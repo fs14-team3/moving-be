@@ -1,0 +1,87 @@
+# moving-be
+
+무빙(이사 소비자와 기사님 견적 매칭 서비스)의 백엔드 API입니다.
+
+## 기술 스택
+
+Node.js 24 · Express 5 · TypeScript · Prisma 7 · PostgreSQL 16 · Helmet · ESLint · Prettier · Knip · Husky · GitHub Actions · AWS (EC2 · RDS · S3) · PM2 · Nginx
+
+## 시작하기
+
+요구 사항: Node.js 24 (`.nvmrc`), npm 11+, PostgreSQL 16
+
+```bash
+nvm use
+npm install
+cp .env.example .env     # DATABASE_URL을 로컬 DB에 맞게 수정
+npm run prisma:generate
+npm run dev              # http://localhost:4000/api/health
+```
+
+## 환경 변수
+
+| 이름            | 예시                                   | 설명                                                                             |
+| --------------- | -------------------------------------- | -------------------------------------------------------------------------------- |
+| `PORT`          | `4000`                                 | API 서버 포트                                                                    |
+| `HOST`          | `127.0.0.1`                            | 바인딩 주소. 생략 시 모든 인터페이스, 운영(Nginx 뒤)은 `127.0.0.1`               |
+| `CLIENT_ORIGIN` | `http://localhost:3000`                | CORS 허용 프론트 주소                                                            |
+| `DATABASE_URL`  | `postgresql://…@localhost:5432/moving` | PostgreSQL 연결 문자열                                                           |
+| `NODE_ENV`      | `development`                          | `development` / `production`                                                     |
+| `SENTRY_DSN`    | `https://…@o0.ingest.sentry.io/0`      | Sentry 에러 수집 DSN. 생략하면 Sentry를 사용하지 않습니다 (로컬은 생략)          |
+| `TRUST_PROXY`   | `0`                                    | 신뢰할 프록시 홉 수. 로컬 `0`, Nginx 뒤 `1`, Cloudflare·로드밸런서 + Nginx는 `2` |
+
+새 환경 변수를 추가하면 `.env.example`과 이 표를 같은 PR에서 수정합니다.
+
+`CLIENT_ORIGIN`은 쉼표로 여러 origin을 지정할 수 있습니다. 경로나 끝의 `/`는 넣지 않습니다.
+운영 환경에서는 이 값을 명시합니다. `DATABASE_URL`은 DB 연결에 필요하며,
+빌드(`prisma generate`)에는 필요하지 않습니다.
+
+`src/config/env.ts`는 `.env`를 읽고 기본값과 숫자·목록 변환만 적용합니다.
+값의 유효성은 검사하지 않으므로 `.env.example`을 기준으로 직접 설정합니다.
+
+## 명령어
+
+| 명령어                   | 설명                                  |
+| ------------------------ | ------------------------------------- |
+| `npm run dev`            | 개발 서버 (tsx watch)                 |
+| `npm run build`          | Prisma Client 생성 + `dist/`로 컴파일 |
+| `npm start`              | 빌드 결과 실행                        |
+| `npm run lint`           | ESLint 검사 (`lint:fix`로 자동 수정)  |
+| `npm run typecheck`      | 타입 검사                             |
+| `npm run knip`           | 사용하지 않는 파일·export·의존성 검사 |
+| `npm run format:check`   | Prettier 검사 (`format`으로 수정)     |
+| `npm run prisma:migrate` | 마이그레이션 생성 및 로컬 DB 적용     |
+| `npm run prisma:studio`  | Prisma Studio                         |
+
+## 구조
+
+`routes → controllers → services` 순서로 호출합니다. services가 Prisma를 직접 사용하며, 같은 쿼리를 여러 곳에서 쓰게 되면 그때 분리합니다.
+
+```text
+src/
+  app.ts            Express 앱과 공통 미들웨어
+  server.ts         서버 실행 진입점
+  config/           환경 변수와 기본값
+  errors/           AppError, 공통 에러 코드와 상태
+  routes/           URL → controller 연결 (/api 아래)
+  controllers/      요청/응답 처리
+  services/         비즈니스 규칙, Prisma 쿼리, 트랜잭션
+  middlewares/      인증, 에러 처리 등
+  validators/       요청 검증 스키마
+  lib/              Prisma 등 외부 클라이언트
+  utils/            공통 유틸
+  generated/        Prisma Client (생성물, 커밋 안 함)
+```
+
+## 실행 및 상태 확인
+
+- `GET /api/health`: 프로세스 생존 확인. DB 연결 없이 200을 반환합니다.
+- `GET /api/ready`: DB에 `SELECT 1`을 실행합니다. DB 오류 시 503을 반환합니다. 배포 직후 확인용입니다.
+- DB 연결은 드라이버 기본 설정을 사용합니다. 연결 및 쿼리 대기 시간에 별도 제한을 설정하지 않습니다 (`src/lib/prisma.ts`).
+- `SIGINT` / `SIGTERM`: 새 연결 수락 중단 → 진행 중인 HTTP 요청 완료 → Prisma 연결 해제 순으로 종료합니다. 10초를 넘기면 실패 상태로 종료합니다. PM2/Nginx의 종료 유예 시간도 이에 맞춰 설정합니다.
+- `TRUST_PROXY`는 실제 Nginx / 로드밸런서 경로와 맞춰야 합니다. 앱에 직접 접근 가능한 배포에서 무조건 `1`로 설정하지 않습니다. 운영에서는 `HOST=127.0.0.1`로 앱을 Nginx 뒤에만 노출합니다.
+- 운영 실행은 `NODE_ENV=production npm start`를 사용합니다.
+
+## 협업 규칙
+
+브랜치 전략, 커밋 형식, PR 규칙은 [CONTRIBUTING.md](https://github.com/fs14-team3/.github/blob/main/CONTRIBUTING.md)를 따릅니다.
