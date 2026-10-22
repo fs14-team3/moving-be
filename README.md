@@ -58,7 +58,7 @@ npm run dev              # http://localhost:4000/api/health
 
 `routes → controllers → services` 순서로 호출합니다.
 
-초기 설계 문서: [ERD](docs/db/erd.ko.md) · [OpenAPI 초안](docs/api/openapi.ko.yaml). DB 정의는 `prisma/schema.prisma`와 `prisma/migrations/`를 기준으로 합니다. OpenAPI 문서는 `GET /api/openapi.yaml`에서도 확인할 수 있습니다. 문서에 정의된 API 중 아직 구현되지 않은 경로가 있습니다.
+초기 설계 문서: [ERD](docs/db/erd.ko.md) · [OpenAPI 초안](docs/api/openapi.ko.yaml). DB 정의는 `prisma/schema.prisma`와 `prisma/migrations/`를 기준으로 합니다. OpenAPI 문서는 브라우저에서 `http://localhost:4000/api/docs/`로 볼 수 있고, 원본 YAML은 `GET /api/openapi.yaml`에서 받을 수 있습니다. 문서에 정의된 API 중 아직 구현되지 않은 경로가 있습니다.
 
 ```text
 src/
@@ -80,6 +80,7 @@ src/
 
 - `GET /api/health`: 프로세스 생존 확인. DB 연결 없이 200을 반환합니다.
 - `GET /api/ready`: DB에 `SELECT 1`을 실행합니다. DB 오류 시 503을 반환합니다. 배포 직후 확인용입니다.
+- `GET /api/docs/`: Swagger UI에서 OpenAPI 초안을 보여줍니다.
 - `GET /api/openapi.yaml`: OpenAPI 초안 파일을 제공합니다. 실행 시 프로젝트 루트의 `docs/api/openapi.ko.yaml` 파일이 필요합니다.
 - DB 연결은 드라이버 기본 설정을 사용합니다. 연결 및 쿼리 대기 시간에 별도 제한을 설정하지 않습니다 (`src/lib/prisma.ts`).
 - `SIGINT` / `SIGTERM`: 새 연결 수락 중단 → 진행 중인 HTTP 요청 완료 → Prisma 연결 해제 순으로 종료합니다. 10초를 넘기면 실패 상태로 종료합니다. PM2/Nginx의 종료 유예 시간도 이에 맞춰 설정합니다.
