@@ -52,7 +52,10 @@ npm run dev              # http://localhost:4000/api/health
 | `npm run format:check`   | Prettier 검사 (`format`으로 수정)     |
 | `npm run prisma:migrate` | 마이그레이션 생성 및 로컬 DB 적용     |
 | `npm run prisma:deploy`  | 기존 마이그레이션을 DB에 적용         |
+| `npm run prisma:seed`    | 빈 개발 DB에 시드 데이터 추가         |
 | `npm run prisma:studio`  | Prisma Studio                         |
+
+시드 데이터의 날짜는 실행한 날을 기준으로 만듭니다. 이미 시드 데이터가 있는 DB에서는 실패하므로, 다시 채울 때는 `npx prisma migrate reset`으로 DB를 비운 뒤 `npm run prisma:seed`를 실행합니다.
 
 ## 구조
 
