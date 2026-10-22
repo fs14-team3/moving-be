@@ -55,7 +55,7 @@ npm run dev              # http://localhost:4000/api/health
 
 ## 구조
 
-`routes → controllers → services` 순서로 호출합니다. services가 Prisma를 직접 사용하며, 같은 쿼리를 여러 곳에서 쓰게 되면 그때 분리합니다.
+`routes → controllers → services` 순서로 호출합니다.
 
 ```text
 src/
