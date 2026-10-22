@@ -58,7 +58,7 @@ npm run dev              # http://localhost:4000/api/health
 
 `routes → controllers → services` 순서로 호출합니다.
 
-초기 설계 문서: [DB 스키마 초안](docs/db/schema.sql) · [OpenAPI 초안](docs/api/openapi.ko.yaml). DB 변경 사항은 `prisma/schema.prisma`와 `prisma/migrations/`에 반영합니다. OpenAPI 문서는 `GET /api/openapi.yaml`에서도 확인할 수 있습니다. 문서에 정의된 API 중 아직 구현되지 않은 경로가 있습니다.
+초기 설계 문서: [ERD](docs/db/erd.ko.md) · [OpenAPI 초안](docs/api/openapi.ko.yaml). DB 정의는 `prisma/schema.prisma`와 `prisma/migrations/`를 기준으로 합니다. OpenAPI 문서는 `GET /api/openapi.yaml`에서도 확인할 수 있습니다. 문서에 정의된 API 중 아직 구현되지 않은 경로가 있습니다.
 
 ```text
 src/
