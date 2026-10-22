@@ -87,6 +87,20 @@ src/
 - `TRUST_PROXY`는 실제 Nginx / 로드밸런서 경로와 맞춰야 합니다. 앱에 직접 접근 가능한 배포에서 무조건 `1`로 설정하지 않습니다. 운영에서는 `HOST=127.0.0.1`로 앱을 Nginx 뒤에만 노출합니다.
 - 운영 실행은 `NODE_ENV=production npm start`를 사용합니다.
 
+## 배포
+
+push 후 CI가 통과하면 `Deploy` 워크플로가 자동으로 배포합니다. 재배포는 Actions 탭의 `Deploy` → `Run workflow`로 합니다.
+
+| 환경 | 브랜치    | API (도메인 연결 전 임시 주소)           | PM2 / 포트              | DB            |
+| ---- | --------- | ---------------------------------------- | ----------------------- | ------------- |
+| dev  | `develop` | `https://dev-api.15-135-94-159.sslip.io` | `moving-be-dev` / 4001  | `moving_dev`  |
+| prod | `main`    | `https://api.15-135-94-159.sslip.io`     | `moving-be-prod` / 4000 | `moving_prod` |
+
+- 구성: EC2 한 대에서 Nginx(HTTPS) → PM2 → 앱, DB는 RDS PostgreSQL입니다.
+- 흐름: GitHub Actions가 SSH로 서버의 배포 게이트를 호출 → 해당 브랜치에 있는 커밋인지 확인 → `scripts/deploy.sh`가 `npm ci` → `npm run build` → `prisma migrate deploy` → `current` 링크 교체 → `pm2 reload` → `/api/ready` 확인. 실패하면 이전 릴리스로 되돌립니다. 마이그레이션은 되돌리지 않습니다.
+- 배포 키는 배포 게이트만 실행할 수 있습니다. 서버 접속은 AWS Session Manager로 합니다.
+- 운영 환경 변수는 서버의 `/srv/moving/config/{dev,prod}.env`에 있습니다. 새 환경 변수는 이 파일에도 추가해야 배포에 반영됩니다.
+
 ## 협업 규칙
 
 브랜치 전략, 커밋 형식, PR 규칙은 [CONTRIBUTING.md](https://github.com/fs14-team3/.github/blob/main/CONTRIBUTING.md)를 따릅니다.
