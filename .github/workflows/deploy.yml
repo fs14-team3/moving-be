@@ -1,0 +1,75 @@
+name: Deploy
+
+# Deploys after CI passes on a push: develop → dev, main → prod.
+# The SSH key can only run the server's deploy gate (`deploy <dev|prod> <sha>`),
+# which accepts commits already on that branch and then runs scripts/deploy.sh.
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [develop, main]
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: Branch to redeploy
+        type: choice
+        options: [develop, main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-${{ github.event.workflow_run.head_branch || inputs.branch }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: ${{ (github.event.workflow_run.head_branch || inputs.branch) == 'main' && 'production' || 'development' }}
+      url: ${{ vars.API_URL }}
+    steps:
+      - name: Resolve commit
+        id: target
+        env:
+          BRANCH: ${{ github.event.workflow_run.head_branch || inputs.branch }}
+          RUN_SHA: ${{ github.event.workflow_run.head_sha }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          sha=${RUN_SHA:-$(gh api "repos/$GITHUB_REPOSITORY/commits/$BRANCH" --jq .sha)}
+          env=dev
+          if [ "$BRANCH" = main ]; then env=prod; fi
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "env=$env" >> "$GITHUB_OUTPUT"
+          echo "Deploying $BRANCH ($sha) to $env"
+
+      - name: Set up SSH
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ vars.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+
+      - name: Deploy
+        env:
+          DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+          TARGET_ENV: ${{ steps.target.outputs.env }}
+          SHA: ${{ steps.target.outputs.sha }}
+        run: >-
+          ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes
+          -o StrictHostKeyChecking=yes -o BatchMode=yes
+          "moving@$DEPLOY_HOST" "deploy $TARGET_ENV $SHA"
+
+      - name: Check readiness
+        env:
+          API_URL: ${{ vars.API_URL }}
+        run: curl -fsS --retry 5 --retry-delay 3 --retry-all-errors "$API_URL/api/ready"
