@@ -7,3 +7,221 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
+
+enum UserRole {
+  CUSTOMER
+  MOVER
+
+  @@map("user_role")
+}
+
+enum SocialProvider {
+  GOOGLE
+  KAKAO
+  NAVER
+
+  @@map("social_provider")
+}
+
+enum ServiceType {
+  SMALL
+  HOME
+  OFFICE
+
+  @@map("service_type")
+}
+
+enum MoveRequestStatus {
+  PENDING
+  CONFIRMED
+  COMPLETED
+  EXPIRED
+
+  @@map("move_request_status")
+}
+
+enum QuoteStatus {
+  SUBMITTED
+  CONFIRMED
+  NOT_SELECTED
+
+  @@map("quote_status")
+}
+
+enum NotificationType {
+  NEW_REQUEST
+  NEW_QUOTE
+  QUOTE_CONFIRMED
+  MOVE_DAY
+
+  @@map("notification_type")
+}
+
+model User {
+  id              String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  role            UserRole
+  email           String?
+  passwordHash    String?          @map("password_hash")
+  name            String?
+  phone           String?
+  createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime         @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  socialAccounts  SocialAccount[]
+  customerProfile CustomerProfile?
+  moverProfile    MoverProfile?
+  notifications   Notification[]
+
+  @@map("users")
+}
+
+model SocialAccount {
+  id         String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId     String         @map("user_id") @db.Uuid
+  provider   SocialProvider
+  providerId String         @map("provider_id")
+  user       User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("social_accounts")
+}
+
+model CustomerProfile {
+  userId       String        @id @map("user_id") @db.Uuid
+  imageUrl     String?       @map("image_url")
+  nickname     String?
+  careerYears  Int?          @map("career_years")
+  intro        String?
+  description  String?
+  serviceTypes ServiceType[] @map("service_types")
+  regions      String[]
+  createdAt    DateTime      @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime      @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  moveRequests MoveRequest[]
+  favorites    Favorite[]
+
+  @@map("customer_profiles")
+}
+
+model MoverProfile {
+  userId             String              @id @map("user_id") @db.Uuid
+  imageUrl           String?             @map("image_url")
+  nickname           String?
+  careerYears        Int?                @map("career_years")
+  intro              String?
+  description        String?
+  serviceTypes       ServiceType[]       @map("service_types")
+  regions            String[]
+  createdAt          DateTime            @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt          DateTime            @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  user               User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  designatedRequests DesignatedRequest[]
+  quotes             Quote[]
+  requestRejections  RequestRejection[]
+  favorites          Favorite[]
+
+  @@map("mover_profiles")
+}
+
+model MoveRequest {
+  id                 String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  customerId         String              @map("customer_id") @db.Uuid
+  moveType           ServiceType         @map("move_type")
+  moveDate           DateTime            @map("move_date") @db.Date
+  fromAddress        String              @map("from_address")
+  fromZonecode       String?             @map("from_zonecode")
+  fromRegion         String              @map("from_region")
+  toAddress          String              @map("to_address")
+  toZonecode         String?             @map("to_zonecode")
+  toRegion           String              @map("to_region")
+  status             MoveRequestStatus   @default(PENDING)
+  confirmedAt        DateTime?           @map("confirmed_at") @db.Timestamptz
+  createdAt          DateTime            @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt          DateTime            @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  customer           CustomerProfile     @relation(fields: [customerId], references: [userId], onDelete: Cascade)
+  designatedRequests DesignatedRequest[]
+  quotes             Quote[]
+  requestRejections  RequestRejection[]
+  notifications      Notification[]
+
+  // Partial unique index on active requests is defined in the migration SQL.
+  @@map("move_requests")
+}
+
+model DesignatedRequest {
+  moveRequestId String       @map("move_request_id") @db.Uuid
+  moverId       String       @map("mover_id") @db.Uuid
+  createdAt     DateTime     @default(now()) @map("created_at") @db.Timestamptz
+  moveRequest   MoveRequest  @relation(fields: [moveRequestId], references: [id], onDelete: Cascade)
+  mover         MoverProfile @relation(fields: [moverId], references: [userId], onDelete: Cascade)
+
+  @@id([moveRequestId, moverId])
+  @@map("designated_requests")
+}
+
+model Quote {
+  id            String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  moveRequestId String         @map("move_request_id") @db.Uuid
+  moverId       String         @map("mover_id") @db.Uuid
+  price         Int
+  isDesignated  Boolean        @default(false) @map("is_designated")
+  status        QuoteStatus    @default(SUBMITTED)
+  confirmedAt   DateTime?      @map("confirmed_at") @db.Timestamptz
+  createdAt     DateTime       @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt     DateTime       @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  moveRequest   MoveRequest    @relation(fields: [moveRequestId], references: [id], onDelete: Cascade)
+  mover         MoverProfile   @relation(fields: [moverId], references: [userId], onDelete: Cascade)
+  reviews       Review[]
+  notifications Notification[]
+
+  // Partial unique index on confirmed quotes is defined in the migration SQL.
+  @@map("quotes")
+}
+
+model RequestRejection {
+  moveRequestId String       @map("move_request_id") @db.Uuid
+  moverId       String       @map("mover_id") @db.Uuid
+  createdAt     DateTime     @default(now()) @map("created_at") @db.Timestamptz
+  moveRequest   MoveRequest  @relation(fields: [moveRequestId], references: [id], onDelete: Cascade)
+  mover         MoverProfile @relation(fields: [moverId], references: [userId], onDelete: Cascade)
+
+  @@id([moveRequestId, moverId])
+  @@map("request_rejections")
+}
+
+model Review {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  quoteId   String   @map("quote_id") @db.Uuid
+  rating    Decimal  @db.Decimal
+  content   String
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  quote     Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+
+  @@map("reviews")
+}
+
+model Favorite {
+  customerId String          @map("customer_id") @db.Uuid
+  moverId    String          @map("mover_id") @db.Uuid
+  createdAt  DateTime        @default(now()) @map("created_at") @db.Timestamptz
+  customer   CustomerProfile @relation(fields: [customerId], references: [userId], onDelete: Cascade)
+  mover      MoverProfile    @relation(fields: [moverId], references: [userId], onDelete: Cascade)
+
+  @@id([customerId, moverId])
+  @@map("favorites")
+}
+
+model Notification {
+  id            String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId        String           @map("user_id") @db.Uuid
+  type          NotificationType
+  message       String
+  moveRequestId String?          @map("move_request_id") @db.Uuid
+  quoteId       String?          @map("quote_id") @db.Uuid
+  createdAt     DateTime         @default(now()) @map("created_at") @db.Timestamptz
+  user          User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  moveRequest   MoveRequest?     @relation(fields: [moveRequestId], references: [id], onDelete: Cascade)
+  quote         Quote?           @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
+}

@@ -1,8 +1,24 @@
+import { resolve } from 'node:path'
 import { Router } from 'express'
+import swaggerUi from 'swagger-ui-express'
 import { AppError } from '../errors/app-error'
 import { prisma } from '../lib/prisma'
 
 export const apiRouter = Router()
+
+apiRouter.use(
+  '/docs',
+  swaggerUi.serve,
+  swaggerUi.setup(null, {
+    swaggerOptions: { url: '/api/openapi.yaml' },
+  }),
+)
+
+apiRouter.get('/openapi.yaml', (_req, res) => {
+  res
+    .type('application/yaml')
+    .sendFile(resolve(__dirname, '../../docs/api/openapi.ko.yaml'))
+})
 
 apiRouter.get('/health', (_req, res) => {
   res.json({ status: 'ok' })

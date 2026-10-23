@@ -1,0 +1,1518 @@
+---
+openapi: 3.0.3
+info:
+  title: 무빙 (Moving) API
+  version: 0.1.0
+  description: |
+    이사 소비자(CUSTOMER)와 이사 전문가(MOVER, 기사님) 매칭 서비스의 초기 API 초안.
+
+servers:
+  - { url: '/api' }
+tags:
+  - { name: Auth }
+  - { name: Me }
+  - { name: Profiles }
+  - { name: Uploads }
+  - { name: Movers }
+  - { name: Favorites }
+  - { name: MoveRequests }
+  - { name: MoverInbox }
+  - { name: Quotes }
+  - { name: Reviews }
+  - { name: Notifications }
+paths:
+  '/auth/signup':
+    post:
+      tags: [Auth]
+      summary: 이메일 회원가입
+      description: 요청한 역할의 이메일 계정을 생성합니다. 이메일·전화번호·비밀번호는 §3.2.1에 따라 검증합니다.
+      operationId: signup
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { '$ref': '#/components/schemas/SignupRequest' }
+      responses:
+        '201':
+          description: 가입 완료
+          content:
+            application/json:
+              schema: { '$ref': '#/components/schemas/Me' }
+        '400': { '$ref': '#/components/responses/ValidationError' }
+        '429': { '$ref': '#/components/responses/RateLimited' }
+  '/auth/login':
+    post:
+      tags: [Auth]
+      summary: 이메일 로그인
+      description: 역할별 로그인 페이지에서 요청한 역할로 인증합니다.
+      operationId: login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { '$ref': '#/components/schemas/LoginRequest' }
+      responses:
+        '200':
+          description: 로그인 완료
+          content:
+            application/json:
+              schema: { '$ref': '#/components/schemas/AuthResponse' }
+        '400': { '$ref': '#/components/responses/ValidationError' }
+        '401':
+          description: '`INVALID_CREDENTIALS`'
+          content:
+            application/json:
+              schema: { '$ref': '#/components/schemas/ErrorResponse' }
+        '429': { '$ref': '#/components/responses/RateLimited' }
+  '/auth/logout':
+    post:
+      tags: [Auth]
+      summary: 로그아웃
+      description: 현재 로그인 상태를 종료합니다. 세션 또는 토큰 종료 방식은 인증 구현 시 결정합니다.
+      operationId: logout
+      security:
+        - bearerAuth: []
+      responses:
+        '204': { description: 로그아웃 완료 }
+  '/auth/{provider}':
+    get:
+      tags: [Auth]
+      summary: 소셜 로그인 시작 (provider로 리다이렉트)
+      description: 선택한 소셜 제공자의 로그인 페이지로 이동합니다. OAuth 검증 및 로그인 후 이동 방식은 인증 구현 시 결정합니다.
+      operationId: startSocialLogin
+      security: []
+      parameters:
+        - { '$ref': '#/components/parameters/ProviderPath' }
+        - name: role
+          in: query
+          required: true
+          schema: { '$ref': '#/components/schemas/Role' }
+      responses:
+        '302':
+          {
+            description: Google / Kakao / Naver 인가(authorize) URL로 리다이렉트,
+          }
+        '400': { '$ref': '#/components/responses/ValidationError' }
+  '/auth/{provider}/callback':
+    get:
+      tags: [Auth]
+      summary: 소셜 로그인 콜백 (등록된 redirect URI)
+      description: 소셜 제공자의 응답을 검증한 뒤 가입 또는 로그인합니다. 기존 계정과의 연결 및 로그인 결과 전달 방식은 추후 결정합니다.
+      operationId: socialLoginCallback
+      security: []
+      parameters:
+        - { '$ref': '#/components/parameters/ProviderPath' }
+        - name: code
+          in: query
+          required: false
+          schema: { type: string }
+        - name: state
+          in: query
+          required: true
+          schema: { type: string }
+        - name: error
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        '302': { description: 로그인 결과 화면으로 이동 }
+  '/users/me':
+    get:
+      tags: [Me]
+      summary: 내 정보 (GNB, 라우트 가드용)
+      operationId: getMe
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: 현재 사용자
+          content:
+            application/json:
+              schema: { '$ref': '#/components/schemas/Me' }
+        '401': { '$ref': '#/components/responses/Unauthorized' }
+    patch:
+      tags: [Me]
+      summary: 기본 정보 수정
+      description: 일반 유저 정보 수정과 기사님 기본정보 수정에서 사용합니다. 변경 가능 항목과 인증 확인 방식은 추후 결정합니다.
+      operationId: updateMe
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { '$ref': '#/components/schemas/BasicInfoUpdate' }
+      responses:
+        '200':
+          description: 수정 완료
+          content:
+            application/json:
+              schema: { '$ref': '#/components/schemas/Me' }
+        '400': { '$ref': '#/components/responses/ValidationError' }
+        '401': { '$ref': '#/components/responses/Unauthorized' }
+  '/customers/me/profile':
+    post:
+      tags: [Profiles]
+      summary: 일반 유저 프로필 등록
+      operationId: createCustomerProfile
+      security:
+        - bearerAuth: []
+      x-roles: [CUSTOMER]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { '$ref': '#/components/schemas/CustomerProfileCreate' }
+      responses:
+        '201':
+          description: 생성 완료
+          content:
+            application/json:
+              schema: { '$ref': '#/components/schemas/CustomerProfile' }
+        '400': { '$ref': '#/components/responses/ValidationError' }
+        '401': { '$ref': '#/components/responses/Unauthorized' }
+        '403': { '$ref': '#/components/responses/Forbidden' }
+        '409':
+          description: '`PROFILE_ALREADY_EXISTS`'
+          content:
+            application/json:
+              schema: { '$ref': '#/components/schemas/ErrorResponse' }
+    patch:
+      tags: [Profiles]
+      summary: 일반 유저 프로필 수정
+      operationId: updateCustomerProfile
+      security:
+        - bearerAuth: []
+      x-roles: [CUSTOMER]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { '$ref': '#/components/schemas/CustomerProfileUpdate' }
+      responses:
+        '200':
+          description: 수정 완료
+          content:
+            application/json:
+              schema: { '$ref': '#/components/schemas/CustomerProfile' }
+        '400': { '$ref': '#/components/responses/ValidationError' }
+        '401': { '$ref': '#/components/responses/Unauthorized' }
+        '403': { '$ref': '#/components/responses/Forbidden' }
+  '/movers/me/profile':
+    post:
+      tags: [Profiles]
+      summary: 기사님 프로필 등록
+      operationId: createMoverProfile
+      security:
+        - bearerAuth: []
+      x-roles: [MOVER]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { '$ref': '#/components/schemas/MoverProfileCreate' }
+      responses:
+        '201':
+          description: 생성 완료
+          content:
+            application/json:
+              schema: { '$ref': '#/components/schemas/MoverProfile' }
+        '400': { '$ref': '#/components/responses/ValidationError' }
+        '401': { '$ref': '#/components/responses/Unauthorized' }
+        '403': { '$ref': '#/components/responses/Forbidden' }
+        '409':
+          description: '`PROFILE_ALREADY_EXISTS`'
+          content:
+            application/json:
+              schema: { '$ref': '#/components/schemas/ErrorResponse' }
+    patch:
+      tags: [Profiles]
+      summary: 기사님 프로필 수정
+      operationId: updateMoverProfile
+      security:
+        - bearerAuth: []
+      x-roles: [MOVER]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { '$ref': '#/components/schemas/MoverProfileUpdate' }
+      responses:
+        '200':
+          description: 수정 완료
+          content:
+            application/json:
+              schema: { '$ref': '#/components/schemas/MoverProfile' }
+        '400': { '$ref': '#/components/responses/ValidationError' }
+        '401': { '$ref': '#/components/responses/Unauthorized' }
+        '403': { '$ref': '#/components/responses/Forbidden' }
+  '/movers/me':
+    get:
+      tags: [Profiles]
+      summary: 기사님 마이페이지 (내 프로필·평점)
+      operationId: getMyMoverPage
+      security:
+        - bearerAuth: []
+      x-roles: [MOVER]
+      responses:
+        '200':
+          description: 공개 기사님 상세와 같은 형태. `isFavorite`, `isDesignated`는 null입니다.
+          content:
+            application/json:
+              schema: { '$ref': '#/components/schemas/MoverDetail' }
+        '401': { '$ref': '#/components/responses/Unauthorized' }
+        '403': { '$ref': '#/components/responses/Forbidden' }
+  '/uploads/images':
+    post:
+      tags: [Uploads]
+      summary: 프로필 이미지 업로드
+      description: 프로필 등록·수정에 사용할 이미지 URL을 반환합니다. 저장소, 허용 형식 및 용량 제한은 추후 결정합니다.
+      operationId: uploadImage
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+      responses:
+        '201':
+          description: 업로드 완료
+          content:
+            application/json:
+              schema: { '$ref': '#/components/schemas/UploadResponse' }
+        '400': { '$ref': '#/components/responses/ValidationError' }
+        '401': { '$ref': '#/components/responses/Unauthorized' }
+  '/movers':
+    get:
+      tags: [Movers]
+      summary: 기사님 목록 (검색·정렬·필터·무한 스크롤)
+      description: |
+        공개 API. 로그인한 일반 유저가 호출하면 `isFavorite`가 채워지고, 그 외에는 null입니다.
+        프로필을 등록한 기사님만 목록에 노출됩니다.
+      operationId: listMovers
+      security:
+        - {}
+        - bearerAuth: []
+      parameters:
+        - name: keyword
+          in: query
+          description: 기사님 별명 부분 검색
+          schema: { type: string }
+        - name: region
+          in: query
+          schema: { '$ref': '#/components/schemas/Region' }
+        - name: serviceType
+          in: query
+          schema: { '$ref': '#/components/schemas/ServiceType' }
+        - name: sort
+          in: query
+          schema: { '$ref': '#/components/schemas/MoverSort' }
+        - { '$ref': '#/components/parameters/Cursor' }
+        - { '$ref': '#/components/parameters/Limit' }
+      responses:
+        '200':
+          description: 기사님 목록 페이지
+          content:
+            application/json:
+              schema: { '$ref': '#/components/schemas/MoverListResponse' }
+        '400': { '$ref': '#/components/responses/ValidationError' }
+  '/movers/{moverId}':
+    get:
+      tags: [Movers]
+      summary: 기사님 상세 (SNS 공유 링크 대상)
+      description: |
+        공개 API. 로그인한 일반 유저라면 `isFavorite`가 채워지고, `isDesignated`는 이 기사님이
+        해당 유저의 활성 견적 요청에 이미 지정되어 있는지를 나타냅니다.
+      operationId: getMover
+      security:
+        - {}
+        - bearerAuth: []
+      parameters:
+        - { '$ref': '#/components/parameters/MoverIdPath' }
+      responses:
+        '200':
+          description: 기사님 상세
+          content:
+            application/json:
+              schema: { '$ref': '#/components/schemas/MoverDetail' }
+        '404': { '$ref': '#/components/responses/NotFound' }
+  '/movers/{moverId}/reviews':
+    get:
+      tags: [Movers, Reviews]
+      summary: 기사님이 받은 리뷰 (페이지네이션)
+      description: 공개 API. 기사님 본인 마이페이지에서도 사용합니다.
+      operationId: listMoverReviews
+      security: []
+      parameters:
+        - { '$ref': '#/components/parameters/MoverIdPath' }
+        - { '$ref': '#/components/parameters/Page' }
+        - { '$ref': '#/components/parameters/PageSize' }
+      responses:
+        '200':
+          description: 리뷰 목록 페이지
+          content:
+            application/json:
+              schema: { '$ref': '#/components/schemas/MoverReviewListResponse' }
+        '404': { '$ref': '#/components/responses/NotFound' }
+  '/movers/{moverId}/favorite':
+    put:
+      tags: [Favorites]
+      summary: 찜하기 (멱등)
+      operationId: addFavorite
+      security:
+        - bearerAuth: []
+      x-roles: [CUSTOMER]
+      parameters:
+        - { '$ref': '#/components/parameters/MoverIdPath' }
+      responses:
+        '200':
+          description: 찜한 상태
+          content:
+            application/json:
+              schema: { '$ref': '#/components/schemas/FavoriteState' }
+        '401': { '$ref': '#/components/responses/Unauthorized' }
+        '403': { '$ref': '#/components/responses/Forbidden' }
+        '404': { '$ref': '#/components/responses/NotFound' }
+    delete:
+      tags: [Favorites]
+      summary: 찜 해제 (멱등)
+      operationId: removeFavorite
+      security:
+        - bearerAuth: []
+      x-roles: [CUSTOMER]
+      parameters:
+        - { '$ref': '#/components/parameters/MoverIdPath' }
+      responses:
+        '200':
+          description: 찜 해제된 상태
+          content:
+            application/json:
+              schema: { '$ref': '#/components/schemas/FavoriteState' }
+        '401': { '$ref': '#/components/responses/Unauthorized' }
+        '403': { '$ref': '#/components/responses/Forbidden' }
+        '404': { '$ref': '#/components/responses/NotFound' }
+  '/customers/me/favorites':
+    get:
+      tags: [Favorites]
+      summary: 찜한 기사님 목록
+      description: 찜한 기사님 목록. PC 사이드바에서는 limit=3으로 최대 3명을 표시할 수 있습니다.
+      operationId: listMyFavorites
+      security:
+        - bearerAuth: []
+      x-roles: [CUSTOMER]
+      parameters:
+        - { '$ref': '#/components/parameters/Cursor' }
+        - { '$ref': '#/components/parameters/Limit' }
+      responses:
+        '200':
+          description: 찜한 기사님 목록 페이지 (`isFavorite`는 항상 true)
+          content:
+            application/json:
+              schema: { '$ref': '#/components/schemas/MoverListResponse' }
+        '401': { '$ref': '#/components/responses/Unauthorized' }
+        '403': { '$ref': '#/components/responses/Forbidden' }
+  '/move-requests':
+    post:
+      tags: [MoveRequests]
+      summary: 일반 견적 요청 생성
+      description: |-
+        §4.2에 따라 이사일이 지나기 전에는 새 요청을 만들 수 없으며 활성 요청은 한 번에 하나입니다.
+        서버는 요청 상태와 이사일을 함께 확인합니다. 이사 완료 처리만으로 이사일 이전에 새 요청을 허용하지 않습니다.
+        새 요청을 모든 서비스 지역의 기사님들에게 알립니다. 날짜 기준 시간대와 주소의 지역 매핑 방식은 추후 결정합니다.
+        입력 중 수정(§4.1.4)은 제출 전 프론트엔드 폼에서 처리합니다.
+      operationId: createMoveRequest
+      security:
+        - bearerAuth: []
+      x-roles: [CUSTOMER]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { '$ref': '#/components/schemas/MoveRequestCreate' }
+      responses:
+        '201':
+          description: 생성 완료
+          content:
+            application/json:
+              schema: { '$ref': '#/components/schemas/MoveRequest' }
+        '400': { '$ref': '#/components/responses/ValidationError' }
+        '401': { '$ref': '#/components/responses/Unauthorized' }
+        '403': { '$ref': '#/components/responses/Forbidden' }
+        '409':
+          description: '`ACTIVE_REQUEST_EXISTS`'
+          content:
+            application/json:
+              schema: { '$ref': '#/components/schemas/ErrorResponse' }
+  '/move-requests/active':
+    get:
+      tags: [MoveRequests]
+      summary: 현재 활성 견적 요청 (없으면 null)
+      description: '§4.2.1의 활성 요청을 반환합니다. 이사일이 지난 요청을 계속 활성으로 반환하지 않도록 상태를 확인합니다.'
+      operationId: getActiveMoveRequest
+      security:
+        - bearerAuth: []
+      x-roles: [CUSTOMER]
+      responses:
+        '200':
+          description: 활성 견적 요청 또는 null
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [moveRequest]
+                properties:
+                  moveRequest:
+                    type: object
+                    nullable: true
+                    allOf:
+                      - { '$ref': '#/components/schemas/MoveRequest' }
+        '401': { '$ref': '#/components/responses/Unauthorized' }
+        '403': { '$ref': '#/components/responses/Forbidden' }
+  '/move-requests/history':
+    get:
+      tags: [MoveRequests]
+      summary: 받았던 견적 (지난 요청 + 받은 견적 전체)
+      description: 완료된 이사의 정보와 받은 전체 견적을 반환합니다. 확정 견적 필터를 제공합니다.
+      operationId: listMoveRequestHistory
+      security:
+        - bearerAuth: []
+      x-roles: [CUSTOMER]
+      parameters:
+        - name: confirmedOnly
+          in: query
+          description: 확정된 견적만 조회
+          schema: { type: boolean }
+        - { '$ref': '#/components/parameters/Cursor' }
+        - { '$ref': '#/components/parameters/Limit' }
+      responses:
+        '200':
+          description: 지난 견적 요청 목록 페이지
+          content:
+            application/json:
+              schema:
+                { '$ref': '#/components/schemas/MoveRequestHistoryResponse' }
+        '401': { '$ref': '#/components/responses/Unauthorized' }
+        '403': { '$ref': '#/components/responses/Forbidden' }
+  '/move-requests/{requestId}':
+    get:
+      tags: [MoveRequests]
+      summary: 견적 요청 상세 (요청자 본인)
+      operationId: getMoveRequest
+      security:
+        - bearerAuth: []
+      x-roles: [CUSTOMER]
+      parameters:
+        - { '$ref': '#/components/parameters/RequestIdPath' }
+      responses:
+        '200':
+          description: 견적 요청
+          content:
+            application/json:
+              schema: { '$ref': '#/components/schemas/MoveRequest' }
+        '401': { '$ref': '#/components/responses/Unauthorized' }
+        '403': { '$ref': '#/components/responses/Forbidden' }
+        '404': { '$ref': '#/components/responses/NotFound' }
+  '/move-requests/{requestId}/designations':
+    post:
+      tags: [MoveRequests]
+      summary: 지정 견적 요청
+      description: |-
+        호출자 본인의 일반 견적 요청이 먼저 있어야 합니다(§6.5). 해당 요청에 기사님을 지정합니다.
+        지정 요청 인원에는 별도의 상한을 두지 않습니다. 받은 지정 견적에만 3개 상한을 적용합니다(§7.1.1).
+        지정 요청은 기사님에게 라벨로 강조 표시하며, 기사님의 서비스 가능 지역과 관계없이 요청할 수 있습니다.
+      operationId: designateMover
+      security:
+        - bearerAuth: []
+      x-roles: [CUSTOMER]
+      parameters:
+        - { '$ref': '#/components/parameters/RequestIdPath' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { '$ref': '#/components/schemas/DesignationCreate' }
+      responses:
+        '201':
+          description: 지정 완료
+          content:
+            application/json:
+              schema: { '$ref': '#/components/schemas/Designation' }
+        '400': { '$ref': '#/components/responses/ValidationError' }
+        '401': { '$ref': '#/components/responses/Unauthorized' }
+        '403': { '$ref': '#/components/responses/Forbidden' }
+        '404': { '$ref': '#/components/responses/NotFound' }
+  '/move-requests/{requestId}/quotes':
+    get:
+      tags: [MoveRequests]
+      summary: 받은 견적 목록 (대기 중인 견적)
+      description:
+        요청자 본인만 조회합니다. 지정 요청 라벨과 기사님 찜 상태를 제공합니다. 최대 8개이므로 별도 페이지네이션은 두지
+        않습니다.
+      operationId: listQuotesForRequest
+      security:
+        - bearerAuth: []
+      x-roles: [CUSTOMER]
+      parameters:
+        - { '$ref': '#/components/parameters/RequestIdPath' }
+        - name: status
+          in: query
+          schema: { '$ref': '#/components/schemas/QuoteStatus' }
+      responses:
+        '200':
+          description: 견적 목록
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    maxItems: 8
+                    items: { '$ref': '#/components/schemas/CustomerQuote' }
+        '401': { '$ref': '#/components/responses/Unauthorized' }
+        '403': { '$ref': '#/components/responses/Forbidden' }
+        '404': { '$ref': '#/components/responses/NotFound' }
+    post:
+      tags: [MoverInbox]
+      summary: 견적 보내기 (기사님)
+      description: |-
+        기사님은 모든 서비스 지역의 받은 요청에 가격을 입력하여 견적을 보냅니다(§8.1–8.2).
+        지정된 기사님도 지역 제한 없이 견적을 보낼 수 있습니다. 확정되거나 이사일이 지난 요청에는 견적을 보내지 않습니다.
+        일반 견적 최대 5개, 지정 견적 최대 3개, 총 최대 8개를 동시 요청에서도 지킵니다(§7.1.1).
+        지정 여부의 견적 분류 시점과 재응답 정책은 추후 결정합니다. 일반 유저에게 새 견적 알림을 보냅니다.
+      operationId: sendQuote
+      security:
+        - bearerAuth: []
+      x-roles: [MOVER]
+      parameters:
+        - { '$ref': '#/components/parameters/RequestIdPath' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { '$ref': '#/components/schemas/QuoteCreate' }
+      responses:
+        '201':
+          description: 전송 완료
+          content:
+            application/json:
+              schema: { '$ref': '#/components/schemas/SentQuote' }
+        '400': { '$ref': '#/components/responses/ValidationError' }
+        '401': { '$ref': '#/components/responses/Unauthorized' }
+        '403':
+          description: '`FORBIDDEN`, `PROFILE_REQUIRED` 또는 `NOT_IN_SERVICE_AREA`'
+          content:
+            application/json:
+              schema: { '$ref': '#/components/schemas/ErrorResponse' }
+        '404': { '$ref': '#/components/responses/NotFound' }
+        '409':
+          description: '`QUOTE_LIMIT_REACHED` 또는 `REQUEST_NOT_PENDING`'
+          content:
+            application/json:
+              schema: { '$ref': '#/components/schemas/ErrorResponse' }
+  '/move-requests/{requestId}/rejections':
+    post:
+      tags: [MoverInbox]
+      summary: 견적 요청 반려 (기사님)
+      operationId: rejectMoveRequest
+      security:
+        - bearerAuth: []
+      x-roles: [MOVER]
+      parameters:
+        - { '$ref': '#/components/parameters/RequestIdPath' }
+      responses:
+        '201':
+          description: 반려 완료. 해당 요청은 받은 요청 목록에서 사라집니다.
+          content:
+            application/json:
+              schema: { '$ref': '#/components/schemas/RejectedRequest' }
+        '400': { '$ref': '#/components/responses/ValidationError' }
+        '401': { '$ref': '#/components/responses/Unauthorized' }
+        '403': { '$ref': '#/components/responses/Forbidden' }
+        '404': { '$ref': '#/components/responses/NotFound' }
+      description: 지역에 관계없이 받은 요청을 반려합니다(§8.3). 반려 사유 입력은 요구하지 않습니다.
+  '/movers/me/received-requests':
+    get:
+      tags: [MoverInbox]
+      summary: 받은 요청 목록 (기사님)
+      description: |-
+        기본적으로 모든 서비스 지역의 받은 요청을 반환합니다(§8.1). 지정 요청도 포함합니다.
+        지정 여부를 구분하여 강조 표시할 수 있습니다. 이사 유형·지역·지정 여부 필터와
+        이사 빠른 순·최근 요청 순 정렬을 지원합니다. 지역 단위와 매핑 방식은 추후 결정합니다.
+      operationId: listReceivedRequests
+      security:
+        - bearerAuth: []
+      x-roles: [MOVER]
+      parameters:
+        - name: moveTypes
+          in: query
+          description: 이사 유형 (OR). 생략하면 전체.
+          style: form
+          explode: false
+          schema:
+            type: array
+            items: { '$ref': '#/components/schemas/ServiceType' }
+        - name: region
+          in: query
+          description: 요청 지역으로 필터링. 생략하면 모든 서비스 지역.
+          schema: { '$ref': '#/components/schemas/Region' }
+        - name: designatedOnly
+          in: query
+          description: 지정 견적 요청만
+          schema: { type: boolean, default: false }
+        - name: sort
+          in: query
+          schema: { '$ref': '#/components/schemas/ReceivedRequestSort' }
+        - { '$ref': '#/components/parameters/Cursor' }
+        - { '$ref': '#/components/parameters/Limit' }
+      responses:
+        '200':
+          description: 받은 요청 목록 페이지
+          content:
+            application/json:
+              schema:
+                { '$ref': '#/components/schemas/ReceivedRequestListResponse' }
+        '401': { '$ref': '#/components/responses/Unauthorized' }
+        '403': { '$ref': '#/components/responses/Forbidden' }
+  '/movers/me/rejected-requests':
+    get:
+      tags: [MoverInbox]
+      summary: 반려한 요청 목록
+      operationId: listMyRejectedRequests
+      security:
+        - bearerAuth: []
+      x-roles: [MOVER]
+      parameters:
+        - { '$ref': '#/components/parameters/Cursor' }
+        - { '$ref': '#/components/parameters/Limit' }
+      responses:
+        '200':
+          description: 반려한 요청 목록 페이지
+          content:
+            application/json:
+              schema:
+                { '$ref': '#/components/schemas/RejectedRequestListResponse' }
+        '401': { '$ref': '#/components/responses/Unauthorized' }
+        '403': { '$ref': '#/components/responses/Forbidden' }
+  '/quotes/{quoteId}':
+    get:
+      tags: [Quotes]
+      summary: 견적 상세
+      description: 견적 요청자 본인이 견적가와 기사님 정보를 조회합니다.
+      operationId: getQuote
+      security:
+        - bearerAuth: []
+      parameters:
+        - { '$ref': '#/components/parameters/QuoteIdPath' }
+      responses:
+        '200':
+          description: 견적 상세
+          content:
+            application/json:
+              schema: { '$ref': '#/components/schemas/QuoteDetail' }
+        '401': { '$ref': '#/components/responses/Unauthorized' }
+        '403': { '$ref': '#/components/responses/Forbidden' }
+        '404': { '$ref': '#/components/responses/NotFound' }
+      x-roles: [CUSTOMER]
+  '/quotes/{quoteId}/confirm':
+    post:
+      tags: [Quotes]
+      summary: 견적 확정
+      description: |-
+        호출자 본인의 견적 요청에서 견적 하나를 확정합니다. 요청당 확정 견적은 하나이며,
+        요청 상태와 견적 상태는 함께 갱신합니다. 기사님과 일반 유저에게 확정 알림을 보냅니다.
+      operationId: confirmQuote
+      security:
+        - bearerAuth: []
+      x-roles: [CUSTOMER]
+      parameters:
+        - { '$ref': '#/components/parameters/QuoteIdPath' }
+      responses:
+        '200':
+          description: 확정 완료
+          content:
+            application/json:
+              schema: { '$ref': '#/components/schemas/QuoteDetail' }
+        '401': { '$ref': '#/components/responses/Unauthorized' }
+        '403': { '$ref': '#/components/responses/Forbidden' }
+        '404': { '$ref': '#/components/responses/NotFound' }
+        '409':
+          description: '`REQUEST_NOT_PENDING` (이미 확정되었거나 만료됨)'
+          content:
+            application/json:
+              schema: { '$ref': '#/components/schemas/ErrorResponse' }
+  '/reviews':
+    post:
+      tags: [Reviews]
+      summary: 리뷰 작성
+      description:
+        호출자 본인의 완료된 이사에서 확정된 견적의 기사님에게 리뷰를 작성합니다(§11.1). 완료 판정 방식과 리뷰 중복 정책은
+        추후 결정하며, 다음 날까지 기다려야 한다는 별도 제한은 두지 않습니다.
+      operationId: createReview
+      security:
+        - bearerAuth: []
+      x-roles: [CUSTOMER]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { '$ref': '#/components/schemas/ReviewCreate' }
+      responses:
+        '201':
+          description: 생성 완료
+          content:
+            application/json:
+              schema: { '$ref': '#/components/schemas/MyReview' }
+        '400': { '$ref': '#/components/responses/ValidationError' }
+        '401': { '$ref': '#/components/responses/Unauthorized' }
+        '403':
+          description: '`FORBIDDEN`, `PROFILE_REQUIRED` 또는 `REVIEW_NOT_ALLOWED`'
+          content:
+            application/json:
+              schema: { '$ref': '#/components/schemas/ErrorResponse' }
+        '404': { '$ref': '#/components/responses/NotFound' }
+  '/customers/me/reviews':
+    get:
+      tags: [Reviews]
+      summary: 내가 작성한 리뷰
+      operationId: listMyReviews
+      security:
+        - bearerAuth: []
+      x-roles: [CUSTOMER]
+      parameters:
+        - { '$ref': '#/components/parameters/Page' }
+        - { '$ref': '#/components/parameters/PageSize' }
+      responses:
+        '200':
+          description: 리뷰 목록 페이지
+          content:
+            application/json:
+              schema: { '$ref': '#/components/schemas/MyReviewListResponse' }
+        '401': { '$ref': '#/components/responses/Unauthorized' }
+        '403': { '$ref': '#/components/responses/Forbidden' }
+  '/customers/me/reviews/writable':
+    get:
+      tags: [Reviews]
+      summary: 작성 가능한 리뷰 목록
+      operationId: listWritableReviews
+      security:
+        - bearerAuth: []
+      x-roles: [CUSTOMER]
+      parameters:
+        - { '$ref': '#/components/parameters/Page' }
+        - { '$ref': '#/components/parameters/PageSize' }
+      responses:
+        '200':
+          description: 리뷰 작성 대기 중인 확정 견적 목록 페이지
+          content:
+            application/json:
+              schema:
+                { '$ref': '#/components/schemas/WritableReviewListResponse' }
+        '401': { '$ref': '#/components/responses/Unauthorized' }
+        '403': { '$ref': '#/components/responses/Forbidden' }
+  '/notifications':
+    get:
+      tags: [Notifications]
+      summary: 알림 목록
+      description:
+        '§13의 역할별 알림을 조회합니다. 새 견적·새 요청·견적 확정·이사 당일 알림을 제공하며, 전달 방식과 갱신
+        주기는 추후 결정합니다.'
+      operationId: listNotifications
+      security:
+        - bearerAuth: []
+      parameters:
+        - { '$ref': '#/components/parameters/Cursor' }
+        - { '$ref': '#/components/parameters/Limit' }
+      responses:
+        '200':
+          description: 알림 목록 페이지
+          content:
+            application/json:
+              schema:
+                { '$ref': '#/components/schemas/NotificationListResponse' }
+        '401': { '$ref': '#/components/responses/Unauthorized' }
+components:
+  securitySchemes:
+    bearerAuth:
+      {
+        type: http,
+        scheme: bearer,
+        description: 인증이 필요한 API를 나타내는 초기 표현입니다.
+          토큰 형식·수명·저장·갱신 방식은 추후 결정합니다.,
+      }
+  parameters:
+    ProviderPath:
+      name: provider
+      in: path
+      required: true
+      schema:
+        type: string
+        enum: [google, kakao, naver]
+    MoverIdPath:
+      name: moverId
+      in: path
+      required: true
+      description: 기사님의 user id
+      schema: { type: string, format: uuid }
+    RequestIdPath:
+      name: requestId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    QuoteIdPath:
+      name: quoteId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    Cursor:
+      name: cursor
+      in: query
+      description: 이전 페이지의 `nextCursor`. 첫 페이지에서는 생략합니다.
+      schema: { type: string }
+    Limit:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1 }
+    Page:
+      name: page
+      in: query
+      schema: { type: integer, minimum: 1 }
+    PageSize:
+      name: pageSize
+      in: query
+      schema: { type: integer, minimum: 1 }
+  responses:
+    ValidationError:
+      description: '`VALIDATION_ERROR`. `details`에 유효하지 않은 필드별 정보가 담깁니다.'
+      content:
+        application/json:
+          schema: { '$ref': '#/components/schemas/ErrorResponse' }
+          example:
+            error:
+              code: VALIDATION_ERROR
+              message: Invalid request body
+              details:
+                - field: password
+                  reason:
+                    must be at least 8 characters and include a letter, a number,
+                    and a special character
+    Unauthorized:
+      description: 인증 정보가 없거나 유효하지 않음
+      content:
+        application/json:
+          schema: { '$ref': '#/components/schemas/ErrorResponse' }
+    Forbidden:
+      description:
+        '`FORBIDDEN` (역할이 다르거나 본인 소유가 아님) 또는 `PROFILE_REQUIRED` (사용자를 프로필
+        등록 화면으로 이동)'
+      content:
+        application/json:
+          schema: { '$ref': '#/components/schemas/ErrorResponse' }
+    NotFound:
+      description: '`NOT_FOUND`'
+      content:
+        application/json:
+          schema: { '$ref': '#/components/schemas/ErrorResponse' }
+    RateLimited:
+      description: '`RATE_LIMITED`'
+      headers:
+        Retry-After:
+          schema: { type: integer }
+      content:
+        application/json:
+          schema: { '$ref': '#/components/schemas/ErrorResponse' }
+  schemas:
+    Role:
+      type: string
+      enum: [CUSTOMER, MOVER]
+    ServiceType:
+      type: string
+      description: SMALL 소형이사, HOME 가정이사, OFFICE 사무실이사
+      enum: [SMALL, HOME, OFFICE]
+    Region:
+      {
+        type: string,
+        description: 서비스 지역 식별값. 지역 단위와 코드 목록은 추후 결정합니다.,
+      }
+    MoveRequestStatus:
+      type: string
+      enum: [PENDING, CONFIRMED, COMPLETED, EXPIRED]
+    QuoteStatus:
+      type: string
+      enum: [SUBMITTED, CONFIRMED, NOT_SELECTED]
+    NotificationType:
+      type: string
+      enum: [NEW_REQUEST, NEW_QUOTE, QUOTE_CONFIRMED, MOVE_DAY]
+    MoverSort:
+      type: string
+      description: 리뷰순 / 평점순 / 경력순 / 확정순
+      enum: [REVIEW_COUNT, RATING, CAREER, CONFIRMED_COUNT]
+    ReceivedRequestSort:
+      type: string
+      description: 이사 빠른 순 / 최근 요청 순
+      enum: [MOVE_DATE_ASC, CREATED_DESC]
+    ErrorCode:
+      type: string
+      description: 주요 오류 코드 초안. 세부 오류 분류와 메시지는 구현 시 결정합니다.
+      enum:
+        - VALIDATION_ERROR
+        - UNAUTHORIZED
+        - INVALID_CREDENTIALS
+        - FORBIDDEN
+        - PROFILE_REQUIRED
+        - NOT_IN_SERVICE_AREA
+        - REVIEW_NOT_ALLOWED
+        - NOT_FOUND
+        - PROFILE_ALREADY_EXISTS
+        - ACTIVE_REQUEST_EXISTS
+        - REQUEST_NOT_PENDING
+        - QUOTE_LIMIT_REACHED
+        - RATE_LIMITED
+        - INTERNAL_ERROR
+        - SOCIAL_LOGIN_FAILED
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code: { '$ref': '#/components/schemas/ErrorCode' }
+            message:
+              {
+                type: string,
+                description:
+                  오류 안내. 운영 환경에서는 스택 트레이스 등 내부 상세 정보를
+                  노출하지 않습니다.,
+              }
+            details:
+              type: array
+              items:
+                type: object
+                required: [field, reason]
+                properties:
+                  field: { type: string }
+                  reason: { type: string }
+    CursorMeta:
+      type: object
+      required: [nextCursor, hasNext]
+      properties:
+        nextCursor: { type: string, nullable: true }
+        hasNext: { type: boolean }
+    OffsetMeta:
+      type: object
+      required: [page, pageSize, totalCount, totalPages]
+      properties:
+        page: { type: integer }
+        pageSize: { type: integer }
+        totalCount: { type: integer }
+        totalPages: { type: integer }
+    UploadResponse:
+      type: object
+      required: [url]
+      properties:
+        url: { type: string, format: uri }
+    SignupRequest:
+      type: object
+      required: [role, email, phone, password]
+      properties:
+        role: { '$ref': '#/components/schemas/Role' }
+        name: { type: string }
+        email: { type: string, format: email }
+        phone:
+          {
+            type: string,
+            description: 지역에 맞는 전화번호 형식을 검증합니다(§3.2.1).,
+          }
+        password:
+          {
+            type: string,
+            format: password,
+            description: ! '8자 이상, 영문·숫자·특수문자
+              포함',
+            minLength: 8,
+          }
+    LoginRequest:
+      type: object
+      required: [role, email, password]
+      properties:
+        role: { '$ref': '#/components/schemas/Role' }
+        email: { type: string, format: email }
+        password: { type: string, format: password }
+    AuthResponse:
+      type: object
+      required: [accessToken, user]
+      properties:
+        accessToken: { type: string }
+        user: { '$ref': '#/components/schemas/Me' }
+    Me:
+      type: object
+      required:
+        [
+          id,
+          role,
+          name,
+          email,
+          phone,
+          hasProfile,
+          customerProfile,
+          moverProfile,
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        role: { '$ref': '#/components/schemas/Role' }
+        name: { type: string, nullable: true }
+        email: { type: string, format: email, nullable: true }
+        phone: { type: string, nullable: true }
+        hasProfile: { type: boolean }
+        customerProfile:
+          description: role이 CUSTOMER이고 프로필이 있을 때 채워짐
+          type: object
+          nullable: true
+          allOf:
+            - { '$ref': '#/components/schemas/CustomerProfile' }
+        moverProfile:
+          description: role이 MOVER이고 프로필이 있을 때 채워짐
+          type: object
+          nullable: true
+          allOf:
+            - { '$ref': '#/components/schemas/MoverProfile' }
+    BasicInfoUpdate:
+      type: object
+      minProperties: 1
+      properties:
+        name: { type: string }
+        email: { type: string, format: email }
+        phone: { type: string, description: 지역에 맞는 전화번호 형식 }
+    CustomerProfile:
+      type: object
+      description: '§3.4의 프로필 항목. 필수 입력 여부는 추후 결정합니다.'
+      properties:
+        imageUrl: { type: string, format: uri, nullable: true }
+        nickname: { type: string, description: 별명, nullable: true }
+        careerYears: { type: integer, description: 경력 (년), nullable: true }
+        intro: { type: string, description: 한 줄 소개, nullable: true }
+        description: { type: string, description: 상세 설명, nullable: true }
+        serviceTypes:
+          type: array
+          items: { '$ref': '#/components/schemas/ServiceType' }
+          nullable: true
+        regions:
+          type: array
+          items: { '$ref': '#/components/schemas/Region' }
+          nullable: true
+    CustomerProfileCreate:
+      type: object
+      description: '§3.4의 프로필 항목. 필수 입력 여부는 추후 결정합니다.'
+      properties:
+        imageUrl: { type: string, format: uri, nullable: true }
+        nickname: { type: string, description: 별명 }
+        careerYears: { type: integer, description: 경력 (년) }
+        intro: { type: string, description: 한 줄 소개 }
+        description: { type: string, description: 상세 설명 }
+        serviceTypes:
+          type: array
+          items: { '$ref': '#/components/schemas/ServiceType' }
+        regions:
+          type: array
+          items: { '$ref': '#/components/schemas/Region' }
+    CustomerProfileUpdate:
+      type: object
+      description: '§3.4의 프로필 항목. 필수 입력 여부는 추후 결정합니다.'
+      properties:
+        imageUrl: { type: string, format: uri, nullable: true }
+        nickname: { type: string, description: 별명 }
+        careerYears: { type: integer, description: 경력 (년) }
+        intro: { type: string, description: 한 줄 소개 }
+        description: { type: string, description: 상세 설명 }
+        serviceTypes:
+          type: array
+          items: { '$ref': '#/components/schemas/ServiceType' }
+        regions:
+          type: array
+          items: { '$ref': '#/components/schemas/Region' }
+    MoverProfile:
+      type: object
+      description: '§3.4의 프로필 항목. 필수 입력 여부는 추후 결정합니다.'
+      properties:
+        imageUrl: { type: string, format: uri, nullable: true }
+        nickname: { type: string, description: 별명, nullable: true }
+        careerYears: { type: integer, description: 경력 (년), nullable: true }
+        intro: { type: string, description: 한 줄 소개, nullable: true }
+        description: { type: string, description: 상세 설명, nullable: true }
+        serviceTypes:
+          type: array
+          items: { '$ref': '#/components/schemas/ServiceType' }
+          nullable: true
+        regions:
+          type: array
+          items: { '$ref': '#/components/schemas/Region' }
+          nullable: true
+    MoverProfileCreate:
+      type: object
+      description: '§3.4의 프로필 항목. 필수 입력 여부는 추후 결정합니다.'
+      properties:
+        imageUrl: { type: string, format: uri, nullable: true }
+        nickname: { type: string, description: 별명 }
+        careerYears: { type: integer, description: 경력 (년) }
+        intro: { type: string, description: 한 줄 소개 }
+        description: { type: string, description: 상세 설명 }
+        serviceTypes:
+          type: array
+          items: { '$ref': '#/components/schemas/ServiceType' }
+        regions:
+          type: array
+          items: { '$ref': '#/components/schemas/Region' }
+    MoverProfileUpdate:
+      type: object
+      description: '§3.4의 프로필 항목. 필수 입력 여부는 추후 결정합니다.'
+      properties:
+        imageUrl: { type: string, format: uri, nullable: true }
+        nickname: { type: string, description: 별명 }
+        careerYears: { type: integer, description: 경력 (년) }
+        intro: { type: string, description: 한 줄 소개 }
+        description: { type: string, description: 상세 설명 }
+        serviceTypes:
+          type: array
+          items: { '$ref': '#/components/schemas/ServiceType' }
+        regions:
+          type: array
+          items: { '$ref': '#/components/schemas/Region' }
+    MoverSummary:
+      description: 기사님 목록, 찜 목록, 견적 카드, 리뷰에서 재사용하는 카드 형태
+      type: object
+      required:
+        [
+          id,
+          nickname,
+          imageUrl,
+          intro,
+          careerYears,
+          serviceTypes,
+          averageRating,
+          reviewCount,
+          confirmedCount,
+          isFavorite,
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        nickname: { type: string, nullable: true }
+        imageUrl: { type: string, format: uri, nullable: true }
+        intro: { type: string, nullable: true }
+        careerYears: { type: integer, nullable: true }
+        serviceTypes:
+          type: array
+          items: { '$ref': '#/components/schemas/ServiceType' }
+          nullable: true
+        averageRating:
+          { type: number, format: float, example: 4.8, description: 평점.
+              척도는 추후 결정합니다. }
+        reviewCount: { type: integer }
+        confirmedCount: { type: integer }
+        isFavorite:
+          {
+            type: boolean,
+            nullable: true,
+            description: 로그인한 일반 유저가 아니면 null,
+          }
+    MoverDetail:
+      allOf:
+        - { '$ref': '#/components/schemas/MoverSummary' }
+        - type: object
+          required: [description, regions, isDesignated]
+          properties:
+            description: { type: string, nullable: true }
+            regions:
+              type: array
+              items: { '$ref': '#/components/schemas/Region' }
+              nullable: true
+            isDesignated:
+              {
+                type: boolean,
+                nullable: true,
+                description: 활성 견적 요청이 있는
+                  일반 유저가 아니면 null,
+              }
+    MoverListResponse:
+      allOf:
+        - { '$ref': '#/components/schemas/CursorMeta' }
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items: { '$ref': '#/components/schemas/MoverSummary' }
+    FavoriteState:
+      type: object
+      required: [moverId, isFavorite]
+      properties:
+        moverId: { type: string, format: uuid }
+        isFavorite: { type: boolean }
+    AddressInput:
+      type: object
+      description: 우편번호 서비스로 입력한 주소. 제공자는 특정하지 않습니다.
+      required: [address, region]
+      properties:
+        address: { type: string }
+        zonecode: { type: string, description: 우편번호 }
+        region: { '$ref': '#/components/schemas/Region' }
+    Address:
+      type: object
+      required: [address, region]
+      properties:
+        address: { type: string }
+        zonecode: { type: string, nullable: true }
+        region: { '$ref': '#/components/schemas/Region' }
+    MoveRequestCreate:
+      type: object
+      required: [moveType, moveDate, from, to]
+      properties:
+        moveType: { '$ref': '#/components/schemas/ServiceType' }
+        moveDate: { type: string, format: date, description: 이사 날짜 }
+        from: { '$ref': '#/components/schemas/AddressInput' }
+        to: { '$ref': '#/components/schemas/AddressInput' }
+    MoveRequest:
+      type: object
+      required:
+        [
+          id,
+          moveType,
+          moveDate,
+          from,
+          to,
+          status,
+          quoteCount,
+          designatedMoverIds,
+          createdAt,
+          confirmedAt,
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        moveType: { '$ref': '#/components/schemas/ServiceType' }
+        moveDate: { type: string, format: date }
+        from: { '$ref': '#/components/schemas/Address' }
+        to: { '$ref': '#/components/schemas/Address' }
+        status: { '$ref': '#/components/schemas/MoveRequestStatus' }
+        quoteCount: { type: integer, maximum: 8 }
+        designatedMoverIds:
+          type: array
+          items: { type: string, format: uuid }
+        createdAt: { type: string, format: date-time }
+        confirmedAt: { type: string, format: date-time, nullable: true }
+    MoveRequestWithQuotes:
+      allOf:
+        - { '$ref': '#/components/schemas/MoveRequest' }
+        - type: object
+          required: [quotes]
+          properties:
+            quotes:
+              type: array
+              maxItems: 8
+              items: { '$ref': '#/components/schemas/CustomerQuote' }
+    MoveRequestHistoryResponse:
+      allOf:
+        - { '$ref': '#/components/schemas/CursorMeta' }
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items: { '$ref': '#/components/schemas/MoveRequestWithQuotes' }
+    DesignationCreate:
+      type: object
+      required: [moverId]
+      properties:
+        moverId: { type: string, format: uuid }
+    Designation:
+      type: object
+      required: [moveRequestId, moverId, createdAt]
+      properties:
+        moveRequestId: { type: string, format: uuid }
+        moverId: { type: string, format: uuid }
+        createdAt: { type: string, format: date-time }
+    CustomerQuote:
+      description: 견적을 요청한 일반 유저에게 보이는 견적
+      type: object
+      required: [id, price, status, isDesignated, createdAt, mover]
+      properties:
+        id: { type: string, format: uuid }
+        price: { type: integer, description: 원(KRW), example: 350000 }
+        status: { '$ref': '#/components/schemas/QuoteStatus' }
+        isDesignated: { type: boolean, description: 지정 견적 라벨 표시용 }
+        createdAt: { type: string, format: date-time }
+        mover: { '$ref': '#/components/schemas/MoverSummary' }
+    QuoteDetail:
+      allOf:
+        - { '$ref': '#/components/schemas/CustomerQuote' }
+        - type: object
+          required: [confirmedAt, moveRequest]
+          properties:
+            confirmedAt: { type: string, format: date-time, nullable: true }
+            moveRequest: { '$ref': '#/components/schemas/MoveRequest' }
+    QuoteCreate:
+      type: object
+      required: [price]
+      properties:
+        price: { type: integer, description: 견적가 (원) }
+    RequestForMover:
+      description: 기사님에게 보이는 견적 요청
+      type: object
+      required:
+        [
+          id,
+          customerName,
+          moveType,
+          moveDate,
+          from,
+          to,
+          status,
+          isDesignated,
+          createdAt,
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        customerName: { type: string, nullable: true }
+        moveType: { '$ref': '#/components/schemas/ServiceType' }
+        moveDate: { type: string, format: date }
+        from: { '$ref': '#/components/schemas/Address' }
+        to: { '$ref': '#/components/schemas/Address' }
+        status: { '$ref': '#/components/schemas/MoveRequestStatus' }
+        isDesignated: { type: boolean }
+        createdAt: { type: string, format: date-time }
+    ReceivedRequestListResponse:
+      allOf:
+        - { '$ref': '#/components/schemas/CursorMeta' }
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items: { '$ref': '#/components/schemas/RequestForMover' }
+    SentQuote:
+      description: 견적을 보낸 기사님에게 보이는 견적
+      type: object
+      required: [id, price, status, isDesignated, createdAt, moveRequest]
+      properties:
+        id: { type: string, format: uuid }
+        price: { type: integer }
+        status: { '$ref': '#/components/schemas/QuoteStatus' }
+        isDesignated: { type: boolean }
+        createdAt: { type: string, format: date-time }
+        moveRequest: { '$ref': '#/components/schemas/RequestForMover' }
+    RejectedRequest:
+      type: object
+      required: [moveRequest, rejectedAt]
+      properties:
+        moveRequest: { '$ref': '#/components/schemas/RequestForMover' }
+        rejectedAt: { type: string, format: date-time }
+    RejectedRequestListResponse:
+      allOf:
+        - { '$ref': '#/components/schemas/CursorMeta' }
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items: { '$ref': '#/components/schemas/RejectedRequest' }
+    ReviewCreate:
+      type: object
+      required: [quoteId, rating, content]
+      properties:
+        quoteId: { type: string, format: uuid }
+        rating: { type: number, description: 평점. 척도는 추후 결정합니다. }
+        content: { type: string }
+    Review:
+      description: 기사님 페이지에 표시되는 리뷰
+      type: object
+      required: [id, rating, content, customerName, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        rating: { type: number, description: 평점. 척도는 추후 결정합니다. }
+        content: { type: string }
+        customerName:
+          {
+            type: string,
+            description: 리뷰 작성자 표시명. 표시 방식은 추후 결정합니다.,
+            nullable: true,
+          }
+        createdAt: { type: string, format: date-time }
+    MoverReviewListResponse:
+      allOf:
+        - { '$ref': '#/components/schemas/OffsetMeta' }
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items: { '$ref': '#/components/schemas/Review' }
+    ReviewTarget:
+      description: 리뷰 대상인(또는 리뷰할 수 있는) 완료된 이사
+      type: object
+      required: [quoteId, price, isDesignated, moveType, moveDate, mover]
+      properties:
+        quoteId: { type: string, format: uuid }
+        price: { type: integer }
+        isDesignated: { type: boolean }
+        moveType: { '$ref': '#/components/schemas/ServiceType' }
+        moveDate: { type: string, format: date }
+        mover: { '$ref': '#/components/schemas/MoverSummary' }
+    MyReview:
+      allOf:
+        - { '$ref': '#/components/schemas/ReviewTarget' }
+        - type: object
+          required: [id, rating, content, createdAt]
+          properties:
+            id: { type: string, format: uuid }
+            rating: { type: number, description: 평점. 척도는 추후 결정합니다. }
+            content: { type: string }
+            createdAt: { type: string, format: date-time }
+    MyReviewListResponse:
+      allOf:
+        - { '$ref': '#/components/schemas/OffsetMeta' }
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items: { '$ref': '#/components/schemas/MyReview' }
+    WritableReviewListResponse:
+      allOf:
+        - { '$ref': '#/components/schemas/OffsetMeta' }
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items: { '$ref': '#/components/schemas/ReviewTarget' }
+    Notification:
+      type: object
+      required: [id, type, message, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        type: { '$ref': '#/components/schemas/NotificationType' }
+        message:
+          {
+            type: string,
+            description: 사용자 언어로 표시할 알림. 번역 방식은 추후 결정합니다.,
+          }
+        moveRequestId: { type: string, format: uuid, nullable: true }
+        quoteId: { type: string, format: uuid, nullable: true }
+        createdAt: { type: string, format: date-time }
+    NotificationListResponse:
+      allOf:
+        - { '$ref': '#/components/schemas/CursorMeta' }
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items: { '$ref': '#/components/schemas/Notification' }
