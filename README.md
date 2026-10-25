@@ -81,7 +81,9 @@ src/
   validators/       요청 검증 스키마
   lib/              Prisma 등 외부 클라이언트
   utils/            공통 유틸
+  types/            Express 타입 확장 (req.user)
   generated/        Prisma Client (생성물, 커밋 안 함)
+tests/              Vitest + supertest 테스트
 ```
 
 ## 실행 및 상태 확인
