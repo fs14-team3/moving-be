@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import { env } from '../src/config/env'
 import type {
   MoveRequestStatus,
   Prisma,
@@ -370,7 +371,7 @@ function buildSeedData() {
 }
 
 async function main() {
-  if (process.env.NODE_ENV === 'production') {
+  if (env.NODE_ENV === 'production') {
     throw new Error('Seeding is disabled when NODE_ENV=production')
   }
   const data = buildSeedData()
