@@ -3,6 +3,7 @@ import { Router } from 'express'
 import swaggerUi from 'swagger-ui-express'
 import { AppError } from '../errors/app-error'
 import { prisma } from '../lib/prisma'
+import { authRouter } from './auth.routes'
 
 export const apiRouter = Router()
 
