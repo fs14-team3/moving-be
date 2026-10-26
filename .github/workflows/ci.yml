@@ -7,6 +7,12 @@ on:
   push:
     branches: [main, develop]
 
+# A newer run of the same PR cancels the older one.
+# Each push run gets its own group, so every develop/main commit keeps its result.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
 jobs:
   gitleaks:
     name: Secret scan
