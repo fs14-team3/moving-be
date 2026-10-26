@@ -10,7 +10,13 @@ RELEASE=$2
 BASE=/srv/moving/$ENV
 NAME=moving-be-$ENV
 CONFIG=/srv/moving/config/$ENV.env
-PORT=$(sed -n 's/^PORT=//p' "$CONFIG")
+PORT=$(sed -n 's/^PORT=//p' "$CONFIG" | tr -d "\"'\r")
+case $PORT in
+  '' | *[!0-9]*)
+    echo "PORT in $CONFIG must be a single number, got '$PORT'" >&2
+    exit 1
+    ;;
+esac
 
 cd "$RELEASE"
 ln -sfn "$CONFIG" .env
