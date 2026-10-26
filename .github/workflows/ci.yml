@@ -35,7 +35,13 @@ jobs:
           printf '%s  %s\n' "$GITLEAKS_SHA256" "${install_dir}/${archive}" | sha256sum --check
           tar -xzf "${install_dir}/${archive}" -C "$install_dir" gitleaks
       - name: Scan Git history for secrets
-        run: '"${RUNNER_TEMP}/gitleaks/gitleaks" git --redact --no-banner --log-opts="--all" .'
+        env:
+          LOG_OPTS: >-
+            ${{ github.event_name == 'pull_request' &&
+            format('{0}..{1}', github.event.pull_request.base.sha, github.event.pull_request.head.sha) ||
+            github.event.before && github.event.before != '0000000000000000000000000000000000000000' &&
+            format('{0}..{1}', github.event.before, github.sha) || github.sha }}
+        run: '"${RUNNER_TEMP}/gitleaks/gitleaks" git --redact --no-banner --log-opts="$LOG_OPTS" .'
 
   pr-title:
     name: PR title
