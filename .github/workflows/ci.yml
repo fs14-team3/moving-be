@@ -65,11 +65,28 @@ jobs:
   quality:
     name: Quality checks
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: moving_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     env:
-      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/moving
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/moving_test
+      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/moving_test
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
       - name: Set up Node.js
         uses: actions/setup-node@v6
         with:
@@ -87,7 +104,21 @@ jobs:
         run: npm run typecheck
       - name: Find unused files, exports and dependencies
         run: npm run knip
-      - name: Validate Prisma schema
-        run: npx prisma validate
       - name: Build
         run: npm run build
+      - name: Check merged migrations are unchanged
+        if: github.event_name == 'pull_request'
+        run: |
+          changed=$(git diff --name-only --diff-filter=MDR HEAD^1 HEAD -- prisma/migrations)
+          if [ -n "$changed" ]; then
+            for file in $changed; do
+              echo "::error file=$file::Merged migrations cannot change. Add a new migration instead."
+            done
+            exit 1
+          fi
+      - name: Apply migrations to an empty database
+        run: npx prisma migrate deploy
+      - name: Check every schema change has a migration
+        run: npx prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code
+      - name: Test
+        run: npm test
