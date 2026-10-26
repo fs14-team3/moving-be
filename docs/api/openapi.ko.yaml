@@ -296,6 +296,7 @@ paths:
       description: |
         공개 API. 로그인한 일반 유저가 호출하면 `isFavorite`가 채워지고, 그 외에는 null입니다.
         프로필을 등록한 기사님만 목록에 노출됩니다.
+        검색어와 필터는 함께 적용되며, 다음 페이지를 요청할 때는 첫 페이지와 같은 조건에 `cursor`를 더해 보냅니다.
       operationId: listMovers
       security:
         - {}
@@ -303,26 +304,35 @@ paths:
       parameters:
         - name: keyword
           in: query
-          description: 기사님 별명 부분 검색
+          description: 기사님 별명, 한 줄 소개 또는 상세 설명 부분 검색 (대소문자 구분 없음). 앞뒤 공백은 제거하며, 빈 값이면 적용하지 않습니다.
           schema: { type: string }
         - name: region
           in: query
+          description: 서비스 지역에 이 지역이 포함된 기사님만 조회합니다. 빈 값이면 적용하지 않습니다.
           schema: { '$ref': '#/components/schemas/Region' }
         - name: serviceType
           in: query
+          description: 이 서비스를 제공하는 기사님만 조회합니다.
           schema: { '$ref': '#/components/schemas/ServiceType' }
         - name: sort
           in: query
+          description: 생략하면 `REVIEW_COUNT`
           schema: { '$ref': '#/components/schemas/MoverSort' }
         - { '$ref': '#/components/parameters/Cursor' }
-        - { '$ref': '#/components/parameters/Limit' }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 50, default: 10 }
       responses:
         '200':
-          description: 기사님 목록 페이지
+          description: 기사님 목록 페이지. 조건에 맞는 기사님이 없으면 `items`는 빈 배열, `nextCursor`는 null, `hasNext`는 false입니다.
           content:
             application/json:
               schema: { '$ref': '#/components/schemas/MoverListResponse' }
-        '400': { '$ref': '#/components/responses/ValidationError' }
+        '400':
+          description: '`VALIDATION_ERROR`. `sort`·`serviceType`·`limit`이 허용 범위를 벗어나거나, `cursor`가 잘못된 경우'
+          content:
+            application/json:
+              schema: { '$ref': '#/components/schemas/ErrorResponse' }
   '/movers/{moverId}':
     get:
       tags: [Movers]
@@ -953,7 +963,9 @@ components:
       enum: [NEW_REQUEST, NEW_QUOTE, QUOTE_CONFIRMED, MOVE_DAY]
     MoverSort:
       type: string
-      description: 리뷰순 / 평점순 / 경력순 / 확정순
+      description:
+        리뷰 많은 순 / 평점 높은 순 / 경력 많은 순 / 확정 많은 순. 값이 같으면 기사님 id 순서이며,
+        경력순에서는 경력을 입력하지 않은 기사님이 마지막에 옵니다.
       enum: [REVIEW_COUNT, RATING, CAREER, CONFIRMED_COUNT]
     ReceivedRequestSort:
       type: string
@@ -1214,8 +1226,8 @@ components:
           items: { '$ref': '#/components/schemas/ServiceType' }
           nullable: true
         averageRating:
-          { type: number, format: float, example: 4.8, description: 평점.
-              척도는 추후 결정합니다. }
+          { type: number, format: float, example: 4.8, description: 평균 평점
+              (소수점 둘째 자리까지). 리뷰가 없으면 0. 척도는 추후 결정합니다. }
         reviewCount: { type: integer }
         confirmedCount: { type: integer }
         isFavorite:

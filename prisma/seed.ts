@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import { env } from '../src/config/env'
 import type {
   MoveRequestStatus,
   Prisma,
@@ -95,7 +96,13 @@ function buildSeedData() {
   const allMovers = [
     ...movers.map((mover, i) => ({ ...mover, joinedDay: -1500 + i })),
     ...newMovers.map((mover, i) => ({ ...mover, joinedDay: -3 + i })),
-  ].map((mover, i) => ({ ...mover, id: id(`mover:${i}`) }))
+  ].map((mover, i) => ({
+    ...mover,
+    id: id(`mover:${i}`),
+    confirmedCount: 0,
+    reviewCount: 0,
+    ratingSum: 0,
+  }))
 
   const moversFor = (moveType: ServiceType, region: string, day: number) =>
     allMovers.filter(
@@ -199,6 +206,7 @@ function buildSeedData() {
     if (!confirmedAt) return
     const chosen = quoters[0]
     const quoteId = id(`quote:${key}:0`)
+    chosen.confirmedCount++
     for (const userId of [customer.id, chosen.id]) {
       notifications.push({
         id: id(`notification:confirmed:${key}:${userId}`),
@@ -234,6 +242,8 @@ function buildSeedData() {
       createdAt: at(moveDay + 2, 20),
       updatedAt: at(moveDay + 2, 20),
     })
+    chosen.reviewCount++
+    chosen.ratingSum += rating
   }
 
   customers.forEach(([name, email, nickname], i) => {
@@ -315,30 +325,35 @@ function buildSeedData() {
     }
   })
 
-  allMovers.forEach(({ id: userId, name, joinedDay, ...profile }, i) => {
-    const joinedAt = at(joinedDay, 10)
-    users.push({
-      id: userId,
-      role: 'MOVER',
-      name,
-      email: `mover${i + 1}@example.test`,
-      phone: `010-2000-${String(i + 1).padStart(4, '0')}`,
-      createdAt: joinedAt,
-      updatedAt: joinedAt,
-    })
-    socialAccounts.push({
-      id: id(`social:mover:${i}`),
-      userId,
-      provider: PROVIDERS[i % PROVIDERS.length],
-      providerId: `seed-mover-${i + 1}`,
-    })
-    moverProfiles.push({
-      userId,
-      ...profile,
-      createdAt: joinedAt,
-      updatedAt: joinedAt,
-    })
-  })
+  allMovers.forEach(
+    ({ id: userId, name, joinedDay, ratingSum, ...profile }, i) => {
+      const joinedAt = at(joinedDay, 10)
+      users.push({
+        id: userId,
+        role: 'MOVER',
+        name,
+        email: `mover${i + 1}@example.test`,
+        phone: `010-2000-${String(i + 1).padStart(4, '0')}`,
+        createdAt: joinedAt,
+        updatedAt: joinedAt,
+      })
+      socialAccounts.push({
+        id: id(`social:mover:${i}`),
+        userId,
+        provider: PROVIDERS[i % PROVIDERS.length],
+        providerId: `seed-mover-${i + 1}`,
+      })
+      moverProfiles.push({
+        userId,
+        ...profile,
+        averageRating: profile.reviewCount
+          ? Math.round((ratingSum / profile.reviewCount) * 100) / 100
+          : 0,
+        createdAt: joinedAt,
+        updatedAt: joinedAt,
+      })
+    },
+  )
 
   return {
     users,
@@ -356,7 +371,7 @@ function buildSeedData() {
 }
 
 async function main() {
-  if (process.env.NODE_ENV === 'production') {
+  if (env.NODE_ENV === 'production') {
     throw new Error('Seeding is disabled when NODE_ENV=production')
   }
   const data = buildSeedData()

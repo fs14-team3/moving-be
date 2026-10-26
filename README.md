@@ -20,15 +20,16 @@ npm run dev              # http://localhost:4000/api/health
 
 ## 환경 변수
 
-| 이름            | 예시                                   | 설명                                                                             |
-| --------------- | -------------------------------------- | -------------------------------------------------------------------------------- |
-| `PORT`          | `4000`                                 | API 서버 포트                                                                    |
-| `HOST`          | `127.0.0.1`                            | 바인딩 주소. 생략 시 모든 인터페이스, 운영(Nginx 뒤)은 `127.0.0.1`               |
-| `CLIENT_ORIGIN` | `http://localhost:3000`                | CORS 허용 프론트 주소                                                            |
-| `DATABASE_URL`  | `postgresql://…@localhost:5432/moving` | PostgreSQL 연결 문자열                                                           |
-| `NODE_ENV`      | `development`                          | `development` / `production`                                                     |
-| `SENTRY_DSN`    | `https://…@o0.ingest.sentry.io/0`      | Sentry 에러 수집 DSN. 생략하면 Sentry를 사용하지 않습니다 (로컬은 생략)          |
-| `TRUST_PROXY`   | `0`                                    | 신뢰할 프록시 홉 수. 로컬 `0`, Nginx 뒤 `1`, Cloudflare·로드밸런서 + Nginx는 `2` |
+| 이름                | 예시                                        | 설명                                                                                  |
+| ------------------- | ------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `PORT`              | `4000`                                      | API 서버 포트                                                                         |
+| `HOST`              | `127.0.0.1`                                 | 바인딩 주소. 생략 시 모든 인터페이스, 운영(Nginx 뒤)은 `127.0.0.1`                    |
+| `CLIENT_ORIGIN`     | `http://localhost:3000`                     | CORS 허용 프론트 주소                                                                 |
+| `DATABASE_URL`      | `postgresql://…@localhost:5432/moving`      | PostgreSQL 연결 문자열                                                                |
+| `TEST_DATABASE_URL` | `postgresql://…@localhost:5432/moving_test` | `npm test` 전용 DB. 테스트가 모든 행을 지우므로 `DATABASE_URL`과 다른 DB를 사용합니다 |
+| `NODE_ENV`          | `development`                               | `development` / `production`                                                          |
+| `SENTRY_DSN`        | `https://…@o0.ingest.sentry.io/0`           | Sentry 에러 수집 DSN. 생략하면 Sentry를 사용하지 않습니다 (로컬은 생략)               |
+| `TRUST_PROXY`       | `0`                                         | 신뢰할 프록시 홉 수. 로컬 `0`, Nginx 뒤 `1`, Cloudflare·로드밸런서 + Nginx는 `2`      |
 
 새 환경 변수를 추가하면 `.env.example`과 이 표를 같은 PR에서 수정합니다.
 
@@ -50,10 +51,14 @@ npm run dev              # http://localhost:4000/api/health
 | `npm run typecheck`      | 타입 검사                             |
 | `npm run knip`           | 사용하지 않는 파일·export·의존성 검사 |
 | `npm run format:check`   | Prettier 검사 (`format`으로 수정)     |
+| `npm test`               | 테스트 실행 (Vitest)                  |
 | `npm run prisma:migrate` | 마이그레이션 생성 및 로컬 DB 적용     |
 | `npm run prisma:deploy`  | 기존 마이그레이션을 DB에 적용         |
 | `npm run prisma:seed`    | 빈 개발 DB에 시드 데이터 추가         |
 | `npm run prisma:studio`  | Prisma Studio                         |
+
+`npm test`는 `TEST_DATABASE_URL`의 DB에 마이그레이션을 적용한 뒤 실행하고, 테스트마다 모든 행을 지웁니다.
+개발 DB와 다른 DB를 미리 만들어 둡니다 (예: `createdb moving_test`).
 
 시드 데이터의 날짜는 실행한 날을 기준으로 만듭니다. 이미 시드 데이터가 있는 DB에서는 실패하므로, 다시 채울 때는 `npx prisma migrate reset`으로 DB를 비운 뒤 `npm run prisma:seed`를 실행합니다.
 
@@ -76,7 +81,9 @@ src/
   validators/       요청 검증 스키마
   lib/              Prisma 등 외부 클라이언트
   utils/            공통 유틸
+  types/            Express 타입 확장 (req.user)
   generated/        Prisma Client (생성물, 커밋 안 함)
+tests/              Vitest + supertest 테스트
 ```
 
 ## 실행 및 상태 확인
