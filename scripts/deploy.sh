@@ -38,21 +38,21 @@ echo "== Migrate"
 PRISMA_HIDE_UPDATE_MESSAGE=1 npx prisma migrate deploy
 
 switch_to() {
-  ln -sfn "$1" "$BASE/current.next"
-  mv -Tf "$BASE/current.next" "$BASE/current"
+  ln -sfn "$1" "$BASE/current.next" || return
+  mv -Tf "$BASE/current.next" "$BASE/current" || return
   if pm2 describe "$NAME" >/dev/null 2>&1; then
-    pm2 reload "$NAME" --update-env
+    pm2 reload "$NAME" --update-env || return
   else
     # kill-timeout exceeds the app's 10s graceful shutdown (src/server.ts)
     pm2 start "$BASE/current/dist/server.js" --name "$NAME" \
-      --cwd "$BASE/current" --kill-timeout 12000 --time
+      --cwd "$BASE/current" --kill-timeout 12000 --time || return
   fi
   pm2 save --force >/dev/null
 }
 
 ready() {
   for _ in $(seq 1 15); do
-    curl -fsS "http://127.0.0.1:$PORT/api/ready" >/dev/null 2>&1 && return 0
+    curl -fsS --connect-timeout 2 --max-time 5 "http://127.0.0.1:$PORT/api/ready" >/dev/null 2>&1 && return 0
     sleep 2
   done
   return 1
@@ -61,14 +61,16 @@ ready() {
 PREVIOUS=$(readlink "$BASE/current" || true)
 
 echo "== Release"
-switch_to "$RELEASE"
-
-if ! ready; then
-  echo "$NAME did not become ready" >&2
+if ! switch_to "$RELEASE" || ! ready; then
+  echo "$NAME failed to start or become ready" >&2
   pm2 logs "$NAME" --lines 40 --nostream || true
   if [ -n "$PREVIOUS" ] && [ "$PREVIOUS" != "$RELEASE" ]; then
     echo "Rolling back to $PREVIOUS" >&2
-    switch_to "$PREVIOUS"
+    if switch_to "$PREVIOUS" && ready; then
+      echo "$NAME is ready again on $PREVIOUS" >&2
+    else
+      echo "$NAME is not ready after rolling back either" >&2
+    fi
   fi
   exit 1
 fi

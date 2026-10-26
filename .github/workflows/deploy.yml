@@ -81,4 +81,4 @@ jobs:
         if: steps.target.outputs.skip != 'true'
         env:
           API_URL: ${{ vars.API_URL }}
-        run: curl -fsS --retry 5 --retry-delay 3 --retry-all-errors "$API_URL/api/ready"
+        run: curl -fsS --connect-timeout 5 --max-time 10 --retry 5 --retry-delay 3 --retry-all-errors "$API_URL/api/ready"
