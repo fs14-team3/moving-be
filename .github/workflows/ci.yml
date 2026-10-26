@@ -129,5 +129,8 @@ jobs:
         run: npx prisma migrate deploy
       - name: Check every schema change has a migration
         run: npx prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code
+      # Runs while the database is still empty: the seed fails if its data already exists.
+      - name: Check seed data loads
+        run: npm run prisma:seed
       - name: Test
         run: npm test
