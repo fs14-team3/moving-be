@@ -1,12 +1,12 @@
 const ERROR_CATALOG = {
-  VALIDATION_ERROR: { status: 400, message: 'Invalid request' },
-  UNAUTHORIZED: { status: 401, message: 'Authentication required' },
-  FORBIDDEN: { status: 403, message: 'Access denied' },
-  NOT_FOUND: { status: 404, message: 'Resource not found' },
-  INTERNAL_ERROR: { status: 500, message: 'Internal server error' },
+  VALIDATION_ERROR: { status: 400, message: '잘못된 요청입니다' },
+  UNAUTHORIZED: { status: 401, message: '로그인이 필요합니다' },
+  FORBIDDEN: { status: 403, message: '접근 권한이 없습니다' },
+  NOT_FOUND: { status: 404, message: '요청한 리소스를 찾을 수 없습니다' },
+  INTERNAL_ERROR: { status: 500, message: '서버 오류가 발생했습니다' },
   SERVICE_UNAVAILABLE: {
     status: 503,
-    message: 'Service temporarily unavailable',
+    message: '일시적으로 서비스를 이용할 수 없습니다',
   },
 } as const
 

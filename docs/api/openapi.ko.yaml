@@ -898,7 +898,7 @@ components:
           example:
             error:
               code: VALIDATION_ERROR
-              message: Invalid request body
+              message: 잘못된 요청입니다
               details:
                 - field: password
                   reason:
