@@ -18,6 +18,13 @@ case $PORT in
     ;;
 esac
 
+# fd 9 is the gate's per-environment lock, inherited through exec; keep it open.
+exec 8>"$HOME/deploy.lock"
+if ! flock -n 8; then
+  echo "== Waiting for another deploy on this server"
+  flock 8
+fi
+
 cd "$RELEASE"
 ln -sfn "$CONFIG" .env
 
