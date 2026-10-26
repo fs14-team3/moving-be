@@ -48,6 +48,7 @@ npm run dev              # http://localhost:4000/api/health
 | `npm run build`          | Prisma Client 생성 + `dist/`로 컴파일 |
 | `npm start`              | 빌드 결과 실행                        |
 | `npm run lint`           | ESLint 검사 (`lint:fix`로 자동 수정)  |
+| `npm run lint:api`       | `docs/api/openapi.ko.yaml` 명세 검사  |
 | `npm run typecheck`      | 타입 검사                             |
 | `npm run knip`           | 사용하지 않는 파일·export·의존성 검사 |
 | `npm run format:check`   | Prettier 검사 (`format`으로 수정)     |

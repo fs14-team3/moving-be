@@ -107,6 +107,8 @@ jobs:
         run: npm run format:check
       - name: Lint
         run: npm run lint
+      - name: Validate API spec
+        run: npm run lint:api
       - name: Type check
         run: npm run typecheck
       - name: Find unused files, exports and dependencies
