@@ -3,7 +3,13 @@ import { resolve } from 'node:path'
 import { afterAll, beforeEach, expect, it } from 'vitest'
 import type { QuoteStatus } from '../src/generated/prisma/client'
 import { prisma } from '../src/lib/prisma'
-import { api, createCustomer, createMover, resetDatabase } from './helpers'
+import {
+  api,
+  createCustomer,
+  createMover,
+  createReview,
+  resetDatabase,
+} from './helpers'
 
 const customerId = '00000000-0000-4000-8000-000000000001'
 const reviewedMoverId = '00000000-0000-4000-8000-000000000002'
@@ -15,6 +21,13 @@ const migration = readFileSync(
   resolve(
     __dirname,
     '../prisma/migrations/20261025162614_backfill_mover_aggregates/migration.sql',
+  ),
+  'utf8',
+)
+const ratingMigration = readFileSync(
+  resolve(
+    __dirname,
+    '../prisma/migrations/20261027145322_review_rating_integer/migration.sql',
   ),
   'utf8',
 )
@@ -134,4 +147,47 @@ it('찜 수를 음수로 저장할 수 없다', async () => {
   await expect(createMover(newMoverId, { favoriteCount: -1 })).rejects.toThrow(
     'mover_profiles_favorite_count_check',
   )
+})
+
+it('기존 소수점 평점을 정수로 반올림하고 평균 평점을 다시 계산한다', async () => {
+  await createCustomer(customerId)
+  await createMover(reviewedMoverId, {})
+  await createMover(newMoverId, {})
+  await prisma.$executeRawUnsafe(
+    'ALTER TABLE reviews DROP CONSTRAINT reviews_rating_check, ALTER COLUMN rating TYPE NUMERIC',
+  )
+  for (const [rating, content] of [
+    [5, '반올림 전 4.5'],
+    [4, '반올림 전 3.5'],
+    [4, '그대로 4'],
+  ] as const) {
+    await createReview(customerId, reviewedMoverId, { rating, content })
+  }
+  await prisma.$executeRaw`UPDATE reviews SET rating = rating - 0.5 WHERE content LIKE '반올림%'`
+
+  for (const statement of ratingMigration.split(';')) {
+    if (statement.trim()) await prisma.$executeRawUnsafe(statement)
+  }
+
+  const reviews = await prisma.review.findMany({
+    select: { rating: true },
+    orderBy: { rating: 'asc' },
+  })
+  expect(reviews.map(({ rating }) => rating)).toEqual([4, 4, 5])
+  const movers = await prisma.moverProfile.findMany({
+    select: { averageRating: true },
+    orderBy: { userId: 'asc' },
+  })
+  expect(movers.map(({ averageRating }) => averageRating.toNumber())).toEqual([
+    4.33, 0,
+  ])
+})
+
+it.each([0, 6])('평점 %s점은 저장할 수 없다', async (rating) => {
+  await createCustomer(customerId)
+  await createMover(newMoverId, {})
+
+  await expect(
+    createReview(customerId, newMoverId, { rating, content: '이사 후기' }),
+  ).rejects.toThrow('reviews_rating_check')
 })

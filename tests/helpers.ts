@@ -37,3 +37,30 @@ export async function createCustomer(id: string) {
     data: { id, role: 'CUSTOMER', customerProfile: { create: {} } },
   })
 }
+
+export async function createReview(
+  customerId: string,
+  moverId: string,
+  review: Prisma.ReviewCreateWithoutQuoteInput,
+) {
+  await prisma.moveRequest.create({
+    data: {
+      customerId,
+      moveType: 'HOME',
+      moveDate: new Date('2026-01-01'),
+      fromAddress: '서울 출발지',
+      fromRegion: '서울',
+      toAddress: '서울 도착지',
+      toRegion: '서울',
+      status: 'COMPLETED',
+      quotes: {
+        create: {
+          moverId,
+          price: 100000,
+          status: 'CONFIRMED',
+          reviews: { create: review },
+        },
+      },
+    },
+  })
+}

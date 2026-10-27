@@ -1243,7 +1243,7 @@ components:
           nullable: true
         averageRating:
           { type: number, format: float, example: 4.8, description: 평균 평점
-              (소수점 둘째 자리까지). 리뷰가 없으면 0. 척도는 추후 결정합니다. }
+              (소수점 둘째 자리까지). 리뷰가 없으면 0. 평점은 1~5점 정수입니다. }
         reviewCount: { type: integer }
         confirmedCount: { type: integer }
         isFavorite:
@@ -1457,7 +1457,7 @@ components:
       required: [quoteId, rating, content]
       properties:
         quoteId: { type: string, format: uuid }
-        rating: { type: number, description: 평점. 척도는 추후 결정합니다. }
+        rating: { type: integer, description: 평점 (1~5점) }
         content: { type: string }
     Review:
       description: 기사님 페이지에 표시되는 리뷰
@@ -1465,7 +1465,7 @@ components:
       required: [id, rating, content, customerName, createdAt]
       properties:
         id: { type: string, format: uuid }
-        rating: { type: number, description: 평점. 척도는 추후 결정합니다. }
+        rating: { type: integer, description: 평점 (1~5점) }
         content: { type: string }
         customerName:
           {
@@ -1501,7 +1501,7 @@ components:
           required: [id, rating, content, createdAt]
           properties:
             id: { type: string, format: uuid }
-            rating: { type: number, description: 평점. 척도는 추후 결정합니다. }
+            rating: { type: integer, description: 평점 (1~5점) }
             content: { type: string }
             createdAt: { type: string, format: date-time }
     MyReviewListResponse:
