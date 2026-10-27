@@ -82,14 +82,17 @@ export async function login(input: LoginInput) {
   })
 
   // 더미 해시 확인
-  const dummyPasswordHash = process.env.DUMMY_PASSWORD_HASH
+  let passwordHash = user?.passwordHash
 
-  if (!dummyPasswordHash) {
-    throw new Error('DUMMY_PASSWORD_HASH 환경 변수가 설정되지 않았습니다')
+  if (!passwordHash) {
+    const dummyPasswordHash = process.env.DUMMY_PASSWORD_HASH
+
+    if (!dummyPasswordHash) {
+      throw new Error('DUMMY_PASSWORD_HASH 환경 변수가 설정되지 않았습니다')
+    }
+
+    passwordHash = dummyPasswordHash
   }
-
-  // 계정이 없으면 더미 해시로 비교
-  const passwordHash = user?.passwordHash ?? dummyPasswordHash
 
   // 입력한 비밀번호 검증
   const isValidPassword = await verifyPassword(input.password, passwordHash)
