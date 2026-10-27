@@ -118,7 +118,7 @@ jobs:
       - name: Check merged migrations are unchanged
         if: github.event_name == 'pull_request'
         run: |
-          changed=$(git diff --name-only --diff-filter=MDR HEAD^1 HEAD -- prisma/migrations)
+          changed=$(git diff --name-only --diff-filter=MDR HEAD^1 HEAD -- prisma/migrations ':!prisma/migrations/migration_lock.toml')
           if [ -n "$changed" ]; then
             for file in $changed; do
               echo "::error file=$file::Merged migrations cannot change. Add a new migration instead."
