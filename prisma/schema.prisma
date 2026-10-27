@@ -207,7 +207,7 @@ model Review {
 model Favorite {
   customerId String          @map("customer_id") @db.Uuid
   moverId    String          @map("mover_id") @db.Uuid
-  createdAt  DateTime        @default(now()) @map("created_at") @db.Timestamptz
+  createdAt  DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
   customer   CustomerProfile @relation(fields: [customerId], references: [userId], onDelete: Cascade)
   mover      MoverProfile    @relation(fields: [moverId], references: [userId], onDelete: Cascade)
 
