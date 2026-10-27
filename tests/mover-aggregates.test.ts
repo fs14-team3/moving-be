@@ -9,10 +9,19 @@ const customerId = '00000000-0000-4000-8000-000000000001'
 const reviewedMoverId = '00000000-0000-4000-8000-000000000002'
 const confirmedMoverId = '00000000-0000-4000-8000-000000000003'
 const newMoverId = '00000000-0000-4000-8000-000000000004'
+const favoritedMoverId = '00000000-0000-4000-8000-000000000005'
+const otherCustomerId = '00000000-0000-4000-8000-000000000006'
 const migration = readFileSync(
   resolve(
     __dirname,
     '../prisma/migrations/20261025162614_backfill_mover_aggregates/migration.sql',
+  ),
+  'utf8',
+)
+const favoriteBackfill = readFileSync(
+  resolve(
+    __dirname,
+    '../prisma/migrations/20261027051944_backfill_mover_favorite_count/migration.sql',
   ),
   'utf8',
 )
@@ -95,4 +104,34 @@ it('기존 리뷰와 확정 견적을 집계해 목록의 평점과 정렬을 �
       confirmedCount: 0,
     }),
   ])
+})
+
+it('기존 찜을 집계해 찜 수를 복구한다', async () => {
+  await createCustomer(customerId)
+  await createCustomer(otherCustomerId)
+  await createMover(favoritedMoverId, {})
+  await createMover(newMoverId, { favoriteCount: 3 })
+  await prisma.favorite.createMany({
+    data: [
+      { customerId, moverId: favoritedMoverId },
+      { customerId: otherCustomerId, moverId: favoritedMoverId },
+    ],
+  })
+
+  await prisma.$executeRawUnsafe(favoriteBackfill)
+
+  const movers = await prisma.moverProfile.findMany({
+    select: { userId: true, favoriteCount: true },
+    orderBy: { userId: 'asc' },
+  })
+  expect(movers).toEqual([
+    { userId: newMoverId, favoriteCount: 0 },
+    { userId: favoritedMoverId, favoriteCount: 2 },
+  ])
+})
+
+it('찜 수를 음수로 저장할 수 없다', async () => {
+  await expect(createMover(newMoverId, { favoriteCount: -1 })).rejects.toThrow(
+    'mover_profiles_favorite_count_check',
+  )
 })
