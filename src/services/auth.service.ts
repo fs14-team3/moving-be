@@ -81,23 +81,21 @@ export async function login(input: LoginInput) {
     },
   })
 
-  // 계정이 없거나 비밀번호 해시가 없는 경우
-  if (!user?.passwordHash) {
-    throw new AppError('INVALID_CREDENTIALS', [
-      {
-        field: 'email',
-        reason: '이메일 또는 비밀번호가 올바르지 않습니다',
-      },
-    ])
+  // 더미 해시 확인
+  const dummyPasswordHash = process.env.DUMMY_PASSWORD_HASH
+
+  if (!dummyPasswordHash) {
+    throw new Error('DUMMY_PASSWORD_HASH 환경 변수가 설정되지 않았습니다')
   }
 
-  // 입력한 비밀번호 검증
-  const isValidPassword = await verifyPassword(
-    input.password,
-    user.passwordHash,
-  )
+  // 계정이 없으면 더미 해시로 비교
+  const passwordHash = user?.passwordHash ?? dummyPasswordHash
 
-  if (!isValidPassword) {
+  // 입력한 비밀번호 검증
+  const isValidPassword = await verifyPassword(input.password, passwordHash)
+
+  // 계정이 없거나 비밀번호가 틀리면 동일한 오류 반환
+  if (!user?.passwordHash || !isValidPassword) {
     throw new AppError('INVALID_CREDENTIALS', [
       {
         field: 'email',
