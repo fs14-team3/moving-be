@@ -1,6 +1,8 @@
+import { AppError } from '../errors/app-error'
 import type { Prisma } from '../generated/prisma/client'
 import { prisma } from '../lib/prisma'
 import type { ListMoversQuery, MoverSort } from '../validators/mover.validator'
+import { countReviewsByRating } from './review.service'
 
 const ORDER_BY = {
   REVIEW_COUNT: { reviewCount: 'desc' },
@@ -73,6 +75,29 @@ export async function listMovers(
     ),
     nextCursor: hasNext ? page[page.length - 1].userId : null,
     hasNext,
+  }
+}
+
+export async function getMover(moverId: string, viewer?: Express.User) {
+  const mover = await prisma.moverProfile.findUnique({
+    where: { userId: moverId },
+    select: { ...moverSummarySelect, description: true, regions: true },
+  })
+  if (!mover) throw new AppError('NOT_FOUND')
+
+  const { description, regions, ...summary } = mover
+  const [favoriteIds, ratingCounts] = await Promise.all([
+    findFavoriteMoverIds(viewer, [moverId]),
+    countReviewsByRating(moverId),
+  ])
+
+  return {
+    ...toMoverSummary(summary, favoriteIds?.has(moverId) ?? null),
+    description,
+    regions,
+    ratingCounts,
+    // TODO(#13): 로그인한 일반 유저의 활성 견적 요청에 지정된 기사님이면 true, 아니면 false 반환
+    isDesignated: null,
   }
 }
 

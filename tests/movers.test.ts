@@ -1,10 +1,13 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 import type { Prisma } from '../src/generated/prisma/client'
 import { prisma } from '../src/lib/prisma'
-import { api, createCustomer, createMover, resetDatabase } from './helpers'
-
-const userId = (suffix: string) =>
-  `00000000-0000-4000-8000-00000000000${suffix}`
+import {
+  api,
+  createCustomer,
+  createMover,
+  resetDatabase,
+  userId,
+} from './helpers'
 
 const movers: ({ id: string } & Prisma.MoverProfileCreateWithoutUserInput)[] = [
   {

@@ -4,6 +4,9 @@ import { createApp } from '../src/app'
 import type { Prisma } from '../src/generated/prisma/client'
 import { prisma } from '../src/lib/prisma'
 
+export const userId = (suffix: string) =>
+  `00000000-0000-4000-8000-00000000000${suffix}`
+
 export function api(user?: Express.User) {
   const app = express()
   if (user) {
