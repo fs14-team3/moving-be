@@ -7,6 +7,12 @@ on:
   push:
     branches: [main, develop]
 
+# A newer run of the same PR cancels the older one.
+# Each push run gets its own group, so every develop/main commit keeps its result.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
 jobs:
   gitleaks:
     name: Secret scan
@@ -35,12 +41,19 @@ jobs:
           printf '%s  %s\n' "$GITLEAKS_SHA256" "${install_dir}/${archive}" | sha256sum --check
           tar -xzf "${install_dir}/${archive}" -C "$install_dir" gitleaks
       - name: Scan Git history for secrets
-        run: '"${RUNNER_TEMP}/gitleaks/gitleaks" git --redact --no-banner --log-opts="--all" .'
+        env:
+          LOG_OPTS: >-
+            ${{ github.event_name == 'pull_request' &&
+            format('{0}..{1}', github.event.pull_request.base.sha, github.event.pull_request.head.sha) ||
+            github.event.before && github.event.before != '0000000000000000000000000000000000000000' &&
+            format('{0}..{1}', github.event.before, github.sha) || github.sha }}
+        run: '"${RUNNER_TEMP}/gitleaks/gitleaks" git --redact --no-banner --verbose --log-opts="$LOG_OPTS" .'
 
   pr-title:
     name: PR title
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
@@ -59,11 +72,28 @@ jobs:
   quality:
     name: Quality checks
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: moving_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     env:
-      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/moving
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/moving_test
+      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/moving_test
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
       - name: Set up Node.js
         uses: actions/setup-node@v6
         with:
@@ -77,11 +107,30 @@ jobs:
         run: npm run format:check
       - name: Lint
         run: npm run lint
+      - name: Validate API spec
+        run: npm run lint:api
       - name: Type check
         run: npm run typecheck
       - name: Find unused files, exports and dependencies
         run: npm run knip
-      - name: Validate Prisma schema
-        run: npx prisma validate
       - name: Build
         run: npm run build
+      - name: Check merged migrations are unchanged
+        if: github.event_name == 'pull_request'
+        run: |
+          changed=$(git diff --name-only --diff-filter=MDR HEAD^1 HEAD -- prisma/migrations)
+          if [ -n "$changed" ]; then
+            for file in $changed; do
+              echo "::error file=$file::Merged migrations cannot change. Add a new migration instead."
+            done
+            exit 1
+          fi
+      - name: Apply migrations to an empty database
+        run: npx prisma migrate deploy
+      - name: Check every schema change has a migration
+        run: npx prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code
+      # Runs while the database is still empty: the seed fails if its data already exists.
+      - name: Check seed data loads
+        run: npm run prisma:seed
+      - name: Test
+        run: npm test

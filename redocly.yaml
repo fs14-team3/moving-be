@@ -1,0 +1,7 @@
+extends:
+  - recommended
+rules:
+  # Tag names explain themselves, and the API is not published under a license.
+  tag-description: off
+  info-license: off
+telemetry: off
