@@ -16,6 +16,7 @@ on:
         options: [develop, main]
 
 permissions:
+  actions: read
   contents: read
 
 concurrency:
@@ -54,6 +55,21 @@ jobs:
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
           echo "env=$env" >> "$GITHUB_OUTPUT"
           echo "Deploying $BRANCH ($sha) to $env"
+
+      - name: Require successful CI for manual deployment
+        if: github.event_name == 'workflow_dispatch' && steps.target.outputs.skip != 'true'
+        env:
+          BRANCH: ${{ inputs.branch }}
+          SHA: ${{ steps.target.outputs.sha }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          result=$(gh api --method GET "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs" \
+            -f branch="$BRANCH" -f head_sha="$SHA" -f event=push -f per_page=1 \
+            --jq '.workflow_runs[0] | if .status == "completed" then .conclusion else .status end // "missing"')
+          if [ "$result" != success ]; then
+            echo "::error::Cannot deploy $BRANCH ($SHA): latest push CI result is $result. Wait for CI to succeed, then retry deployment."
+            exit 1
+          fi
 
       - name: Set up SSH
         if: steps.target.outputs.skip != 'true'
