@@ -35,9 +35,9 @@ export async function createMover(
   })
 }
 
-export async function createCustomer(id: string) {
+export async function createCustomer(id: string, name?: string) {
   await prisma.user.create({
-    data: { id, role: 'CUSTOMER', customerProfile: { create: {} } },
+    data: { id, role: 'CUSTOMER', name, customerProfile: { create: {} } },
   })
 }
 
