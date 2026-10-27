@@ -12,5 +12,7 @@ export const listMoversQuery = z.object({
   limit: z.coerce.number().int().min(1).max(50).default(10),
 })
 
+export const moverIdParams = z.object({ moverId: z.uuid() })
+
 export type ListMoversQuery = z.infer<typeof listMoversQuery>
 export type MoverSort = ListMoversQuery['sort']
