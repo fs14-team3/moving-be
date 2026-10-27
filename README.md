@@ -4,11 +4,11 @@
 
 ## 기술 스택
 
-Node.js 24 · Express 5 · TypeScript · Prisma 7 · PostgreSQL 16 · Helmet · ESLint · Prettier · Knip · Husky · GitHub Actions · AWS (EC2 · RDS · S3) · PM2 · Nginx
+Node.js 24 · Express 5 · TypeScript · Prisma 7 · PostgreSQL 18 · Helmet · ESLint · Prettier · Knip · Husky · GitHub Actions · AWS (EC2 · RDS · S3) · PM2 · Nginx
 
 ## 시작하기
 
-요구 사항: Node.js 24 (`.nvmrc`), npm 11+, PostgreSQL 16
+요구 사항: Node.js 24 (`.nvmrc`), npm 11+, PostgreSQL 18 (운영 DB와 같은 버전)
 
 ```bash
 nvm use
@@ -66,7 +66,7 @@ npm run dev              # http://localhost:4000/api/health
 
 `routes → controllers → services` 순서로 호출합니다.
 
-초기 설계 문서: [ERD](docs/db/erd.ko.md) · [OpenAPI 초안](docs/api/openapi.ko.yaml). DB 정의는 `prisma/schema.prisma`와 `prisma/migrations/`를 기준으로 합니다. OpenAPI 문서는 브라우저에서 `http://localhost:4000/api/docs/`로 볼 수 있고, 원본 YAML은 `GET /api/openapi.yaml`에서 받을 수 있습니다. 문서에 정의된 API 중 아직 구현되지 않은 경로가 있습니다.
+초기 설계 문서: [ERD](docs/db/erd.ko.md) · [OpenAPI 초안](docs/api/openapi.ko.yaml). DB 정의는 `prisma/schema.prisma`와 `prisma/migrations/`를 기준으로 합니다. OpenAPI 문서는 로컬 `http://localhost:4000/api/docs/` 또는 [dev 서버 Swagger UI](https://api.dev.helpisa.com/api/docs/)에서 볼 수 있고, 원본 YAML은 `GET /api/openapi.yaml`에서 받을 수 있습니다. 문서에 정의된 API 중 아직 구현되지 않은 경로가 있습니다.
 
 ```text
 src/
@@ -96,6 +96,16 @@ tests/              Vitest + supertest 테스트
 - `SIGINT` / `SIGTERM`: 새 연결 수락 중단 → 진행 중인 HTTP 요청 완료 → Prisma 연결 해제 순으로 종료합니다. 10초를 넘기면 실패 상태로 종료합니다. PM2/Nginx의 종료 유예 시간도 이에 맞춰 설정합니다.
 - `TRUST_PROXY`는 실제 Nginx / 로드밸런서 경로와 맞춰야 합니다. 앱에 직접 접근 가능한 배포에서 무조건 `1`로 설정하지 않습니다. 운영에서는 `HOST=127.0.0.1`로 앱을 Nginx 뒤에만 노출합니다.
 - 운영 실행은 `NODE_ENV=production npm start`를 사용합니다.
+
+## 배포
+
+| 환경 | 브랜치    | 프론트                  | API                             |
+| ---- | --------- | ----------------------- | ------------------------------- |
+| dev  | `develop` | https://dev.helpisa.com | https://api.dev.helpisa.com/api |
+| prod | `main`    | https://helpisa.com     | https://api.helpisa.com/api     |
+
+- 머지 후 CI가 통과하면 자동으로 배포됩니다. 진행 상황은 Actions 탭의 `Deploy`에서 확인합니다.
+- 스키마를 바꾸면 `npm run prisma:migrate`로 만든 마이그레이션 파일을 같은 PR에 커밋합니다. CI가 검사합니다.
 
 ## 협업 규칙
 
