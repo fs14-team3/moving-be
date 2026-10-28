@@ -36,4 +36,6 @@ apiRouter.get('/ready', async (_req, res) => {
   res.json({ status: 'ready' })
 })
 
+apiRouter.use('/customers', customerRouter)
+apiRouter.use('/auth', authRouter)
 apiRouter.use('/movers', moverRouter)

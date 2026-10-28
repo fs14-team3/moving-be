@@ -1,8 +1,22 @@
 import { Prisma } from '../generated/prisma/client'
 import { AppError } from '../errors/app-error'
 import { prisma } from '../lib/prisma'
-import { hashPassword, verifyPassword } from '../utils/password'
+import {
+  DUMMY_PASSWORD_HASH,
+  hashPassword,
+  verifyPassword,
+} from '../utils/password'
 import type { LoginInput, SignupInput } from '../validators/auth.validator'
+
+const profileSelect = {
+  imageUrl: true,
+  nickname: true,
+  careerYears: true,
+  intro: true,
+  description: true,
+  serviceTypes: true,
+  regions: true,
+} as const
 
 // API 응답에 필요한 사용자 및 프로필 정보 조회
 const userResponseSelect = {
@@ -13,8 +27,8 @@ const userResponseSelect = {
   phone: true,
   createdAt: true,
   updatedAt: true,
-  customerProfile: true,
-  moverProfile: true,
+  customerProfile: { select: profileSelect },
+  moverProfile: { select: profileSelect },
 } satisfies Prisma.UserSelect
 
 // 역할에 맞는 프로필 등록 여부 계산
@@ -81,23 +95,9 @@ export async function login(input: LoginInput) {
     },
   })
 
-  // 더미 해시 확인
-  let passwordHash = user?.passwordHash
-
-  if (!passwordHash) {
-    const dummyPasswordHash = process.env.DUMMY_PASSWORD_HASH
-
-    if (!dummyPasswordHash) {
-      throw new Error('DUMMY_PASSWORD_HASH 환경 변수가 설정되지 않았습니다')
-    }
-
-    passwordHash = dummyPasswordHash
-  }
-
-  // 입력한 비밀번호 검증
+  const passwordHash = user?.passwordHash ?? DUMMY_PASSWORD_HASH
   const isValidPassword = await verifyPassword(input.password, passwordHash)
 
-  // 계정이 없거나 비밀번호가 틀리면 동일한 오류 반환
   if (!user?.passwordHash || !isValidPassword) {
     throw new AppError('INVALID_CREDENTIALS', [
       {
@@ -107,8 +107,6 @@ export async function login(input: LoginInput) {
     ])
   }
 
-  // 비밀번호 해시를 제외하고 Me 형식으로 반환
   const { passwordHash: _, ...safeUser } = user
-
   return toMe(safeUser)
 }

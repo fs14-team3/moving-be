@@ -79,7 +79,6 @@ describe('Auth API', () => {
     expect(response.body).not.toHaveProperty('accessToken')
   })
 
-  // 비밀번호 최대 길이 검증 테스트
   it('비밀번호 16자는 허용하고 17자는 거부한다', async () => {
     const validResponse = await api().post('/api/auth/signup').send({
       role: 'CUSTOMER',
@@ -100,5 +99,35 @@ describe('Auth API', () => {
     })
 
     expect(invalidResponse.status).toBe(400)
+  })
+
+  it('존재하지 않는 이메일로 로그인하면 500 없이 401을 반환한다', async () => {
+    const response = await api().post('/api/auth/login').send({
+      role: 'CUSTOMER',
+      email: 'missing@example.com',
+      password: 'Test1234!',
+    })
+
+    expect(response.status).toBe(401)
+    expect(response.body.error.code).toBe('INVALID_CREDENTIALS')
+  })
+
+  it('틀린 비밀번호는 400이 아니라 401을 반환한다', async () => {
+    await api().post('/api/auth/signup').send({
+      role: 'CUSTOMER',
+      name: '테스트 사용자',
+      email: 'wrong-password@example.com',
+      phone: '01012345678',
+      password: 'Test1234!',
+    })
+
+    const response = await api().post('/api/auth/login').send({
+      role: 'CUSTOMER',
+      email: 'wrong-password@example.com',
+      password: 'wrong',
+    })
+
+    expect(response.status).toBe(401)
+    expect(response.body.error.code).toBe('INVALID_CREDENTIALS')
   })
 })
