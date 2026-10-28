@@ -114,6 +114,7 @@ model MoverProfile {
   reviewCount        Int                 @default(0) @map("review_count")
   averageRating      Decimal             @default(0) @map("average_rating") @db.Decimal(3, 2)
   confirmedCount     Int                 @default(0) @map("confirmed_count")
+  favoriteCount      Int                 @default(0) @map("favorite_count")
   createdAt          DateTime            @default(now()) @map("created_at") @db.Timestamptz
   updatedAt          DateTime            @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
   user               User                @relation(fields: [userId], references: [id], onDelete: Cascade)

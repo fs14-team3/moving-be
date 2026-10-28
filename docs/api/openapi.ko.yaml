@@ -375,6 +375,9 @@ paths:
     put:
       tags: [Favorites]
       summary: 찜하기 (멱등)
+      description: |
+        프로필을 등록한 일반 유저만 호출할 수 있습니다. 이미 찜한 기사님이면 그대로 두고 현재 상태를 반환합니다.
+        프로필을 등록하지 않은 기사님은 찜할 수 없습니다 (404).
       operationId: addFavorite
       security:
         - bearerAuth: []
@@ -383,16 +386,18 @@ paths:
         - { '$ref': '#/components/parameters/MoverIdPath' }
       responses:
         '200':
-          description: 찜한 상태
+          description: 찜한 상태와 기사님의 전체 찜 수
           content:
             application/json:
               schema: { '$ref': '#/components/schemas/FavoriteState' }
+        '400': { '$ref': '#/components/responses/ValidationError' }
         '401': { '$ref': '#/components/responses/Unauthorized' }
         '403': { '$ref': '#/components/responses/Forbidden' }
         '404': { '$ref': '#/components/responses/NotFound' }
     delete:
       tags: [Favorites]
       summary: 찜 해제 (멱등)
+      description: 찜하지 않은 기사님이면 그대로 두고 현재 상태를 반환합니다. 그 외 조건은 찜하기와 같습니다.
       operationId: removeFavorite
       security:
         - bearerAuth: []
@@ -401,10 +406,11 @@ paths:
         - { '$ref': '#/components/parameters/MoverIdPath' }
       responses:
         '200':
-          description: 찜 해제된 상태
+          description: 찜 해제된 상태와 기사님의 전체 찜 수
           content:
             application/json:
               schema: { '$ref': '#/components/schemas/FavoriteState' }
+        '400': { '$ref': '#/components/responses/ValidationError' }
         '401': { '$ref': '#/components/responses/Unauthorized' }
         '403': { '$ref': '#/components/responses/Forbidden' }
         '404': { '$ref': '#/components/responses/NotFound' }
@@ -1266,10 +1272,11 @@ components:
               items: { '$ref': '#/components/schemas/MoverSummary' }
     FavoriteState:
       type: object
-      required: [moverId, isFavorite]
+      required: [moverId, isFavorite, favoriteCount]
       properties:
         moverId: { type: string, format: uuid }
         isFavorite: { type: boolean }
+        favoriteCount: { type: integer, description: 기사님이 받은 전체 찜 수 }
     AddressInput:
       type: object
       description: 우편번호 서비스로 입력한 주소. 제공자는 특정하지 않습니다.
