@@ -846,23 +846,82 @@ paths:
   '/notifications':
     get:
       tags: [Notifications]
-      summary: 알림 목록
-      description:
-        '§13의 역할별 알림을 조회합니다. 새 견적·새 요청·견적 확정·이사 당일 알림을 제공하며, 전달 방식과 갱신
-        주기는 추후 결정합니다.'
+      summary: 미읽음 알림 목록 조회
+      description: 현재 사용자의 미읽음 알림을 최신순으로 3개씩 조회합니다.
       operationId: listNotifications
       security:
         - bearerAuth: []
       parameters:
         - { '$ref': '#/components/parameters/Cursor' }
-        - { '$ref': '#/components/parameters/Limit' }
       responses:
         '200':
-          description: 알림 목록 페이지
+          description: 미읽음 알림 목록
           content:
             application/json:
               schema:
                 { '$ref': '#/components/schemas/NotificationListResponse' }
+        '400': { '$ref': '#/components/responses/ValidationError' }
+        '401': { '$ref': '#/components/responses/Unauthorized' }
+
+  '/notifications/unread-count':
+    get:
+      tags: [Notifications]
+      summary: 미읽음 알림 개수 조회
+      operationId: getUnreadNotificationCount
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: 미읽음 알림 개수
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [unreadCount]
+                properties:
+                  unreadCount: { type: integer, minimum: 0 }
+        '401': { '$ref': '#/components/responses/Unauthorized' }
+  '/notifications/read-all':
+    patch:
+      tags: [Notifications]
+      summary: 전체 알림 읽음 처리
+      operationId: readAllNotifications
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: 전체 알림 읽음 처리 결과
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [updatedCount]
+                properties:
+                  updatedCount: { type: integer, minimum: 0 }
+        '401': { '$ref': '#/components/responses/Unauthorized' }
+  '/notifications/{id}/read':
+    patch:
+      tags: [Notifications]
+      summary: 개별 알림 읽음 처리
+      operationId: readNotification
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: 개별 알림 읽음 처리 결과
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [updated]
+                properties:
+                  updated: { type: boolean }
+        '400': { '$ref': '#/components/responses/ValidationError' }
         '401': { '$ref': '#/components/responses/Unauthorized' }
 components:
   securitySchemes:
@@ -975,7 +1034,14 @@ components:
       enum: [SUBMITTED, CONFIRMED, NOT_SELECTED]
     NotificationType:
       type: string
-      enum: [NEW_REQUEST, NEW_QUOTE, QUOTE_CONFIRMED, MOVE_DAY]
+      enum:
+        [
+          NEW_REQUEST,
+          NEW_DESIGNATED_REQUEST,
+          NEW_QUOTE,
+          QUOTE_CONFIRMED,
+          MOVE_DAY,
+        ]
     MoverSort:
       type: string
       description:
