@@ -4,6 +4,7 @@ import swaggerUi from 'swagger-ui-express'
 import { AppError } from '../errors/app-error'
 import { prisma } from '../lib/prisma'
 import { moverRouter } from './mover.routes'
+import { notificationRouter } from './notification.routes'
 
 export const apiRouter = Router()
 
@@ -35,3 +36,4 @@ apiRouter.get('/ready', async (_req, res) => {
 })
 
 apiRouter.use('/movers', moverRouter)
+apiRouter.use('/notifications', notificationRouter)
