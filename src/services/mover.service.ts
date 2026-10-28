@@ -9,6 +9,34 @@ const ORDER_BY = {
   CONFIRMED_COUNT: { confirmedCount: 'desc' },
 } satisfies Record<MoverSort, Prisma.MoverProfileOrderByWithRelationInput>
 
+export const moverSummarySelect = {
+  userId: true,
+  nickname: true,
+  imageUrl: true,
+  intro: true,
+  careerYears: true,
+  serviceTypes: true,
+  averageRating: true,
+  reviewCount: true,
+  confirmedCount: true,
+} satisfies Prisma.MoverProfileSelect
+
+type MoverSummaryRow = Prisma.MoverProfileGetPayload<{
+  select: typeof moverSummarySelect
+}>
+
+export function toMoverSummary(
+  { userId, averageRating, ...profile }: MoverSummaryRow,
+  isFavorite: boolean | null,
+) {
+  return {
+    id: userId,
+    ...profile,
+    averageRating: averageRating.toNumber(),
+    isFavorite,
+  }
+}
+
 export async function listMovers(
   query: ListMoversQuery,
   viewer?: Express.User,
@@ -29,17 +57,7 @@ export async function listMovers(
     cursor: query.cursor ? { userId: query.cursor } : undefined,
     skip: query.cursor ? 1 : undefined,
     take: query.limit + 1,
-    select: {
-      userId: true,
-      nickname: true,
-      imageUrl: true,
-      intro: true,
-      careerYears: true,
-      serviceTypes: true,
-      averageRating: true,
-      reviewCount: true,
-      confirmedCount: true,
-    },
+    select: moverSummarySelect,
   })
 
   const hasNext = rows.length > query.limit
@@ -50,12 +68,9 @@ export async function listMovers(
   )
 
   return {
-    items: page.map(({ userId, averageRating, ...profile }) => ({
-      id: userId,
-      ...profile,
-      averageRating: averageRating.toNumber(),
-      isFavorite: favoriteIds?.has(userId) ?? null,
-    })),
+    items: page.map((row) =>
+      toMoverSummary(row, favoriteIds?.has(row.userId) ?? null),
+    ),
     nextCursor: hasNext ? page[page.length - 1].userId : null,
     hasNext,
   }

@@ -392,6 +392,9 @@ paths:
     put:
       tags: [Favorites]
       summary: 찜하기 (멱등)
+      description: |
+        프로필을 등록한 일반 유저만 호출할 수 있습니다. 이미 찜한 기사님이면 그대로 두고 현재 상태를 반환합니다.
+        프로필을 등록하지 않은 기사님은 찜할 수 없습니다 (404).
       operationId: addFavorite
       security:
         - sessionCookie: []
@@ -400,16 +403,18 @@ paths:
         - { '$ref': '#/components/parameters/MoverIdPath' }
       responses:
         '200':
-          description: 찜한 상태
+          description: 찜한 상태와 기사님의 전체 찜 수
           content:
             application/json:
               schema: { '$ref': '#/components/schemas/FavoriteState' }
+        '400': { '$ref': '#/components/responses/ValidationError' }
         '401': { '$ref': '#/components/responses/Unauthorized' }
         '403': { '$ref': '#/components/responses/Forbidden' }
         '404': { '$ref': '#/components/responses/NotFound' }
     delete:
       tags: [Favorites]
       summary: 찜 해제 (멱등)
+      description: 찜하지 않은 기사님이면 그대로 두고 현재 상태를 반환합니다. 그 외 조건은 찜하기와 같습니다.
       operationId: removeFavorite
       security:
         - sessionCookie: []
@@ -418,10 +423,11 @@ paths:
         - { '$ref': '#/components/parameters/MoverIdPath' }
       responses:
         '200':
-          description: 찜 해제된 상태
+          description: 찜 해제된 상태와 기사님의 전체 찜 수
           content:
             application/json:
               schema: { '$ref': '#/components/schemas/FavoriteState' }
+        '400': { '$ref': '#/components/responses/ValidationError' }
         '401': { '$ref': '#/components/responses/Unauthorized' }
         '403': { '$ref': '#/components/responses/Forbidden' }
         '404': { '$ref': '#/components/responses/NotFound' }
@@ -429,20 +435,29 @@ paths:
     get:
       tags: [Favorites]
       summary: 찜한 기사님 목록
-      description: 찜한 기사님 목록. PC 사이드바에서는 limit=3으로 최대 3명을 표시할 수 있습니다.
+      description: |
+        프로필을 등록한 일반 유저만 호출할 수 있습니다. 최근에 찜한 기사님부터 보여주며, 찜을 취소한 기사님은 빠집니다.
+        PC 사이드바에서는 `limit=3`으로 최대 3명을 표시할 수 있습니다. 다음 페이지를 요청할 때는 `cursor`를 더해 보내며, 그 사이에 찜을 취소했더라도 이어서 조회됩니다.
       operationId: listMyFavorites
       security:
         - sessionCookie: []
       x-roles: [CUSTOMER]
       parameters:
         - { '$ref': '#/components/parameters/Cursor' }
-        - { '$ref': '#/components/parameters/Limit' }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 50, default: 10 }
       responses:
         '200':
-          description: 찜한 기사님 목록 페이지 (`isFavorite`는 항상 true)
+          description: 찜한 기사님 목록 페이지 (`isFavorite`는 항상 true). 찜한 기사님이 없으면 `items`는 빈 배열, `nextCursor`는 null, `hasNext`는 false입니다.
           content:
             application/json:
               schema: { '$ref': '#/components/schemas/MoverListResponse' }
+        '400':
+          description: '`VALIDATION_ERROR`. `limit`이 허용 범위를 벗어나거나 `cursor`가 잘못된 경우'
+          content:
+            application/json:
+              schema: { '$ref': '#/components/schemas/ErrorResponse' }
         '401': { '$ref': '#/components/responses/Unauthorized' }
         '403': { '$ref': '#/components/responses/Forbidden' }
   '/move-requests':
@@ -1004,6 +1019,7 @@ components:
         - QUOTE_LIMIT_REACHED
         - RATE_LIMITED
         - INTERNAL_ERROR
+        - SERVICE_UNAVAILABLE
         - SOCIAL_LOGIN_FAILED
     ErrorResponse:
       type: object
@@ -1287,10 +1303,11 @@ components:
               items: { '$ref': '#/components/schemas/MoverSummary' }
     FavoriteState:
       type: object
-      required: [moverId, isFavorite]
+      required: [moverId, isFavorite, favoriteCount]
       properties:
         moverId: { type: string, format: uuid }
         isFavorite: { type: boolean }
+        favoriteCount: { type: integer, description: 기사님이 받은 전체 찜 수 }
     AddressInput:
       type: object
       description: 우편번호 서비스로 입력한 주소. 제공자는 특정하지 않습니다.

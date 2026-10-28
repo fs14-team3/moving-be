@@ -101,6 +101,7 @@ function buildSeedData() {
     id: id(`mover:${i}`),
     confirmedCount: 0,
     reviewCount: 0,
+    favoriteCount: 0,
     ratingSum: 0,
   }))
 
@@ -298,6 +299,7 @@ function buildSeedData() {
         moverId: mover.id,
         createdAt: at(-900 + i, 20),
       })
+      mover.favoriteCount++
     }
 
     const historyCount = i % 10 === 9 ? 12 : i % 4
