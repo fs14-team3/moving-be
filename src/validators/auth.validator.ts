@@ -44,5 +44,21 @@ export const loginInput = z.object({
   password: passwordSchema,
 })
 
+export const socialProviderSchema = z.enum(['google', 'kakao', 'naver'])
+
+export const socialLoginQuery = z.object({
+  role: z.enum(UserRole),
+})
+
+export const socialCallbackQuery = z.object({
+  state: z.string().min(1),
+  code: z.string().optional(),
+  error: z.string().optional(),
+  error_description: z.string().optional(),
+})
+
 export type SignupInput = z.infer<typeof signupInput>
 export type LoginInput = z.infer<typeof loginInput>
+export type SocialProvider = z.infer<typeof socialProviderSchema>
+export type SocialLoginQuery = z.infer<typeof socialLoginQuery>
+export type SocialCallbackQuery = z.infer<typeof socialCallbackQuery>

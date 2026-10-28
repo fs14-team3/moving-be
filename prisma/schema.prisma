@@ -83,6 +83,7 @@ model SocialAccount {
   providerId String         @map("provider_id")
   user       User           @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@unique([provider, providerId])
   @@map("social_accounts")
 }
 
