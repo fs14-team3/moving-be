@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { ServiceType } from '../generated/prisma/enums'
+import { cursorPageQuery } from './pagination.validator'
 
 export const listMoversQuery = z.object({
   keyword: z.string().trim().optional(),
@@ -8,8 +9,7 @@ export const listMoversQuery = z.object({
   sort: z
     .enum(['REVIEW_COUNT', 'RATING', 'CAREER', 'CONFIRMED_COUNT'])
     .default('REVIEW_COUNT'),
-  cursor: z.uuid().optional(),
-  limit: z.coerce.number().int().min(1).max(50).default(10),
+  ...cursorPageQuery(z.uuid()),
 })
 
 export const moverIdParams = z.object({ moverId: z.uuid() })
