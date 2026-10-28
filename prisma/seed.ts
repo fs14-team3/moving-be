@@ -60,7 +60,7 @@ const ACTIVE_REQUESTS = [
   { status: 'CONFIRMED', createdDay: -10, quoteCount: 3, designatedCount: 0 },
   { status: 'PENDING', createdDay: -5, quoteCount: 5, designatedCount: 0 },
   { status: 'PENDING', createdDay: -5, quoteCount: 3, designatedCount: 3 },
-  { status: 'PENDING', createdDay: -5, quoteCount: 8, designatedCount: 3 },
+  { status: 'PENDING', createdDay: -5, quoteCount: 5, designatedCount: 3 },
 ] as const
 
 const today = Date.parse(
@@ -154,8 +154,14 @@ function buildSeedData() {
       notifications.push({
         id: id(`notification:request:${key}:${designatedMover.id}`),
         userId: designatedMover.id,
-        type: 'NEW_REQUEST',
-        message: `${customer.name} 고객님이 지정 견적을 요청했어요.`,
+        type: 'NEW_DESIGNATED_REQUEST',
+        payload: {
+          customerName: customer.name,
+          moveType: customer.moveType,
+          moveDate: date(moveDay).toISOString().slice(0, 10),
+          fromRegion: customer.route.fromRegion,
+          toRegion: customer.route.toRegion,
+        },
         moveRequestId: requestId,
         createdAt: at(createdDay, 11),
       })
@@ -197,7 +203,11 @@ function buildSeedData() {
         id: id(`notification:quote:${key}:${q}`),
         userId: customer.id,
         type: 'NEW_QUOTE',
-        message: `${mover.nickname ?? mover.name} 기사님이 ${price.toLocaleString('ko-KR')}원 견적을 보냈어요.`,
+        // message: `${mover.nickname ?? mover.name} 기사님이 ${price.toLocaleString('ko-KR')}원 견적을 보냈어요.`,
+        payload: {
+          moverNickname: mover.nickname ?? mover.name,
+          moveType: customer.moveType,
+        },
         moveRequestId: requestId,
         quoteId,
         createdAt: quoteCreatedAt,
@@ -213,7 +223,19 @@ function buildSeedData() {
         id: id(`notification:confirmed:${key}:${userId}`),
         userId,
         type: 'QUOTE_CONFIRMED',
-        message: `${customer.name} 고객님의 이사 견적이 확정되었어요.`,
+        // message: `${customer.name} 고객님의 이사 견적이 확정되었어요.`,
+        payload:
+          userId === customer.id
+            ? {
+                moverNickname: chosen.nickname ?? chosen.name,
+                moveType: customer.moveType,
+                moveDate: date(moveDay).toISOString().slice(0, 10),
+              }
+            : {
+                customerName: customer.name,
+                moveType: customer.moveType,
+                moveDate: date(moveDay).toISOString().slice(0, 10),
+              },
         moveRequestId: requestId,
         quoteId,
         createdAt: confirmedAt,
@@ -223,8 +245,12 @@ function buildSeedData() {
           id: id(`notification:move-day:${key}:${userId}`),
           userId,
           type: 'MOVE_DAY',
-          message:
-            '오늘은 이사하는 날이에요. 출발 시간과 주소를 확인해 주세요.',
+          // message: '오늘은 이사하는 날이에요. 출발 시간과 주소를 확인해 주세요.',
+          payload: {
+            moveType: customer.moveType,
+            fromAddress: customer.route.fromAddress,
+            toAddress: customer.route.toAddress,
+          },
           moveRequestId: requestId,
           quoteId,
           createdAt: at(moveDay, 0),
