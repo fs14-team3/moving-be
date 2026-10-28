@@ -28,15 +28,12 @@ describe('Auth API', () => {
       }),
     )
 
-    // customerProfile은 null 또는 객체여야 함
     expect(
       response.body.customerProfile === null ||
         typeof response.body.customerProfile === 'object',
     ).toBe(true)
 
-    // CUSTOMER 계정이므로 기사 프로필은 null이어야 함
     expect(response.body.moverProfile).toBeNull()
-
     expect(response.body).not.toHaveProperty('password')
     expect(response.body).not.toHaveProperty('passwordHash')
   })
@@ -58,7 +55,6 @@ describe('Auth API', () => {
 
     expect(response.status).toBe(200)
 
-    // 로그인 응답은 { user: Me } 형식
     expect(response.body).toEqual(
       expect.objectContaining({
         user: expect.objectContaining({
@@ -76,13 +72,33 @@ describe('Auth API', () => {
       }),
     )
 
-    // 비밀번호 관련 정보는 응답에 포함하지 않음
     expect(response.body).not.toHaveProperty('password')
     expect(response.body).not.toHaveProperty('passwordHash')
     expect(response.body.user).not.toHaveProperty('password')
     expect(response.body.user).not.toHaveProperty('passwordHash')
-
-    // 세션 방식 응답에는 accessToken을 포함하지 않음
     expect(response.body).not.toHaveProperty('accessToken')
+  })
+
+  // 비밀번호 최대 길이 검증 테스트
+  it('비밀번호 16자는 허용하고 17자는 거부한다', async () => {
+    const validResponse = await api().post('/api/auth/signup').send({
+      role: 'CUSTOMER',
+      name: '테스트 사용자',
+      email: 'password16@example.com',
+      phone: '01012345678',
+      password: 'Abcdef1234567!XY',
+    })
+
+    expect(validResponse.status).toBe(201)
+
+    const invalidResponse = await api().post('/api/auth/signup').send({
+      role: 'CUSTOMER',
+      name: '테스트 사용자',
+      email: 'password17@example.com',
+      phone: '01012345679',
+      password: 'Abcdef1234567!XYZ',
+    })
+
+    expect(invalidResponse.status).toBe(400)
   })
 })

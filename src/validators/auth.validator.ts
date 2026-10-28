@@ -13,7 +13,7 @@ const phoneSchema = z
   .string()
   .trim()
   .regex(
-    /^010-?\d{4}-?\d{4}$/,
+    /^010\d{8}$|^010-\d{4}-\d{4}$/,
     '전화번호는 01012345678 또는 010-1234-5678 형식이어야 합니다',
   )
   .transform((phone) => phone.replace(/-/g, ''))
@@ -41,7 +41,7 @@ export const signupInput = z.object({
 export const loginInput = z.object({
   role: z.enum(UserRole),
   email: emailSchema,
-  password: z.string().min(1, '비밀번호를 입력해 주세요'),
+  password: passwordSchema,
 })
 
 export type SignupInput = z.infer<typeof signupInput>
