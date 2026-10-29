@@ -5,4 +5,5 @@
 
 */
 -- CreateIndex
-CREATE UNIQUE INDEX "social_accounts_provider_provider_id_key" ON "social_accounts"("provider", "provider_id");
+CREATE UNIQUE INDEX "social_accounts_provider_provider_id_key"
+  ON "social_accounts"("provider", "provider_id");
