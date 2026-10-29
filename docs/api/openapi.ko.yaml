@@ -40,7 +40,7 @@ paths:
           content:
             application/json:
               schema:
-                '$ref': '#/components/schemas/UserAccount'
+                '$ref': '#/components/schemas/Me'
         '400':
           '$ref': '#/components/responses/ValidationError'
         '429':
@@ -69,7 +69,7 @@ paths:
           content:
             application/json:
               schema:
-                '$ref': '#/components/schemas/UserAccount'
+                '$ref': '#/components/schemas/AuthResponse'
         '400':
           '$ref': '#/components/responses/ValidationError'
         '401':
@@ -97,7 +97,10 @@ paths:
     get:
       tags: [Auth]
       summary: 소셜 로그인 시작 (provider로 리다이렉트)
-      description: 선택한 소셜 제공자의 로그인 페이지로 이동합니다. OAuth 검증 및 로그인 후 이동 방식은 인증 구현 시 결정합니다.
+      description: |
+        선택한 소셜 제공자(Google / Kakao / Naver) 인가 페이지로 이동합니다.
+        `role`은 OAuth `state`에 서명되어 콜백에서 복원됩니다.
+        제공자 앱 Client ID/Secret과 Redirect URI 환경 변수가 필요합니다.
       operationId: startSocialLogin
       security: []
       parameters:
@@ -112,11 +115,21 @@ paths:
             description: Google / Kakao / Naver 인가(authorize) URL로 리다이렉트,
           }
         '400': { '$ref': '#/components/responses/ValidationError' }
+        '401':
+          description: '`SOCIAL_LOGIN_FAILED` (OAuth 설정 누락 등)'
+          content:
+            application/json:
+              schema: { '$ref': '#/components/schemas/ErrorResponse' }
   '/auth/{provider}/callback':
     get:
       tags: [Auth]
       summary: 소셜 로그인 콜백 (등록된 redirect URI)
-      description: 소셜 제공자의 응답을 검증한 뒤 가입 또는 로그인합니다. 기존 계정과의 연결 및 로그인 결과 전달 방식은 추후 결정합니다.
+      description: |
+        소셜 제공자의 `code`로 액세스 토큰을 교환하고 프로필을 조회한 뒤,
+        (provider, providerId) 기준 소셜 계정을 찾거나 생성합니다.
+        같은 역할·이메일의 기존 계정이 있으면 소셜 계정만 연결합니다.
+        성공/실패 모두 프론트엔드 `SOCIAL_LOGIN_REDIRECT_PATH`로 302 이동합니다.
+        세션 쿠키 발급은 인증 세션 API에서 연결합니다.
       operationId: socialLoginCallback
       security: []
       parameters:
@@ -134,7 +147,11 @@ paths:
           required: false
           schema: { type: string }
       responses:
-        '302': { description: 로그인 결과 화면으로 이동 }
+        '302':
+          description: |
+            프론트로 이동.
+            성공: `?provider=&status=success`
+            실패: `?provider=&status=error&code=SOCIAL_LOGIN_FAILED` 등
   '/users/me':
     get:
       tags: [Me]
@@ -1057,12 +1074,14 @@ components:
           {
             type: string,
             minLength: 2,
+            maxLength: 20,
             description: '필수 입력이며, 앞뒤 공백을 제거한 후 빈 문자열은 허용하지 않습니다.',
           }
         email:
           {
             type: string,
             format: email,
+            maxLength: 255,
             description: '앞뒤 공백을 제거하고 소문자로 변환합니다.',
           }
         phone:
@@ -1088,6 +1107,11 @@ components:
         role: { '$ref': '#/components/schemas/Role' }
         email: { type: string, format: email }
         password: { type: string, format: password }
+    AuthResponse:
+      type: object
+      required: [user]
+      properties:
+        user: { '$ref': '#/components/schemas/Me' }
     Me:
       type: object
       required:
@@ -1550,35 +1574,3 @@ components:
             items:
               type: array
               items: { '$ref': '#/components/schemas/Notification' }
-    UserAccount:
-      type: object
-      required:
-        - id
-        - role
-        - name
-        - email
-        - phone
-        - createdAt
-        - updatedAt
-      properties:
-        id:
-          type: string
-          format: uuid
-        role:
-          '$ref': '#/components/schemas/Role'
-        name:
-          type: string
-          nullable: true
-        email:
-          type: string
-          format: email
-          nullable: true
-        phone:
-          type: string
-          nullable: true
-        createdAt:
-          type: string
-          format: date-time
-        updatedAt:
-          type: string
-          format: date-time

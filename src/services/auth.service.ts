@@ -3,12 +3,22 @@ import { Prisma } from '../generated/prisma/client'
 import { SocialProvider, UserRole } from '../generated/prisma/enums'
 import { AppError } from '../errors/app-error'
 import { prisma } from '../lib/prisma'
-import { hashPassword, verifyPassword } from '../utils/password'
-import type {
-  LoginInput,
-  SignupInput,
-  SocialProvider as SocialProviderName,
-} from '../validators/auth.validator'
+import {
+  DUMMY_PASSWORD_HASH,
+  hashPassword,
+  verifyPassword,
+} from '../utils/password'
+import type { LoginInput, SignupInput } from '../validators/auth.validator'
+
+const profileSelect = {
+  imageUrl: true,
+  nickname: true,
+  careerYears: true,
+  intro: true,
+  description: true,
+  serviceTypes: true,
+  regions: true,
+} as const
 
 const userResponseSelect = {
   id: true,
@@ -18,8 +28,8 @@ const userResponseSelect = {
   phone: true,
   createdAt: true,
   updatedAt: true,
-  customerProfile: true,
-  moverProfile: true,
+  customerProfile: { select: profileSelect },
+  moverProfile: { select: profileSelect },
 } satisfies Prisma.UserSelect
 
 type UserResponse = Prisma.UserGetPayload<{
@@ -82,18 +92,7 @@ export async function login(input: LoginInput) {
     },
   })
 
-  let passwordHash = user?.passwordHash
-
-  if (!passwordHash) {
-    const dummyPasswordHash = process.env.DUMMY_PASSWORD_HASH
-
-    if (!dummyPasswordHash) {
-      throw new Error('DUMMY_PASSWORD_HASH 환경 변수가 설정되지 않았습니다')
-    }
-
-    passwordHash = dummyPasswordHash
-  }
-
+  const passwordHash = user?.passwordHash ?? DUMMY_PASSWORD_HASH
   const isValidPassword = await verifyPassword(input.password, passwordHash)
 
   if (!user?.passwordHash || !isValidPassword) {
@@ -128,7 +127,7 @@ const providerMap = {
     authorizationUrl: 'https://kauth.kakao.com/oauth/authorize',
     tokenUrl: 'https://kauth.kakao.com/oauth/token',
     userInfoUrl: 'https://kapi.kakao.com/v2/user/me',
-    scope: 'profile_nickname account_email',
+    scope: 'profile_nickname',
   },
   naver: {
     provider: SocialProvider.NAVER,
@@ -141,6 +140,8 @@ const providerMap = {
     scope: '',
   },
 } as const
+
+type SocialProviderName = keyof typeof providerMap
 
 type SocialIdentity = {
   providerId: string
@@ -233,6 +234,13 @@ function getProviderConfig(provider: SocialProviderName) {
 
   if (!clientId || !callbackUrl) {
     throw new Error(`${provider} OAuth 환경 변수가 설정되지 않았습니다`)
+  }
+  if (provider === 'naver') {
+    console.log('[NAVER OAuth 설정 확인]', {
+      clientIdExists: Boolean(clientId),
+      clientIdLength: clientId.length,
+      callbackUrl,
+    })
   }
 
   return { ...config, clientId, callbackUrl }

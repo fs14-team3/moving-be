@@ -101,6 +101,7 @@ function buildSeedData() {
     id: id(`mover:${i}`),
     confirmedCount: 0,
     reviewCount: 0,
+    favoriteCount: 0,
     ratingSum: 0,
   }))
 
@@ -270,7 +271,7 @@ function buildSeedData() {
       role: 'CUSTOMER',
       name,
       email: `${email}@example.test`,
-      phone: i % 10 === 0 ? null : `010-1000-${String(i + 1).padStart(4, '0')}`,
+      phone: i % 10 === 0 ? null : `0101000${String(i + 1).padStart(4, '0')}`,
       createdAt: joinedAt,
       updatedAt: joinedAt,
     })
@@ -298,6 +299,7 @@ function buildSeedData() {
         moverId: mover.id,
         createdAt: at(-900 + i, 20),
       })
+      mover.favoriteCount++
     }
 
     const historyCount = i % 10 === 9 ? 12 : i % 4
@@ -333,7 +335,7 @@ function buildSeedData() {
         role: 'MOVER',
         name,
         email: `mover${i + 1}@example.test`,
-        phone: `010-2000-${String(i + 1).padStart(4, '0')}`,
+        phone: `0102000${String(i + 1).padStart(4, '0')}`,
         createdAt: joinedAt,
         updatedAt: joinedAt,
       })
