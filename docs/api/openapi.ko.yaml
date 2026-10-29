@@ -1553,17 +1553,16 @@ components:
               items: { '$ref': '#/components/schemas/ReviewTarget' }
     Notification:
       type: object
-      required: [id, type, message, createdAt]
+      required: [id, userId, type, payload, readAt, createdAt]
       properties:
         id: { type: string, format: uuid }
+        userId: { type: string, format: uuid }
         type: { '$ref': '#/components/schemas/NotificationType' }
-        message:
-          {
-            type: string,
-            description: 사용자 언어로 표시할 알림. 번역 방식은 추후 결정합니다.,
-          }
+        message: { type: string, nullable: true }
+        payload: { type: object, additionalProperties: true }
         moveRequestId: { type: string, format: uuid, nullable: true }
         quoteId: { type: string, format: uuid, nullable: true }
+        readAt: { type: string, format: date-time, nullable: true }
         createdAt: { type: string, format: date-time }
     NotificationListResponse:
       allOf:
