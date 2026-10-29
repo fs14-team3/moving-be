@@ -340,6 +340,7 @@ paths:
       description: |
         공개 API. 로그인한 일반 유저라면 `isFavorite`가 채워지고, `isDesignated`는 이 기사님이
         해당 유저의 활성 견적 요청에 이미 지정되어 있는지를 나타냅니다.
+        `ratingCounts`는 1~5점별 리뷰 수입니다. 프로필을 등록한 기사님만 조회됩니다 (404).
       operationId: getMover
       security:
         - {}
@@ -352,12 +353,15 @@ paths:
           content:
             application/json:
               schema: { '$ref': '#/components/schemas/MoverDetail' }
+        '400': { '$ref': '#/components/responses/ValidationError' }
         '404': { '$ref': '#/components/responses/NotFound' }
   '/movers/{moverId}/reviews':
     get:
       tags: [Movers, Reviews]
       summary: 기사님이 받은 리뷰 (페이지네이션)
-      description: 공개 API. 기사님 본인 마이페이지에서도 사용합니다.
+      description: |
+        공개 API. 기사님 본인 마이페이지에서도 사용합니다.
+        최근에 작성된 리뷰부터 보여주며, 작성자 이름은 첫 글자만 남기고 `*`로 가립니다.
       operationId: listMoverReviews
       security: []
       parameters:
@@ -366,10 +370,11 @@ paths:
         - { '$ref': '#/components/parameters/PageSize' }
       responses:
         '200':
-          description: 리뷰 목록 페이지
+          description: 리뷰 목록 페이지. 리뷰가 없으면 `items`는 빈 배열, `totalCount`와 `totalPages`는 0입니다.
           content:
             application/json:
               schema: { '$ref': '#/components/schemas/MoverReviewListResponse' }
+        '400': { '$ref': '#/components/responses/ValidationError' }
         '404': { '$ref': '#/components/responses/NotFound' }
   '/movers/{moverId}/favorite':
     put:
@@ -909,11 +914,13 @@ components:
     Page:
       name: page
       in: query
-      schema: { type: integer, minimum: 1 }
+      description: 페이지 번호. 생략하면 1
+      schema: { type: integer, minimum: 1, default: 1 }
     PageSize:
       name: pageSize
       in: query
-      schema: { type: integer, minimum: 1 }
+      description: 페이지당 개수. 생략하면 10
+      schema: { type: integer, minimum: 1, maximum: 50, default: 10 }
   responses:
     ValidationError:
       description: '`VALIDATION_ERROR`. `details`에 유효하지 않은 필드별 정보가 담깁니다.'
@@ -1243,7 +1250,7 @@ components:
           nullable: true
         averageRating:
           { type: number, format: float, example: 4.8, description: 평균 평점
-              (소수점 둘째 자리까지). 리뷰가 없으면 0. 척도는 추후 결정합니다. }
+              (소수점 둘째 자리까지). 리뷰가 없으면 0. 평점은 1~5점 정수입니다. }
         reviewCount: { type: integer }
         confirmedCount: { type: integer }
         isFavorite:
@@ -1256,13 +1263,23 @@ components:
       allOf:
         - { '$ref': '#/components/schemas/MoverSummary' }
         - type: object
-          required: [description, regions, isDesignated]
+          required: [description, regions, ratingCounts, isDesignated]
           properties:
             description: { type: string, nullable: true }
             regions:
               type: array
               items: { '$ref': '#/components/schemas/Region' }
               nullable: true
+            ratingCounts:
+              type: object
+              description: 1~5점별 리뷰 수. 리뷰가 없는 점수는 0입니다.
+              required: ['1', '2', '3', '4', '5']
+              properties:
+                '1': { type: integer }
+                '2': { type: integer }
+                '3': { type: integer }
+                '4': { type: integer }
+                '5': { type: integer }
             isDesignated:
               {
                 type: boolean,
@@ -1457,7 +1474,7 @@ components:
       required: [quoteId, rating, content]
       properties:
         quoteId: { type: string, format: uuid }
-        rating: { type: number, description: 평점. 척도는 추후 결정합니다. }
+        rating: { type: integer, description: 평점 (1~5점) }
         content: { type: string }
     Review:
       description: 기사님 페이지에 표시되는 리뷰
@@ -1465,12 +1482,12 @@ components:
       required: [id, rating, content, customerName, createdAt]
       properties:
         id: { type: string, format: uuid }
-        rating: { type: number, description: 평점. 척도는 추후 결정합니다. }
+        rating: { type: integer, description: 평점 (1~5점) }
         content: { type: string }
         customerName:
           {
             type: string,
-            description: 리뷰 작성자 표시명. 표시 방식은 추후 결정합니다.,
+            description: '리뷰 작성자 이름. 첫 글자만 남기고 `*`로 가리며 이름이 없으면 null',
             nullable: true,
           }
         createdAt: { type: string, format: date-time }
@@ -1501,7 +1518,7 @@ components:
           required: [id, rating, content, createdAt]
           properties:
             id: { type: string, format: uuid }
-            rating: { type: number, description: 평점. 척도는 추후 결정합니다. }
+            rating: { type: integer, description: 평점 (1~5점) }
             content: { type: string }
             createdAt: { type: string, format: date-time }
     MyReviewListResponse:
