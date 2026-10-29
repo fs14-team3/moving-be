@@ -50,6 +50,7 @@ enum QuoteStatus {
 
 enum NotificationType {
   NEW_REQUEST
+  NEW_DESIGNATED_REQUEST
   NEW_QUOTE
   QUOTE_CONFIRMED
   MOVE_DAY
@@ -219,13 +220,16 @@ model Notification {
   id            String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   userId        String           @map("user_id") @db.Uuid
   type          NotificationType
-  message       String
+  message       String?
+  payload       Json             @default("{}") @db.JsonB
   moveRequestId String?          @map("move_request_id") @db.Uuid
   quoteId       String?          @map("quote_id") @db.Uuid
+  readAt        DateTime?        @map("read_at") @db.Timestamptz
   createdAt     DateTime         @default(now()) @map("created_at") @db.Timestamptz
   user          User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   moveRequest   MoveRequest?     @relation(fields: [moveRequestId], references: [id], onDelete: Cascade)
   quote         Quote?           @relation(fields: [quoteId], references: [id], onDelete: Cascade)
 
+  @@index([userId, readAt, createdAt, id])
   @@map("notifications")
 }
