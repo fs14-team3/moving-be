@@ -25,7 +25,7 @@ paths:
     post:
       tags: [Auth]
       summary: 이메일 회원가입
-      description: 요청한 역할의 이메일 계정을 생성합니다. 이메일·전화번호·비밀번호는 §3.2.1에 따라 검증합니다.
+      description: 요청한 역할의 이메일 계정을 생성합니다. 이름·이메일·전화번호·비밀번호는 validator 기준에 따라 검증합니다.
       operationId: signup
       security: []
       requestBody:
@@ -49,7 +49,7 @@ paths:
     post:
       tags: [Auth]
       summary: 이메일 로그인
-      description: 역할별 로그인 페이지에서 요청한 역할로 인증합니다. 인증 상태는 서버 세션으로 유지합니다.
+      description: 역할별 로그인 페이지에서 요청한 역할과 이메일·비밀번호를 확인하고 사용자 정보를 반환합니다.
       operationId: login
       security: []
       requestBody:
@@ -61,11 +61,6 @@ paths:
       responses:
         '200':
           description: 로그인 완료
-          headers:
-            Set-Cookie:
-              description: 세션 쿠키를 설정합니다. 실제 쿠키 이름과 옵션은 서버 설정을 따릅니다.
-              schema:
-                type: string
           content:
             application/json:
               schema:
@@ -80,19 +75,6 @@ paths:
                 '$ref': '#/components/schemas/ErrorResponse'
         '429':
           '$ref': '#/components/responses/RateLimited'
-  '/auth/logout':
-    post:
-      tags: [Auth]
-      summary: 로그아웃
-      description: 현재 서버 세션을 종료하고 세션 쿠키를 무효화합니다.
-      operationId: logout
-      security:
-        - sessionCookie: []
-      responses:
-        '204':
-          description: 로그아웃 완료
-        '401':
-          '$ref': '#/components/responses/Unauthorized'
   '/auth/{provider}':
     get:
       tags: [Auth]
@@ -124,7 +106,7 @@ paths:
     get:
       tags: [Auth]
       summary: 소셜 로그인 콜백 (등록된 redirect URI)
-      description: 소셜 제공자의 응답을 검증한 뒤 가입 또는 로그인합니다. 기존 계정과의 연결 및 로그인 결과 전달 방식은 추후 결정합니다.
+      description: 소셜 제공자의 응답을 검증한 뒤 가입 또는 로그인합니다. 동일 역할과 이메일을 가진 기존 계정이 있으면 소셜 계정을 연결하며, 처리 결과에 따라 프론트엔드로 리다이렉트합니다.
       operationId: socialLoginCallback
       security: []
       parameters:
@@ -140,6 +122,11 @@ paths:
         - name: error
           in: query
           required: false
+          schema: { type: string }
+        - name: error_description
+          in: query
+          required: false
+          description: OAuth 제공자가 전달하는 인증 실패 상세 설명
           schema: { type: string }
       responses:
         '302': { description: 로그인 결과 화면으로 이동 }
@@ -1083,10 +1070,14 @@ components:
         url: { type: string, format: uri }
     SignupRequest:
       type: object
-      required: [role, email, phone, password]
+      required: [role, name, email, phone, password]
       properties:
         role: { '$ref': '#/components/schemas/Role' }
-        name: { type: string }
+        name:
+          type: string
+          minLength: 2
+          maxLength: 20
+          description: 앞뒤 공백 제거 후 2~20자
         email: { type: string, format: email }
         phone:
           {
@@ -1097,9 +1088,9 @@ components:
           {
             type: string,
             format: password,
-            description: ! '8자 이상, 영문·숫자·특수문자
-              포함',
+            description: '공백을 제외한 ASCII 문자 8~16자. 영문·숫자·특수문자를 각각 1자 이상 포함',
             minLength: 8,
+            maxLength: 16,
           }
     LoginRequest:
       type: object
@@ -1107,12 +1098,11 @@ components:
       properties:
         role: { '$ref': '#/components/schemas/Role' }
         email: { type: string, format: email }
-        password: { type: string, format: password }
+        password: { type: string, format: password, minLength: 1 }
     AuthResponse:
       type: object
-      required: [accessToken, user]
+      required: [user]
       properties:
-        accessToken: { type: string }
         user: { '$ref': '#/components/schemas/Me' }
     Me:
       type: object
