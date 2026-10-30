@@ -199,7 +199,7 @@ model RequestRejection {
 model Review {
   id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   quoteId   String   @map("quote_id") @db.Uuid
-  rating    Decimal  @db.Decimal
+  rating    Int
   content   String
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
