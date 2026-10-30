@@ -4,6 +4,7 @@ import swaggerUi from 'swagger-ui-express'
 import { AppError } from '../errors/app-error'
 import { prisma } from '../lib/prisma'
 import { customerRouter } from './customer.routes'
+import { authRouter } from './auth.routes'
 import { moverRouter } from './mover.routes'
 
 export const apiRouter = Router()
@@ -36,4 +37,5 @@ apiRouter.get('/ready', async (_req, res) => {
 })
 
 apiRouter.use('/customers', customerRouter)
+apiRouter.use('/auth', authRouter)
 apiRouter.use('/movers', moverRouter)
