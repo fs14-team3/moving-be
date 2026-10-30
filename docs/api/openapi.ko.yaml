@@ -25,62 +25,64 @@ paths:
     post:
       tags: [Auth]
       summary: 이메일 회원가입
-      description: 요청한 역할의 이메일 계정을 생성합니다. 이메일·전화번호·비밀번호는 §3.2.1에 따라 검증합니다.
+      description: 요청한 역할의 이메일 계정을 생성합니다. 이름·이메일·전화번호·비밀번호는 validator 기준에 따라 검증합니다.
       operationId: signup
       security: []
       requestBody:
         required: true
         content:
           application/json:
-            schema: { '$ref': '#/components/schemas/SignupRequest' }
+            schema:
+              '$ref': '#/components/schemas/SignupRequest'
       responses:
         '201':
           description: 가입 완료
           content:
             application/json:
-              schema: { '$ref': '#/components/schemas/Me' }
-        '400': { '$ref': '#/components/responses/ValidationError' }
-        '429': { '$ref': '#/components/responses/RateLimited' }
+              schema:
+                '$ref': '#/components/schemas/Me'
+        '400':
+          '$ref': '#/components/responses/ValidationError'
+        '429':
+          '$ref': '#/components/responses/RateLimited'
   '/auth/login':
     post:
       tags: [Auth]
       summary: 이메일 로그인
-      description: 역할별 로그인 페이지에서 요청한 역할로 인증합니다.
+      description: 역할별 로그인 페이지에서 요청한 역할과 이메일·비밀번호를 확인하고 사용자 정보를 반환합니다.
       operationId: login
       security: []
       requestBody:
         required: true
         content:
           application/json:
-            schema: { '$ref': '#/components/schemas/LoginRequest' }
+            schema:
+              '$ref': '#/components/schemas/LoginRequest'
       responses:
         '200':
           description: 로그인 완료
           content:
             application/json:
-              schema: { '$ref': '#/components/schemas/AuthResponse' }
-        '400': { '$ref': '#/components/responses/ValidationError' }
+              schema:
+                '$ref': '#/components/schemas/AuthResponse'
+        '400':
+          '$ref': '#/components/responses/ValidationError'
         '401':
           description: '`INVALID_CREDENTIALS`'
           content:
             application/json:
-              schema: { '$ref': '#/components/schemas/ErrorResponse' }
-        '429': { '$ref': '#/components/responses/RateLimited' }
-  '/auth/logout':
-    post:
-      tags: [Auth]
-      summary: 로그아웃
-      description: 현재 로그인 상태를 종료합니다. 세션 또는 토큰 종료 방식은 인증 구현 시 결정합니다.
-      operationId: logout
-      security:
-        - bearerAuth: []
-      responses:
-        '204': { description: 로그아웃 완료 }
+              schema:
+                '$ref': '#/components/schemas/ErrorResponse'
+        '429':
+          '$ref': '#/components/responses/RateLimited'
   '/auth/{provider}':
     get:
       tags: [Auth]
       summary: 소셜 로그인 시작 (provider로 리다이렉트)
-      description: 선택한 소셜 제공자의 로그인 페이지로 이동합니다. OAuth 검증 및 로그인 후 이동 방식은 인증 구현 시 결정합니다.
+      description: |
+        선택한 소셜 제공자(Google / Kakao / Naver) 인가 페이지로 이동합니다.
+        `role`은 OAuth `state`에 서명되어 콜백에서 복원됩니다.
+        제공자 앱 Client ID/Secret과 Redirect URI 환경 변수가 필요합니다.
       operationId: startSocialLogin
       security: []
       parameters:
@@ -95,11 +97,16 @@ paths:
             description: Google / Kakao / Naver 인가(authorize) URL로 리다이렉트,
           }
         '400': { '$ref': '#/components/responses/ValidationError' }
+        '401':
+          description: '`SOCIAL_LOGIN_FAILED` (OAuth 설정 누락 등)'
+          content:
+            application/json:
+              schema: { '$ref': '#/components/schemas/ErrorResponse' }
   '/auth/{provider}/callback':
     get:
       tags: [Auth]
       summary: 소셜 로그인 콜백 (등록된 redirect URI)
-      description: 소셜 제공자의 응답을 검증한 뒤 가입 또는 로그인합니다. 기존 계정과의 연결 및 로그인 결과 전달 방식은 추후 결정합니다.
+      description: 소셜 제공자의 응답을 검증한 뒤 가입 또는 로그인합니다. 동일 역할과 이메일을 가진 기존 계정이 있으면 소셜 계정을 연결하며, 처리 결과에 따라 프론트엔드로 리다이렉트합니다.
       operationId: socialLoginCallback
       security: []
       parameters:
@@ -115,6 +122,11 @@ paths:
         - name: error
           in: query
           required: false
+          schema: { type: string }
+        - name: error_description
+          in: query
+          required: false
+          description: OAuth 제공자가 전달하는 인증 실패 상세 설명
           schema: { type: string }
       responses:
         '302': { description: 로그인 결과 화면으로 이동 }
@@ -1058,10 +1070,14 @@ components:
         url: { type: string, format: uri }
     SignupRequest:
       type: object
-      required: [role, email, phone, password]
+      required: [role, name, email, phone, password]
       properties:
         role: { '$ref': '#/components/schemas/Role' }
-        name: { type: string }
+        name:
+          type: string
+          minLength: 2
+          maxLength: 20
+          description: 앞뒤 공백 제거 후 2~20자
         email: { type: string, format: email }
         phone:
           {
@@ -1072,9 +1088,9 @@ components:
           {
             type: string,
             format: password,
-            description: ! '8자 이상, 영문·숫자·특수문자
-              포함',
+            description: '공백을 제외한 ASCII 문자 8~16자. 영문·숫자·특수문자를 각각 1자 이상 포함',
             minLength: 8,
+            maxLength: 16,
           }
     LoginRequest:
       type: object
@@ -1082,12 +1098,11 @@ components:
       properties:
         role: { '$ref': '#/components/schemas/Role' }
         email: { type: string, format: email }
-        password: { type: string, format: password }
+        password: { type: string, format: password, minLength: 1 }
     AuthResponse:
       type: object
-      required: [accessToken, user]
+      required: [user]
       properties:
-        accessToken: { type: string }
         user: { '$ref': '#/components/schemas/Me' }
     Me:
       type: object
