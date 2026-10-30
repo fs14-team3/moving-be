@@ -424,62 +424,84 @@ export async function completeSocialLogin(
   const state = verifyState(stateValue, cookieNonce, provider)
   const accessToken = await exchangeCodeForToken(provider, code, stateValue)
   const identity = await fetchSocialIdentity(provider, accessToken)
+  const normalizedEmail = identity.email?.trim().toLowerCase() ?? null
   const providerEnum = providerMap[provider].provider
 
-  const existingAccount = await prisma.socialAccount.findFirst({
-    where: {
-      provider: providerEnum,
-      providerId: identity.providerId,
-    },
-    include: {
-      user: { select: userResponseSelect },
-    },
-  })
-
-  if (existingAccount) {
-    if (existingAccount.user.role !== state.role) {
-      throw new Error('이 소셜 계정은 다른 사용자 유형으로 등록되어 있습니다')
-    }
-
-    return {
-      user: toMe(existingAccount.user),
-      role: state.role,
-    }
-  }
-
-  // 이메일이 기존 이메일 계정과 겹치면 자동 연결하지 않고,
-  // 새 소셜 계정의 email은 null로 저장합니다.
-  let email = identity.email
-
-  if (email) {
-    const emailOwner = await prisma.user.findUnique({
+  const user = await prisma.$transaction(async (tx) => {
+    // 1. 이미 연결된 소셜 계정인지 확인
+    const existingAccount = await tx.socialAccount.findUnique({
       where: {
-        email_role: {
-          email,
-          role: state.role,
-        },
-      },
-      select: { id: true },
-    })
-
-    if (emailOwner) {
-      email = null
-    }
-  }
-
-  const user = await prisma.user.create({
-    data: {
-      role: state.role,
-      name: identity.name,
-      email,
-      socialAccounts: {
-        create: {
+        provider_providerId: {
           provider: providerEnum,
           providerId: identity.providerId,
         },
       },
-    },
-    select: userResponseSelect,
+      include: {
+        user: { select: userResponseSelect },
+      },
+    })
+
+    // 2. 기존 소셜 계정이 있으면 해당 사용자로 로그인
+    if (existingAccount) {
+      if (existingAccount.user.role !== state.role) {
+        throw new Error('이 소셜 계정은 다른 사용자 유형으로 등록되어 있습니다')
+      }
+
+      return existingAccount.user
+    }
+
+    // 3. 동일한 역할과 이메일을 가진 기존 계정 검색
+    if (normalizedEmail) {
+      const emailOwner = await tx.user.findUnique({
+        where: {
+          email_role: {
+            email: normalizedEmail,
+            role: state.role,
+          },
+        },
+        select: {
+          id: true,
+        },
+      })
+
+      // 4. 기존 이메일 계정에 소셜 계정 자동 연결
+      if (emailOwner) {
+        await tx.socialAccount.create({
+          data: {
+            userId: emailOwner.id,
+            provider: providerEnum,
+            providerId: identity.providerId,
+          },
+        })
+
+        const linkedUser = await tx.user.findUnique({
+          where: { id: emailOwner.id },
+          select: userResponseSelect,
+        })
+
+        if (!linkedUser) {
+          throw new Error('소셜 계정을 연결할 사용자를 찾을 수 없습니다')
+        }
+
+        return linkedUser
+      }
+    }
+
+    // 5. 기존 계정이 없으면 신규 사용자 생성
+    return tx.user.create({
+      data: {
+        role: state.role,
+        name: identity.name,
+        email: normalizedEmail,
+        socialAccounts: {
+          create: {
+            provider: providerEnum,
+            providerId: identity.providerId,
+          },
+        },
+      },
+      select: userResponseSelect,
+    })
   })
 
   return {

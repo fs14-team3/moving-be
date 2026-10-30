@@ -23,12 +23,13 @@ function stateCookieOptions() {
 
 function landingPageUrl() {
   const frontendUrl = process.env.FRONTEND_URL
+  const redirectPath = process.env.SOCIAL_LOGIN_REDIRECT_PATH || '/'
 
   if (!frontendUrl) {
     throw new Error('FRONTEND_URL 환경 변수가 설정되지 않았습니다')
   }
 
-  return new URL('/', frontendUrl)
+  return new URL(redirectPath, frontendUrl)
 }
 
 function redirectToLanding(res: Response, params: Record<string, string>) {
@@ -73,7 +74,6 @@ export function socialLogin(req: Request, res: Response) {
 }
 
 // 소셜 로그인 콜백
-
 export async function socialCallback(req: Request, res: Response) {
   const provider = validate(socialProviderSchema, req.params.provider)
   const query = validate(socialCallbackQuery, req.query)
@@ -92,13 +92,14 @@ export async function socialCallback(req: Request, res: Response) {
 
   if (query.error || !query.code) {
     return redirectToLanding(res, {
-      socialLogin: 'failed',
-      reason: query.error ? 'provider_denied' : 'missing_code',
+      provider,
+      status: 'error',
+      code: 'SOCIAL_LOGIN_FAILED',
     })
   }
 
   try {
-    const result = await authService.completeSocialLogin(
+    await authService.completeSocialLogin(
       provider,
       query.code,
       query.state,
@@ -106,13 +107,14 @@ export async function socialCallback(req: Request, res: Response) {
     )
 
     return redirectToLanding(res, {
-      socialLogin: 'success',
-      role: result.role,
+      provider,
+      status: 'success',
     })
   } catch {
     return redirectToLanding(res, {
-      socialLogin: 'failed',
-      reason: 'social_login_failed',
+      provider,
+      status: 'error',
+      code: 'SOCIAL_LOGIN_FAILED',
     })
   }
 }
