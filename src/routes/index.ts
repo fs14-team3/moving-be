@@ -6,6 +6,7 @@ import { prisma } from '../lib/prisma'
 import { customerRouter } from './customer.routes'
 import { moverRouter } from './mover.routes'
 import { quoteRouter } from './quote.routes'
+import { rejectionRouter } from './rejection.routes'
 
 export const apiRouter = Router()
 
@@ -39,3 +40,4 @@ apiRouter.get('/ready', async (_req, res) => {
 apiRouter.use('/customers', customerRouter)
 apiRouter.use('/movers', moverRouter)
 apiRouter.use('/move-requests', quoteRouter)
+apiRouter.use('/move-requests', rejectionRouter)
