@@ -106,7 +106,7 @@ paths:
     get:
       tags: [Auth]
       summary: 소셜 로그인 콜백 (등록된 redirect URI)
-      description: 소셜 제공자의 응답을 검증한 뒤 가입 또는 로그인합니다. 동일 역할과 이메일을 가진 기존 계정이 있으면 소셜 계정을 연결하며, 처리 결과에 따라 프론트엔드로 리다이렉트합니다.
+      description: 소셜 제공자의 응답을 검증한 뒤 가입 또는 로그인합니다.
       operationId: socialLoginCallback
       security: []
       parameters:
@@ -114,29 +114,60 @@ paths:
         - name: code
           in: query
           required: false
-          schema: { type: string }
+          schema:
+            type: string
         - name: state
           in: query
           required: true
-          schema: { type: string }
+          schema:
+            type: string
         - name: error
           in: query
           required: false
-          schema: { type: string }
+          schema:
+            type: string
         - name: error_description
           in: query
           required: false
-          description: OAuth 제공자가 전달하는 인증 실패 상세 설명
-          schema: { type: string }
+          schema:
+            type: string
       responses:
-        '302': { description: 로그인 결과 화면으로 이동 }
+        '302':
+          description: 로그인 결과 화면으로 이동
+  '/auth/logout':
+    post:
+      tags: [Auth]
+      summary: 로그아웃
+      description: 현재 로그인된 세션을 종료하고 세션 쿠키를 삭제합니다.
+      operationId: logout
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: 로그아웃 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - message
+                properties:
+                  message:
+                    type: string
+                    example: 로그아웃되었습니다.
+        '500':
+          description: 로그아웃 처리 실패
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   '/users/me':
     get:
       tags: [Me]
       summary: 내 정보 (GNB, 라우트 가드용)
       operationId: getMe
       security:
-        - bearerAuth: []
+        - sessionCookie: []
       responses:
         '200':
           description: 현재 사용자
@@ -150,7 +181,7 @@ paths:
       description: 일반 유저 정보 수정과 기사님 기본정보 수정에서 사용합니다. 변경 가능 항목과 인증 확인 방식은 추후 결정합니다.
       operationId: updateMe
       security:
-        - bearerAuth: []
+        - sessionCookie: []
       requestBody:
         required: true
         content:
@@ -170,7 +201,7 @@ paths:
       summary: 일반 유저 프로필 등록
       operationId: createCustomerProfile
       security:
-        - bearerAuth: []
+        - sessionCookie: []
       x-roles: [CUSTOMER]
       requestBody:
         required: true
@@ -196,7 +227,7 @@ paths:
       summary: 일반 유저 프로필 수정
       operationId: updateCustomerProfile
       security:
-        - bearerAuth: []
+        - sessionCookie: []
       x-roles: [CUSTOMER]
       requestBody:
         required: true
@@ -218,7 +249,7 @@ paths:
       summary: 기사님 프로필 등록
       operationId: createMoverProfile
       security:
-        - bearerAuth: []
+        - sessionCookie: []
       x-roles: [MOVER]
       requestBody:
         required: true
@@ -244,7 +275,7 @@ paths:
       summary: 기사님 프로필 수정
       operationId: updateMoverProfile
       security:
-        - bearerAuth: []
+        - sessionCookie: []
       x-roles: [MOVER]
       requestBody:
         required: true
@@ -266,7 +297,7 @@ paths:
       summary: 기사님 마이페이지 (내 프로필·평점)
       operationId: getMyMoverPage
       security:
-        - bearerAuth: []
+        - sessionCookie: []
       x-roles: [MOVER]
       responses:
         '200':
@@ -283,7 +314,7 @@ paths:
       description: 프로필 등록·수정에 사용할 이미지 URL을 반환합니다. 저장소, 허용 형식 및 용량 제한은 추후 결정합니다.
       operationId: uploadImage
       security:
-        - bearerAuth: []
+        - sessionCookie: []
       requestBody:
         required: true
         content:
@@ -312,7 +343,7 @@ paths:
       operationId: listMovers
       security:
         - {}
-        - bearerAuth: []
+        - sessionCookie: []
       parameters:
         - name: keyword
           in: query
@@ -356,7 +387,7 @@ paths:
       operationId: getMover
       security:
         - {}
-        - bearerAuth: []
+        - sessionCookie: []
       parameters:
         - { '$ref': '#/components/parameters/MoverIdPath' }
       responses:
@@ -397,7 +428,7 @@ paths:
         프로필을 등록하지 않은 기사님은 찜할 수 없습니다 (404).
       operationId: addFavorite
       security:
-        - bearerAuth: []
+        - sessionCookie: []
       x-roles: [CUSTOMER]
       parameters:
         - { '$ref': '#/components/parameters/MoverIdPath' }
@@ -417,7 +448,7 @@ paths:
       description: 찜하지 않은 기사님이면 그대로 두고 현재 상태를 반환합니다. 그 외 조건은 찜하기와 같습니다.
       operationId: removeFavorite
       security:
-        - bearerAuth: []
+        - sessionCookie: []
       x-roles: [CUSTOMER]
       parameters:
         - { '$ref': '#/components/parameters/MoverIdPath' }
@@ -440,7 +471,7 @@ paths:
         PC 사이드바에서는 `limit=3`으로 최대 3명을 표시할 수 있습니다. 다음 페이지를 요청할 때는 `cursor`를 더해 보내며, 그 사이에 찜을 취소했더라도 이어서 조회됩니다.
       operationId: listMyFavorites
       security:
-        - bearerAuth: []
+        - sessionCookie: []
       x-roles: [CUSTOMER]
       parameters:
         - { '$ref': '#/components/parameters/Cursor' }
@@ -471,7 +502,7 @@ paths:
         입력 중 수정(§4.1.4)은 제출 전 프론트엔드 폼에서 처리합니다.
       operationId: createMoveRequest
       security:
-        - bearerAuth: []
+        - sessionCookie: []
       x-roles: [CUSTOMER]
       requestBody:
         required: true
@@ -499,7 +530,7 @@ paths:
       description: '§4.2.1의 활성 요청을 반환합니다. 이사일이 지난 요청을 계속 활성으로 반환하지 않도록 상태를 확인합니다.'
       operationId: getActiveMoveRequest
       security:
-        - bearerAuth: []
+        - sessionCookie: []
       x-roles: [CUSTOMER]
       responses:
         '200':
@@ -524,7 +555,7 @@ paths:
       description: 완료된 이사의 정보와 받은 전체 견적을 반환합니다. 확정 견적 필터를 제공합니다.
       operationId: listMoveRequestHistory
       security:
-        - bearerAuth: []
+        - sessionCookie: []
       x-roles: [CUSTOMER]
       parameters:
         - name: confirmedOnly
@@ -548,7 +579,7 @@ paths:
       summary: 견적 요청 상세 (요청자 본인)
       operationId: getMoveRequest
       security:
-        - bearerAuth: []
+        - sessionCookie: []
       x-roles: [CUSTOMER]
       parameters:
         - { '$ref': '#/components/parameters/RequestIdPath' }
@@ -571,7 +602,7 @@ paths:
         지정 요청은 기사님에게 라벨로 강조 표시하며, 기사님의 서비스 가능 지역과 관계없이 요청할 수 있습니다.
       operationId: designateMover
       security:
-        - bearerAuth: []
+        - sessionCookie: []
       x-roles: [CUSTOMER]
       parameters:
         - { '$ref': '#/components/parameters/RequestIdPath' }
@@ -599,7 +630,7 @@ paths:
         않습니다.
       operationId: listQuotesForRequest
       security:
-        - bearerAuth: []
+        - sessionCookie: []
       x-roles: [CUSTOMER]
       parameters:
         - { '$ref': '#/components/parameters/RequestIdPath' }
@@ -632,7 +663,7 @@ paths:
         지정 여부의 견적 분류 시점과 재응답 정책은 추후 결정합니다. 일반 유저에게 새 견적 알림을 보냅니다.
       operationId: sendQuote
       security:
-        - bearerAuth: []
+        - sessionCookie: []
       x-roles: [MOVER]
       parameters:
         - { '$ref': '#/components/parameters/RequestIdPath' }
@@ -666,7 +697,7 @@ paths:
       summary: 견적 요청 반려 (기사님)
       operationId: rejectMoveRequest
       security:
-        - bearerAuth: []
+        - sessionCookie: []
       x-roles: [MOVER]
       parameters:
         - { '$ref': '#/components/parameters/RequestIdPath' }
@@ -691,7 +722,7 @@ paths:
         이사 빠른 순·최근 요청 순 정렬을 지원합니다. 지역 단위와 매핑 방식은 추후 결정합니다.
       operationId: listReceivedRequests
       security:
-        - bearerAuth: []
+        - sessionCookie: []
       x-roles: [MOVER]
       parameters:
         - name: moveTypes
@@ -730,7 +761,7 @@ paths:
       summary: 반려한 요청 목록
       operationId: listMyRejectedRequests
       security:
-        - bearerAuth: []
+        - sessionCookie: []
       x-roles: [MOVER]
       parameters:
         - { '$ref': '#/components/parameters/Cursor' }
@@ -751,7 +782,7 @@ paths:
       description: 견적 요청자 본인이 견적가와 기사님 정보를 조회합니다.
       operationId: getQuote
       security:
-        - bearerAuth: []
+        - sessionCookie: []
       parameters:
         - { '$ref': '#/components/parameters/QuoteIdPath' }
       responses:
@@ -773,7 +804,7 @@ paths:
         요청 상태와 견적 상태는 함께 갱신합니다. 기사님과 일반 유저에게 확정 알림을 보냅니다.
       operationId: confirmQuote
       security:
-        - bearerAuth: []
+        - sessionCookie: []
       x-roles: [CUSTOMER]
       parameters:
         - { '$ref': '#/components/parameters/QuoteIdPath' }
@@ -800,7 +831,7 @@ paths:
         추후 결정하며, 다음 날까지 기다려야 한다는 별도 제한은 두지 않습니다.
       operationId: createReview
       security:
-        - bearerAuth: []
+        - sessionCookie: []
       x-roles: [CUSTOMER]
       requestBody:
         required: true
@@ -827,7 +858,7 @@ paths:
       summary: 내가 작성한 리뷰
       operationId: listMyReviews
       security:
-        - bearerAuth: []
+        - sessionCookie: []
       x-roles: [CUSTOMER]
       parameters:
         - { '$ref': '#/components/parameters/Page' }
@@ -846,7 +877,7 @@ paths:
       summary: 작성 가능한 리뷰 목록
       operationId: listWritableReviews
       security:
-        - bearerAuth: []
+        - sessionCookie: []
       x-roles: [CUSTOMER]
       parameters:
         - { '$ref': '#/components/parameters/Page' }
@@ -869,7 +900,7 @@ paths:
         주기는 추후 결정합니다.'
       operationId: listNotifications
       security:
-        - bearerAuth: []
+        - sessionCookie: []
       parameters:
         - { '$ref': '#/components/parameters/Cursor' }
         - { '$ref': '#/components/parameters/Limit' }
@@ -883,13 +914,11 @@ paths:
         '401': { '$ref': '#/components/responses/Unauthorized' }
 components:
   securitySchemes:
-    bearerAuth:
-      {
-        type: http,
-        scheme: bearer,
-        description: 인증이 필요한 API를 나타내는 초기 표현입니다.
-          토큰 형식·수명·저장·갱신 방식은 추후 결정합니다.,
-      }
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: moving.sid
+      description: express-session에서 발급한 세션 쿠키
   parameters:
     ProviderPath:
       name: provider
