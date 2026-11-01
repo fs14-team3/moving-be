@@ -1,15 +1,6 @@
 import { randomUUID } from 'node:crypto'
 
-import {
-  afterAll,
-  afterEach,
-  beforeAll,
-  beforeEach,
-  describe,
-  expect,
-  it,
-  vi,
-} from 'vitest'
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 
 import { prisma } from '../src/lib/prisma'
 import { api } from './helpers'
@@ -18,9 +9,23 @@ describe('알림 관리 API', () => {
   const customerId = randomUUID()
   const otherUserId = randomUUID()
 
+  const testUser: Express.User = {
+    id: customerId,
+    role: 'CUSTOMER',
+  }
+
+  const otherUser: Express.User = {
+    id: otherUserId,
+    role: 'MOVER',
+  }
+
+  function notificationApi(user: Express.User = testUser) {
+    return api(user)
+  }
+
   const createdAtBase = Date.parse('2026-10-20T09:00:00.000Z')
 
-  // 인증 기능 구현 전에는 개발용 환경변수로 사용자 식별
+  // 알림 API 테스트에 사용할 고객 및 기사님 계정 생성
   beforeAll(async () => {
     await prisma.user.createMany({
       data: [
@@ -38,19 +43,12 @@ describe('알림 관리 API', () => {
     })
   })
 
-  beforeEach(() => {
-    vi.stubEnv('NODE_ENV', 'test')
-    vi.stubEnv('DEV_NOTIFICATION_USER_ID', customerId)
-  })
-
   afterEach(async () => {
     await prisma.notification.deleteMany({
       where: {
         userId: { in: [customerId, otherUserId] },
       },
     })
-
-    vi.unstubAllEnvs()
   })
 
   afterAll(async () => {
@@ -61,6 +59,24 @@ describe('알림 관리 API', () => {
     })
 
     await prisma.$disconnect()
+  })
+
+  describe('인증 검증', () => {
+    it('비로그인 사용자는 알림 API를 이용할 수 없다', async () => {
+      const notificationId = randomUUID()
+
+      const responses = await Promise.all([
+        api().get('/api/notifications'),
+        api().get('/api/notifications/unread-count'),
+        api().patch(`/api/notifications/${notificationId}/read`),
+        api().patch('/api/notifications/read-all'),
+      ])
+
+      for (const res of responses) {
+        expect(res.status).toBe(401)
+        expect(res.body.error.code).toBe('UNAUTHORIZED')
+      }
+    })
   })
 
   // 중복 알림 생성 제약에 영향을 받지 않도록
@@ -95,7 +111,7 @@ describe('알림 관리 API', () => {
       await createNotification({ readAt: new Date() })
       await createNotification({ userId: otherUserId })
 
-      const res = await api().get('/api/notifications')
+      const res = await notificationApi().get('/api/notifications')
 
       expect(res.status).toBe(200)
       expect(res.body.items).toHaveLength(1)
@@ -110,7 +126,7 @@ describe('알림 관리 API', () => {
       const newest = await createNotification({ seconds: 3 })
       const middle = await createNotification({ seconds: 2 })
 
-      const res = await api().get('/api/notifications')
+      const res = await notificationApi().get('/api/notifications')
 
       expect(res.status).toBe(200)
       expect(res.body.items.map((item: { id: string }) => item.id)).toEqual([
@@ -125,7 +141,7 @@ describe('알림 관리 API', () => {
         await createNotification({ seconds: index })
       }
 
-      const res = await api().get('/api/notifications')
+      const res = await notificationApi().get('/api/notifications')
 
       expect(res.status).toBe(200)
       expect(res.body.items).toHaveLength(3)
@@ -138,12 +154,12 @@ describe('알림 관리 API', () => {
         await createNotification({ seconds: index })
       }
 
-      const first = await api().get('/api/notifications')
+      const first = await notificationApi().get('/api/notifications')
 
       expect(first.status).toBe(200)
       expect(first.body.items).toHaveLength(3)
 
-      const second = await api()
+      const second = await notificationApi()
         .get('/api/notifications')
         .query({ cursor: first.body.nextCursor })
 
@@ -164,9 +180,9 @@ describe('알림 관리 API', () => {
         await createNotification({ seconds: 1 })
       }
 
-      const first = await api().get('/api/notifications')
+      const first = await notificationApi().get('/api/notifications')
 
-      const second = await api()
+      const second = await notificationApi()
         .get('/api/notifications')
         .query({ cursor: first.body.nextCursor })
 
@@ -182,7 +198,7 @@ describe('알림 관리 API', () => {
     })
 
     it('알림이 없으면 빈 목록을 반환한다', async () => {
-      const res = await api().get('/api/notifications')
+      const res = await notificationApi().get('/api/notifications')
 
       expect(res.status).toBe(200)
       expect(res.body).toEqual({
@@ -193,7 +209,7 @@ describe('알림 관리 API', () => {
     })
 
     it('잘못된 커서는 400을 반환한다', async () => {
-      const res = await api()
+      const res = await notificationApi()
         .get('/api/notifications')
         .query({ cursor: 'invalid-cursor' })
 
@@ -208,14 +224,14 @@ describe('알림 관리 API', () => {
       await createNotification({ readAt: new Date() })
       await createNotification({ userId: otherUserId })
 
-      const res = await api().get('/api/notifications/unread-count')
+      const res = await notificationApi().get('/api/notifications/unread-count')
 
       expect(res.status).toBe(200)
       expect(res.body).toEqual({ unreadCount: 2 })
     })
 
     it('미읽음 알림이 없으면 0을 반환한다', async () => {
-      const res = await api().get('/api/notifications/unread-count')
+      const res = await notificationApi().get('/api/notifications/unread-count')
 
       expect(res.status).toBe(200)
       expect(res.body).toEqual({ unreadCount: 0 })
@@ -226,7 +242,7 @@ describe('알림 관리 API', () => {
     it('본인 알림 한 건을 읽음 처리한다', async () => {
       const notification = await createNotification()
 
-      const res = await api().patch(
+      const res = await notificationApi().patch(
         `/api/notifications/${notification.id}/read`,
       )
 
@@ -244,7 +260,7 @@ describe('알림 관리 API', () => {
 
       const notification = await createNotification({ readAt })
 
-      const res = await api().patch(
+      const res = await notificationApi().patch(
         `/api/notifications/${notification.id}/read`,
       )
 
@@ -262,7 +278,7 @@ describe('알림 관리 API', () => {
         userId: otherUserId,
       })
 
-      const res = await api().patch(
+      const res = await notificationApi().patch(
         `/api/notifications/${notification.id}/read`,
       )
 
@@ -275,8 +291,23 @@ describe('알림 관리 API', () => {
       expect(saved?.readAt).toBeNull()
     })
 
+    it('다른 로그인 사용자도 자신의 알림만 조회한다', async () => {
+      await createNotification()
+      const otherNotification = await createNotification({
+        userId: otherUserId,
+      })
+
+      const res = await notificationApi(otherUser).get('/api/notifications')
+
+      expect(res.status).toBe(200)
+      expect(res.body.items).toHaveLength(1)
+      expect(res.body.items[0].id).toBe(otherNotification.id)
+    })
+
     it('잘못된 알림 ID는 400을 반환한다', async () => {
-      const res = await api().patch('/api/notifications/not-a-uuid/read')
+      const res = await notificationApi().patch(
+        '/api/notifications/not-a-uuid/read',
+      )
 
       expect(res.status).toBe(400)
     })
@@ -288,7 +319,7 @@ describe('알림 관리 API', () => {
       await createNotification()
       await createNotification()
 
-      const res = await api().patch('/api/notifications/read-all')
+      const res = await notificationApi().patch('/api/notifications/read-all')
 
       const unreadCount = await prisma.notification.count({
         where: {
@@ -309,7 +340,7 @@ describe('알림 관리 API', () => {
         userId: otherUserId,
       })
 
-      const res = await api().patch('/api/notifications/read-all')
+      const res = await notificationApi().patch('/api/notifications/read-all')
 
       const saved = await prisma.notification.findUnique({
         where: { id: otherNotification.id },
@@ -325,7 +356,7 @@ describe('알림 관리 API', () => {
 
       const notification = await createNotification({ readAt })
 
-      const res = await api().patch('/api/notifications/read-all')
+      const res = await notificationApi().patch('/api/notifications/read-all')
 
       const saved = await prisma.notification.findUnique({
         where: { id: notification.id },
