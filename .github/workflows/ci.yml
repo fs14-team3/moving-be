@@ -103,6 +103,8 @@ jobs:
         run: npm ci
       - name: Generate Prisma Client
         run: npm run prisma:generate
+        env:
+          SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
       - name: Check formatting
         run: npm run format:check
       - name: Lint
