@@ -8,4 +8,3 @@ authRouter.post('/login', authController.login)
 
 authRouter.get('/:provider/callback', authController.socialCallback)
 authRouter.get('/:provider', authController.socialLogin)
-

@@ -118,4 +118,3 @@ export async function socialCallback(req: Request, res: Response) {
     })
   }
 }
-
