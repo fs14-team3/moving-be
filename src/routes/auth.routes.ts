@@ -14,3 +14,6 @@ authRouter.post('/logout', authController.logout)
 
 // 소셜 로그인 콜백
 authRouter.get('/:provider/callback', authController.socialCallback)
+
+// 소셜 로그인 시작
+authRouter.get('/:provider', authController.socialLogin)
