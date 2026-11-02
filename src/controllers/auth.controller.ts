@@ -42,6 +42,7 @@ function redirectToLanding(res: Response, params: Record<string, string>) {
   return res.redirect(302, url.toString())
 }
 
+
 // 로그인 성공 시 세션 생성
 async function establishSession(
   req: Request,
@@ -88,6 +89,7 @@ export async function signup(req: Request, res: Response) {
 }
 
 // 이메일 로그인
+
 export async function login(req: Request, res: Response) {
   const body = validate(loginInput, req.body)
   const user = await authService.login(body)
@@ -134,7 +136,7 @@ export function socialLogin(req: Request, res: Response) {
 
   res.cookie(`oauth_state_${provider}`, nonce, stateCookieOptions())
   res.set('Cache-Control', 'no-store')
-
+  
   return res.redirect(302, authorizationUrl)
 }
 

@@ -106,7 +106,7 @@ paths:
     get:
       tags: [Auth]
       summary: 소셜 로그인 콜백 (등록된 redirect URI)
-      description: 소셜 제공자의 응답을 검증한 뒤 가입 또는 로그인합니다.
+      description: 소셜 제공자의 응답을 검증한 뒤 가입 또는 로그인합니다. 동일 역할과 이메일을 가진 기존 계정이 있으면 소셜 계정을 연결하며, 처리 결과에 따라 프론트엔드로 리다이렉트합니다.
       operationId: socialLoginCallback
       security: []
       parameters:
@@ -124,24 +124,12 @@ paths:
         - name: error
           in: query
           required: false
-          schema:
-            type: string
+          schema: { type: string }
         - name: error_description
           in: query
           required: false
-          schema:
-            type: string
-      responses:
-        '302':
-          description: 로그인 결과 화면으로 이동
-  '/auth/logout':
-    post:
-      tags: [Auth]
-      summary: 로그아웃
-      description: 현재 로그인된 세션을 종료하고 세션 쿠키를 삭제합니다.
-      operationId: logout
-      security:
-        - sessionCookie: []
+          description: OAuth 제공자가 전달하는 인증 실패 상세 설명
+          schema: { type: string }
       responses:
         '200':
           description: 로그아웃 성공
