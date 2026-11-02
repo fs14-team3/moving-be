@@ -42,7 +42,6 @@ function redirectToLanding(res: Response, params: Record<string, string>) {
   return res.redirect(302, url.toString())
 }
 
-// 이메일 회원가입
 export async function signup(req: Request, res: Response) {
   const body = validate(signupInput, req.body)
   const user = await authService.signup(body)
@@ -51,6 +50,7 @@ export async function signup(req: Request, res: Response) {
 }
 
 // 이메일 로그인
+
 export async function login(req: Request, res: Response) {
   const body = validate(loginInput, req.body)
   const user = await authService.login(body)
@@ -118,3 +118,4 @@ export async function socialCallback(req: Request, res: Response) {
     })
   }
 }
+
