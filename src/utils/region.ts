@@ -1,4 +1,4 @@
-const REGIONS = [
+export const REGIONS = [
   '서울',
   '경기',
   '인천',
