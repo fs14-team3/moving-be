@@ -13,6 +13,10 @@ const ERROR_CATALOG = {
     status: 503,
     message: '일시적으로 서비스를 이용할 수 없습니다',
   },
+  PROFILE_ALREADY_EXISTS: {
+    status: 409,
+    message: '이미 프로필이 등록되어 있습니다',
+  },
 } as const
 
 export type ErrorCode = keyof typeof ERROR_CATALOG
