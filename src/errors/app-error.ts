@@ -1,6 +1,10 @@
 const ERROR_CATALOG = {
   VALIDATION_ERROR: { status: 400, message: '잘못된 요청입니다' },
   UNAUTHORIZED: { status: 401, message: '로그인이 필요합니다' },
+  INVALID_CREDENTIALS: {
+    status: 401,
+    message: '이메일 또는 비밀번호가 올바르지 않습니다',
+  },
   FORBIDDEN: { status: 403, message: '접근 권한이 없습니다' },
   PROFILE_REQUIRED: { status: 403, message: '프로필 등록이 필요합니다' },
   NOT_FOUND: { status: 404, message: '요청한 리소스를 찾을 수 없습니다' },

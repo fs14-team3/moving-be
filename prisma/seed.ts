@@ -297,7 +297,7 @@ function buildSeedData() {
       role: 'CUSTOMER',
       name,
       email: `${email}@example.test`,
-      phone: i % 10 === 0 ? null : `010-1000-${String(i + 1).padStart(4, '0')}`,
+      phone: i % 10 === 0 ? null : `0101000${String(i + 1).padStart(4, '0')}`,
       createdAt: joinedAt,
       updatedAt: joinedAt,
     })
@@ -361,7 +361,7 @@ function buildSeedData() {
         role: 'MOVER',
         name,
         email: `mover${i + 1}@example.test`,
-        phone: `010-2000-${String(i + 1).padStart(4, '0')}`,
+        phone: `0102000${String(i + 1).padStart(4, '0')}`,
         createdAt: joinedAt,
         updatedAt: joinedAt,
       })

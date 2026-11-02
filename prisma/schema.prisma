@@ -67,11 +67,13 @@ model User {
   phone           String?
   createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz
   updatedAt       DateTime         @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
   socialAccounts  SocialAccount[]
   customerProfile CustomerProfile?
   moverProfile    MoverProfile?
   notifications   Notification[]
 
+  @@unique([email, role], name: "email_role")
   @@map("users")
 }
 
