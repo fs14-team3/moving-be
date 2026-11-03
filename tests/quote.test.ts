@@ -193,6 +193,19 @@ describe('POST /api/move-requests/:requestId/quotes', () => {
         moveType: 'HOME',
       })
     })
+
+    it('고객 닉네임이 있으면 이름보다 우선 반환한다', async () => {
+      await prisma.customerProfile.update({
+        where: { userId: customerId },
+        data: { nickname: '이사왕' },
+      })
+
+      const request = await createMoveRequest()
+      const res = await sendQuote(request.id, mover)
+
+      expect(res.status).toBe(201)
+      expect(res.body.moveRequest.customerName).toBe('이사왕')
+    })
   })
 
   describe('인증 및 권한', () => {

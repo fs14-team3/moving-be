@@ -1,6 +1,6 @@
 import { AppError } from '../errors/app-error'
 import { prisma } from '../lib/prisma'
-import { createNotification } from './notification.service'
+import { createNotification } from './notification-creation.service'
 import type { SendQuoteBody } from '../validators/quote.validator'
 
 type SendQuoteInput = SendQuoteBody & {
@@ -62,8 +62,17 @@ export async function sendQuote(
 
     const request = await tx.moveRequest.findUniqueOrThrow({
       where: { id: requestId },
+      include: {
+        customer: {
+          select: {
+            nickname: true,
+            user: {
+              select: { name: true },
+            },
+          },
+        },
+      },
     })
-
     if (request.status !== 'PENDING' || request.moveDate < getToday()) {
       throw new AppError('REQUEST_NOT_PENDING')
     }
@@ -155,11 +164,6 @@ export async function sendQuote(
       tx,
     )
 
-    const customer = await tx.user.findUnique({
-      where: { id: request.customerId },
-      select: { name: true },
-    })
-
     // OpenAPI SentQuote 응답 구조
     return {
       id: quote.id,
@@ -169,7 +173,8 @@ export async function sendQuote(
       createdAt: quote.createdAt,
       moveRequest: {
         id: request.id,
-        customerName: customer?.name ?? null,
+        customerName:
+          request.customer.nickname ?? request.customer.user.name ?? null,
         moveType: request.moveType,
         moveDate: request.moveDate.toISOString().slice(0, 10),
         from: {
