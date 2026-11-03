@@ -215,18 +215,24 @@ function verifyState(
     Buffer.from(payload, 'base64url').toString('utf8'),
   ) as OAuthState
 
-  if (
-    state.provider !== expectedProvider ||
-    !cookieNonce ||
-    state.nonce !== cookieNonce ||
-    state.expiresAt < Date.now()
-  ) {
-    throw new Error('OAuth state가 만료되었거나 일치하지 않습니다')
+  if (state.provider !== expectedProvider) {
+    throw new Error('OAuth provider가 일치하지 않습니다')
+  }
+
+  if (!cookieNonce) {
+    throw new Error('OAuth state 쿠키를 찾을 수 없습니다')
+  }
+
+  if (state.nonce !== cookieNonce) {
+    throw new Error('OAuth state nonce가 일치하지 않습니다')
+  }
+
+  if (state.expiresAt < Date.now()) {
+    throw new Error('OAuth state가 만료되었습니다')
   }
 
   return state
 }
-
 function getProviderConfig(provider: SocialProviderName) {
   const config = providerMap[provider]
   const clientId = config.clientId()
@@ -277,14 +283,22 @@ export function readSocialStateNonce(
   return getCookieValue(cookieHeader, `oauth_state_${provider}`)
 }
 
-async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(url, init)
+async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
+  const response = await fetch(url, options)
 
   if (!response.ok) {
+    const responseText = await response.text()
+
+    console.error('[OAuth Provider Response Error]', {
+      status: response.status,
+      statusText: response.statusText,
+      response: responseText,
+    })
+
     throw new Error(`OAuth 제공자 요청 실패 (${response.status})`)
   }
 
-  return (await response.json()) as T
+  return response.json() as Promise<T>
 }
 
 async function exchangeCodeForToken(

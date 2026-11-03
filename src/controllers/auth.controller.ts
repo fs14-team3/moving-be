@@ -128,8 +128,12 @@ export function socialLogin(req: Request, res: Response) {
     query.role,
   )
 
-  res.cookie(`oauth_state_${provider}`, nonce, stateCookieOptions())
+  const cookieName = `oauth_state_${provider}`
+  const cookieOptions = stateCookieOptions()
+
+  res.cookie(cookieName, nonce, cookieOptions)
   res.set('Cache-Control', 'no-store')
+
   return res.redirect(302, authorizationUrl)
 }
 
@@ -167,11 +171,18 @@ export async function socialCallback(req: Request, res: Response) {
     )
 
     await establishSession(req, result.user)
+
     return redirectToLanding(res, {
       provider,
       status: 'success',
     })
-  } catch {
+  } catch (error) {
+    console.error('[Social Login Callback Error]', {
+      provider,
+      message: error instanceof Error ? error.message : '알 수 없는 오류',
+      stack: error instanceof Error ? error.stack : undefined,
+    })
+
     return redirectToLanding(res, {
       provider,
       status: 'error',

@@ -5,6 +5,7 @@ const imageUrlSchema = z
   .string()
   .trim()
   .url('올바른 이미지 URL을 입력해 주세요')
+  .nullable()
   .optional()
 
 const nicknameSchema = z

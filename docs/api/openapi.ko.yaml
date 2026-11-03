@@ -106,7 +106,9 @@ paths:
     get:
       tags: [Auth]
       summary: 소셜 로그인 콜백 (등록된 redirect URI)
-      description: 소셜 제공자의 응답을 검증한 뒤 가입 또는 로그인합니다.
+      description: |
+        소셜 제공자의 응답을 검증한 뒤 가입 또는 로그인합니다.
+        로그인 성공 또는 실패 결과에 따라 프론트엔드 화면으로 리다이렉트합니다.
       operationId: socialLoginCallback
       security: []
       parameters:
@@ -133,12 +135,17 @@ paths:
             type: string
       responses:
         '302':
-          description: 로그인 결과 화면으로 이동
+          description: 로그인 결과 화면으로 리다이렉트
+          headers:
+            Location:
+              description: 프론트엔드 로그인 결과 화면 주소
+              schema:
+                type: string
   '/auth/logout':
     post:
       tags: [Auth]
       summary: 로그아웃
-      description: 현재 로그인된 세션을 종료하고 세션 쿠키를 삭제합니다.
+      description: 현재 로그인된 세션을 종료하고 `moving.sid` 세션 쿠키를 삭제합니다.
       operationId: logout
       security:
         - sessionCookie: []
@@ -149,12 +156,13 @@ paths:
             application/json:
               schema:
                 type: object
-                required:
-                  - message
+                required: [message]
                 properties:
                   message:
                     type: string
                     example: 로그아웃되었습니다.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '500':
           description: 로그아웃 처리 실패
           content:
