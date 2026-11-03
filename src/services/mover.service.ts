@@ -1,7 +1,12 @@
 import { AppError } from '../errors/app-error'
-import type { Prisma } from '../generated/prisma/client'
+import { Prisma } from '../generated/prisma/client'
 import { prisma } from '../lib/prisma'
-import type { ListMoversQuery, MoverSort } from '../validators/mover.validator'
+import type {
+  CreateMoverProfileInput,
+  ListMoversQuery,
+  MoverSort,
+  UpdateMoverProfileInput,
+} from '../validators/mover.validator'
 import { countReviewsByRating } from './review.service'
 
 const ORDER_BY = {
@@ -36,6 +41,101 @@ export function toMoverSummary(
     ...profile,
     averageRating: averageRating.toNumber(),
     isFavorite,
+  }
+}
+
+function assertMover(viewer: Express.User | undefined) {
+  if (!viewer) throw new AppError('UNAUTHORIZED')
+  if (viewer.role !== 'MOVER') throw new AppError('FORBIDDEN')
+
+  return viewer.id
+}
+
+export async function createMyProfile(
+  viewer: Express.User | undefined,
+  input: CreateMoverProfileInput,
+) {
+  const moverId = assertMover(viewer)
+
+  const existingProfile = await prisma.moverProfile.findUnique({
+    where: { userId: moverId },
+    select: { userId: true },
+  })
+
+  if (existingProfile) {
+    throw new AppError('PROFILE_ALREADY_EXISTS')
+  }
+
+  try {
+    return await prisma.moverProfile.create({
+      data: {
+        userId: moverId,
+        imageUrl: input.imageUrl,
+        nickname: input.nickname,
+        careerYears: input.careerYears,
+        intro: input.intro,
+        description: input.description,
+        serviceTypes: input.serviceTypes ?? [],
+        regions: input.regions ?? [],
+      },
+    })
+  } catch (error) {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === 'P2002'
+    ) {
+      throw new AppError('PROFILE_ALREADY_EXISTS')
+    }
+
+    throw error
+  }
+}
+
+export async function updateMyProfile(
+  viewer: Express.User | undefined,
+  input: UpdateMoverProfileInput,
+) {
+  const moverId = assertMover(viewer)
+
+  const existingProfile = await prisma.moverProfile.findUnique({
+    where: { userId: moverId },
+    select: { userId: true },
+  })
+
+  if (!existingProfile) {
+    throw new AppError('PROFILE_REQUIRED')
+  }
+
+  return prisma.moverProfile.update({
+    where: { userId: moverId },
+    data: input,
+  })
+}
+
+export async function getMyProfile(viewer: Express.User | undefined) {
+  const moverId = assertMover(viewer)
+
+  const profile = await prisma.moverProfile.findUnique({
+    where: { userId: moverId },
+    select: {
+      ...moverSummarySelect,
+      description: true,
+      regions: true,
+    },
+  })
+
+  if (!profile) {
+    throw new AppError('PROFILE_REQUIRED')
+  }
+
+  const ratingCounts = await countReviewsByRating(moverId)
+
+  return {
+    ...profile,
+    averageRating: profile.averageRating.toNumber(),
+    ratingCounts,
+    isFavorite: null,
+    isDesignated: null,
   }
 }
 
@@ -83,9 +183,11 @@ export async function getMover(moverId: string, viewer?: Express.User) {
     where: { userId: moverId },
     select: { ...moverSummarySelect, description: true, regions: true },
   })
+
   if (!mover) throw new AppError('NOT_FOUND')
 
   const { description, regions, ...summary } = mover
+
   const [favoriteIds, ratingCounts] = await Promise.all([
     findFavoriteMoverIds(viewer, [moverId]),
     countReviewsByRating(moverId),
@@ -106,9 +208,11 @@ async function findFavoriteMoverIds(
   moverIds: string[],
 ) {
   if (viewer?.role !== 'CUSTOMER') return null
+
   const favorites = await prisma.favorite.findMany({
     where: { customerId: viewer.id, moverId: { in: moverIds } },
     select: { moverId: true },
   })
+
   return new Set(favorites.map((favorite) => favorite.moverId))
 }
