@@ -3,6 +3,7 @@ import * as favoriteController from '../controllers/favorite.controller'
 import * as moverController from '../controllers/mover.controller'
 import * as reviewController from '../controllers/review.controller'
 import * as moverInboxController from '../controllers/mover-inbox.controller'
+import { listMySentQuotes } from '../controllers/sent-quote.controller'
 
 export const moverRouter = Router()
 
@@ -20,3 +21,5 @@ moverRouter.get(
   '/me/received-requests',
   moverInboxController.listReceivedRequests,
 )
+
+moverRouter.get('/me/quotes', listMySentQuotes)
