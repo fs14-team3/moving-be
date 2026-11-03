@@ -1,7 +1,10 @@
 import { AppError } from '../errors/app-error'
 import { prisma } from '../lib/prisma'
 import { encodeCursor } from '../utils/cursor'
-import type { ListFavoritesQuery } from '../validators/favorite.validator'
+import type {
+  ListFavoritesQuery,
+  RemoveFavoritesBody,
+} from '../validators/favorite.validator'
 import { assertCustomer, assertCustomerProfile } from './customer-access'
 import { moverSummarySelect, toMoverSummary } from './mover.service'
 
@@ -41,6 +44,36 @@ export async function setFavorite(
   })
 }
 
+export async function removeFavorites(
+  viewer: Express.User | undefined,
+  body: RemoveFavoritesBody,
+) {
+  const customerId = assertCustomer(viewer)
+
+  return prisma.$transaction(async (tx) => {
+    await assertCustomerProfile(tx, customerId)
+
+    const removed = body.all
+      ? await tx.$queryRaw<{ moverId: string }[]>`
+          DELETE FROM favorites
+          WHERE customer_id = ${customerId}::uuid
+          RETURNING mover_id AS "moverId"`
+      : await tx.$queryRaw<{ moverId: string }[]>`
+          DELETE FROM favorites
+          WHERE customer_id = ${customerId}::uuid
+            AND mover_id = ANY(${body.moverIds}::uuid[])
+          RETURNING mover_id AS "moverId"`
+    if (removed.length) {
+      await tx.moverProfile.updateMany({
+        where: { userId: { in: removed.map((row) => row.moverId) } },
+        data: { favoriteCount: { decrement: 1 } },
+      })
+    }
+
+    return { removedCount: removed.length }
+  })
+}
+
 export async function listFavorites(
   viewer: Express.User | undefined,
   query: ListFavoritesQuery,
@@ -48,27 +81,30 @@ export async function listFavorites(
   const customerId = assertCustomer(viewer)
   await assertCustomerProfile(prisma, customerId)
 
-  const rows = await prisma.favorite.findMany({
-    where: {
-      customerId,
-      OR: query.cursor
-        ? [
-            { createdAt: { lt: query.cursor.createdAt } },
-            {
-              createdAt: query.cursor.createdAt,
-              moverId: { gt: query.cursor.moverId },
-            },
-          ]
-        : undefined,
-    },
-    orderBy: [{ createdAt: 'desc' }, { moverId: 'asc' }],
-    take: query.limit + 1,
-    select: {
-      moverId: true,
-      createdAt: true,
-      mover: { select: moverSummarySelect },
-    },
-  })
+  const [totalCount, rows] = await Promise.all([
+    prisma.favorite.count({ where: { customerId } }),
+    prisma.favorite.findMany({
+      where: {
+        customerId,
+        OR: query.cursor
+          ? [
+              { createdAt: { lt: query.cursor.createdAt } },
+              {
+                createdAt: query.cursor.createdAt,
+                moverId: { gt: query.cursor.moverId },
+              },
+            ]
+          : undefined,
+      },
+      orderBy: [{ createdAt: 'desc' }, { moverId: 'asc' }],
+      take: query.limit + 1,
+      select: {
+        moverId: true,
+        createdAt: true,
+        mover: { select: moverSummarySelect },
+      },
+    }),
+  ])
 
   const hasNext = rows.length > query.limit
   const page = rows.slice(0, query.limit)
@@ -83,5 +119,6 @@ export async function listFavorites(
         })
       : null,
     hasNext,
+    totalCount,
   }
 }
