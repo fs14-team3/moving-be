@@ -17,6 +17,14 @@ const ERROR_CATALOG = {
     status: 503,
     message: '일시적으로 서비스를 이용할 수 없습니다',
   },
+  QUOTE_LIMIT_REACHED: {
+    status: 409,
+    message: '견적 접수 한도에 도달했습니다',
+  },
+  REQUEST_NOT_PENDING: {
+    status: 409,
+    message: '견적을 받을 수 없는 요청입니다',
+  },
 } as const
 
 export type ErrorCode = keyof typeof ERROR_CATALOG

@@ -6,6 +6,8 @@ import { prisma } from '../lib/prisma'
 import { customerRouter } from './customer.routes'
 import { authRouter } from './auth.routes'
 import { moverRouter } from './mover.routes'
+import { quoteRouter } from './quote.routes'
+import { rejectionRouter } from './rejection.routes'
 import { notificationRouter } from './notification.routes'
 import { moveRequestRouter } from './move-request.routes'
 
@@ -41,5 +43,7 @@ apiRouter.get('/ready', async (_req, res) => {
 apiRouter.use('/customers', customerRouter)
 apiRouter.use('/auth', authRouter)
 apiRouter.use('/movers', moverRouter)
+apiRouter.use('/move-requests', quoteRouter)
+apiRouter.use('/move-requests', rejectionRouter)
 apiRouter.use('/notifications', notificationRouter)
 apiRouter.use('/move-requests', moveRequestRouter)
