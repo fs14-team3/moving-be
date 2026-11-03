@@ -78,11 +78,11 @@ async function establishSession(
 export async function signup(req: Request, res: Response) {
   const body = validate(signupInput, req.body)
   const user = await authService.signup(body)
-
   return res.set('Cache-Control', 'no-store').status(201).json(user)
 }
 
 // 이메일 로그인
+
 export async function login(req: Request, res: Response) {
   const body = validate(loginInput, req.body)
   const user = await authService.login(body)
@@ -129,7 +129,6 @@ export function socialLogin(req: Request, res: Response) {
 
   res.cookie(`oauth_state_${provider}`, nonce, stateCookieOptions())
   res.set('Cache-Control', 'no-store')
-
   return res.redirect(302, authorizationUrl)
 }
 
@@ -167,7 +166,6 @@ export async function socialCallback(req: Request, res: Response) {
     )
 
     await establishSession(req, result.user)
-
     return redirectToLanding(res, {
       provider,
       status: 'success',

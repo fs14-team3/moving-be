@@ -235,7 +235,6 @@ function getProviderConfig(provider: SocialProviderName) {
   if (!clientId || !callbackUrl) {
     throw new Error(`${provider} OAuth 환경 변수가 설정되지 않았습니다`)
   }
-
   return { ...config, clientId, callbackUrl }
 }
 
