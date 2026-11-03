@@ -4,19 +4,12 @@ import type { Request, Response, NextFunction } from 'express'
 export function optionalAuth(req: Request, _res: Response, next: NextFunction) {
   const sessionUser = req.session?.user
 
-  console.log('[optionalAuth]', {
-    sessionExists: !!req.session,
-    sessionUser,
-  })
-
   if (sessionUser) {
     req.user = {
       id: sessionUser.userId,
       role: sessionUser.role,
     }
   }
-
-  console.log('[optionalAuth] req.user:', req.user)
 
   return next()
 }

@@ -6,11 +6,11 @@ import type {
   ServiceType,
 } from '../src/generated/prisma/client'
 import { prisma } from '../src/lib/prisma'
+import { regionOf } from '../src/utils/region'
 import {
   customers,
   movers,
   newMovers,
-  regionOf,
   reviewsByType,
   routes,
 } from './seed-data'
@@ -74,6 +74,12 @@ const at = (days: number, kstHour: number) =>
 function id(key: string) {
   const hex = createHash('sha256').update(`moving:seed:v1:${key}`).digest('hex')
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-a${hex.slice(17, 20)}-${hex.slice(20, 32)}`
+}
+
+function seedRegionOf(address: string) {
+  const region = regionOf(address)
+  if (!region) throw new Error(`Unknown region in seed address: ${address}`)
+  return region
 }
 
 function rotate<T>(items: T[], offset: number) {
@@ -288,10 +294,10 @@ async function buildSeedData() {
       route: {
         fromAddress,
         fromZonecode,
-        fromRegion: regionOf(fromAddress),
+        fromRegion: seedRegionOf(fromAddress),
         toAddress,
         toZonecode,
-        toRegion: regionOf(toAddress),
+        toRegion: seedRegionOf(toAddress),
       },
     }
 
@@ -365,6 +371,7 @@ async function buildSeedData() {
         role: 'MOVER',
         name,
         email: `mover${i + 1}@example.test`,
+        passwordHash,
         phone: `0102000${String(i + 1).padStart(4, '0')}`,
         createdAt: joinedAt,
         updatedAt: joinedAt,

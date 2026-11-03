@@ -76,13 +76,8 @@ async function establishSession(
 
 // 이메일 회원가입
 export async function signup(req: Request, res: Response) {
-  console.log('[회원가입 요청 body]', req.body)
   const body = validate(signupInput, req.body)
-
-  console.log('[회원가입 검증 성공]', body)
   const user = await authService.signup(body)
-
-  console.log('[회원가입 DB 저장 성공]', user.id)
 
   return res.set('Cache-Control', 'no-store').status(201).json(user)
 }
@@ -172,7 +167,6 @@ export async function socialCallback(req: Request, res: Response) {
     )
 
     await establishSession(req, result.user)
-
     return redirectToLanding(res, {
       provider,
       status: 'success',
