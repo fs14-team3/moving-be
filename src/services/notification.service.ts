@@ -1,94 +1,46 @@
-import { AppError } from '../errors/app-error'
 import { prisma } from '../lib/prisma'
+import { encodeCursor } from '../utils/cursor'
+import type { ListNotificationsQuery } from '../validators/notification.validator'
 
-// 알림 목록은 최초 3개, 이후 스크롤 시 3개씩 조회 (변경 가능)
-const NOTIFICATION_PAGE_SIZE = 3
-
-type GetNotificationsInput = {
+type GetNotificationsInput = ListNotificationsQuery & {
   userId: string
-  cursor?: string
 }
 
-type NotificationCursor = {
-  createdAt: string
-  id: string
-}
-
-// 최신순 정렬 기준(createdAt, id)을 커서에 저장
-// 동일한 시각에 생성된 알림도 누락 없이 조회
-function encodeCursor(cursor: NotificationCursor): string {
-  return Buffer.from(JSON.stringify(cursor)).toString('base64url')
-}
-
-// 클라이언트가 전달한 커서를 다시 조회 조건으로 변환
-function decodeCursor(cursor: string): NotificationCursor {
-  try {
-    const decoded: unknown = JSON.parse(
-      Buffer.from(cursor, 'base64url').toString('utf8'),
-    )
-
-    if (
-      typeof decoded !== 'object' ||
-      decoded === null ||
-      !('createdAt' in decoded) ||
-      !('id' in decoded) ||
-      typeof decoded.createdAt !== 'string' ||
-      typeof decoded.id !== 'string' ||
-      !decoded.id ||
-      !Number.isFinite(Date.parse(decoded.createdAt))
-    ) {
-      throw new Error('Invalid cursor')
-    }
-
-    return {
-      createdAt: decoded.createdAt,
-      id: decoded.id,
-    }
-  } catch {
-    // 올바르지 않은 알림 커서
-    throw new AppError('VALIDATION_ERROR')
-  }
-}
-
-// 현재 사용자의 미읽음 알림을 최신순으로 3개씩 조회
+// 현재 사용자의 미읽음 알림을 최신순으로 조회
 export async function getNotifications({
   userId,
   cursor,
+  limit,
 }: GetNotificationsInput) {
-  const decodedCursor = cursor ? decodeCursor(cursor) : null
-
   const notifications = await prisma.notification.findMany({
     where: {
       userId,
       readAt: null,
 
-      // 커서 이전에 생성된 알림만 가져오는 키셋 페이지네이션
-      ...(decodedCursor && {
+      ...(cursor && {
         OR: [
           {
             createdAt: {
-              lt: new Date(decodedCursor.createdAt),
+              lt: cursor.createdAt,
             },
           },
           {
-            createdAt: new Date(decodedCursor.createdAt),
+            createdAt: cursor.createdAt,
             id: {
-              lt: decodedCursor.id,
+              lt: cursor.id,
             },
           },
         ],
       }),
     },
 
-    // 생성 시각이 동일할 때는 ID를 두 번째 정렬 기준으로 사용
     orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
 
-    // 다음 페이지 존재 여부를 확인하기 위해 1개 더 조회
-    take: NOTIFICATION_PAGE_SIZE + 1,
+    take: limit + 1,
   })
 
-  const hasNext = notifications.length > NOTIFICATION_PAGE_SIZE
-  const items = notifications.slice(0, NOTIFICATION_PAGE_SIZE)
+  const hasNext = notifications.length > limit
+  const items = notifications.slice(0, limit)
   const lastItem = items.at(-1)
 
   const nextCursor =

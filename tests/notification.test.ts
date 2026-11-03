@@ -214,6 +214,31 @@ describe('알림 관리 API', () => {
         .query({ cursor: 'invalid-cursor' })
 
       expect(res.status).toBe(400)
+
+      expect(res.body).toMatchObject({
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: expect.any(String),
+          details: expect.any(Array),
+        },
+      })
+    })
+
+    it('커서 내부 ID가 UUID가 아니면 400을 반환한다', async () => {
+      const invalidCursor = Buffer.from(
+        JSON.stringify({
+          createdAt: '2026-10-20T09:00:00.000Z',
+          id: 'not-a-uuid',
+        }),
+      ).toString('base64url')
+
+      const res = await notificationApi()
+        .get('/api/notifications')
+        .query({ cursor: invalidCursor })
+
+      expect(res.status).toBe(400)
+      expect(res.body.error.code).toBe('VALIDATION_ERROR')
+      expect(res.body.error.details).toEqual(expect.any(Array))
     })
   })
 
@@ -304,12 +329,19 @@ describe('알림 관리 API', () => {
       expect(res.body.items[0].id).toBe(otherNotification.id)
     })
 
-    it('잘못된 알림 ID는 400을 반환한다', async () => {
+    it('잘못된 알림 ID는 공통 ValidationError 형식으로 반환한다', async () => {
       const res = await notificationApi().patch(
         '/api/notifications/not-a-uuid/read',
       )
 
       expect(res.status).toBe(400)
+      expect(res.body).toMatchObject({
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: expect.any(String),
+          details: expect.any(Array),
+        },
+      })
     })
   })
 
