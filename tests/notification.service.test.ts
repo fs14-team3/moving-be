@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 
 import { prisma } from '../src/lib/prisma'
-import { createNotification } from '../src/services/notification.service'
+import { createNotification } from '../src/services/notification-creation.service'
 
 describe('createNotification', () => {
   const customerId = randomUUID()

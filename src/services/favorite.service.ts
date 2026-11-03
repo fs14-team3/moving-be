@@ -1,8 +1,8 @@
 import { AppError } from '../errors/app-error'
-import type { Prisma } from '../generated/prisma/client'
 import { prisma } from '../lib/prisma'
 import { encodeCursor } from '../utils/cursor'
 import type { ListFavoritesQuery } from '../validators/favorite.validator'
+import { assertCustomer, assertCustomerProfile } from './customer-access'
 import { moverSummarySelect, toMoverSummary } from './mover.service'
 
 export async function setFavorite(
@@ -84,21 +84,4 @@ export async function listFavorites(
       : null,
     hasNext,
   }
-}
-
-function assertCustomer(viewer: Express.User | undefined) {
-  if (!viewer) throw new AppError('UNAUTHORIZED')
-  if (viewer.role !== 'CUSTOMER') throw new AppError('FORBIDDEN')
-  return viewer.id
-}
-
-async function assertCustomerProfile(
-  db: Prisma.TransactionClient,
-  customerId: string,
-) {
-  const customer = await db.customerProfile.findUnique({
-    where: { userId: customerId },
-    select: { userId: true },
-  })
-  if (!customer) throw new AppError('PROFILE_REQUIRED')
 }

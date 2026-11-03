@@ -1,4 +1,5 @@
 import type { ServiceType } from '../src/generated/prisma/client'
+import { REGIONS } from '../src/utils/region'
 
 type Mover = {
   name: string
@@ -13,31 +14,7 @@ type Mover = {
 
 type Specialty = Pick<Mover, 'serviceTypes' | 'intro' | 'description'>
 
-const REGION_BY_ADDRESS_PREFIX: Record<string, string> = {
-  서울특별시: '서울',
-  경기도: '경기',
-  인천광역시: '인천',
-  부산광역시: '부산',
-  울산광역시: '울산',
-  경상남도: '경남',
-  대구광역시: '대구',
-  경상북도: '경북',
-  강원특별자치도: '강원',
-  대전광역시: '대전',
-  세종특별자치시: '세종',
-  충청남도: '충남',
-  충청북도: '충북',
-  광주광역시: '광주',
-  전라남도: '전남',
-  전북특별자치도: '전북',
-  제주특별자치도: '제주',
-}
-
-export function regionOf(address: string) {
-  return REGION_BY_ADDRESS_PREFIX[address.split(' ')[0]]
-}
-
-const nationwide = Object.values(REGION_BY_ADDRESS_PREFIX)
+const nationwide = [...REGIONS]
 const capitalArea = ['서울', '경기', '인천']
 const dongnam = ['부산', '울산', '경남']
 const daegyeongGangwon = ['대구', '경북', '강원']
