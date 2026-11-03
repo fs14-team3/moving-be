@@ -237,22 +237,52 @@ describe('POST /api/move-requests/:requestId/quotes', () => {
   })
 
   describe('요청값 검증', () => {
-    it('잘못된 요청 ID는 400을 반환한다', async () => {
+    it('잘못된 요청 ID는 공통 ValidationError 형식으로 반환한다', async () => {
       const res = await sendQuote('invalid-uuid', mover)
 
       expect(res.status).toBe(400)
-      expect(res.body.error.code).toBe('VALIDATION_ERROR')
+      expect(res.body).toMatchObject({
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: expect.any(String),
+          details: expect.any(Array),
+        },
+      })
+
+      expect(res.body.error.details).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            field: 'requestId',
+            reason: expect.any(String),
+          }),
+        ]),
+      )
     })
 
     it.each([0, -1, 1.5, 2147483648, '350000'])(
-      '잘못된 견적 금액 %s는 400을 반환한다',
+      '잘못된 견적 금액 %s는 공통 ValidationError 형식으로 반환한다',
       async (price) => {
         const request = await createMoveRequest()
 
         const res = await sendQuote(request.id, mover, price)
 
         expect(res.status).toBe(400)
-        expect(res.body.error.code).toBe('VALIDATION_ERROR')
+        expect(res.body).toMatchObject({
+          error: {
+            code: 'VALIDATION_ERROR',
+            message: expect.any(String),
+            details: expect.any(Array),
+          },
+        })
+
+        expect(res.body.error.details).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              field: 'price',
+              reason: expect.any(String),
+            }),
+          ]),
+        )
       },
     )
 
