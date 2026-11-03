@@ -1,6 +1,6 @@
 import { AppError } from '../errors/app-error'
 import { prisma } from '../lib/prisma'
-import { createNotification } from './notification.service'
+import { createNotification } from './notification-creation.service'
 
 type SendQuoteInput = {
   requestId: string
