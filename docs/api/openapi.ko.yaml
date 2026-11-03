@@ -387,7 +387,7 @@ paths:
                 file: { type: string, format: binary }
       responses:
         '201':
-          description: 업로드 완료
+          description: 업로드 완료a
           content:
             application/json:
               schema: { '$ref': '#/components/schemas/UploadResponse' }

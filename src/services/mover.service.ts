@@ -1,7 +1,12 @@
 import { AppError } from '../errors/app-error'
-import type { Prisma } from '../generated/prisma/client'
+import { Prisma } from '../generated/prisma/client'
 import { prisma } from '../lib/prisma'
-import type { ListMoversQuery, MoverSort } from '../validators/mover.validator'
+import type {
+  CreateMoverProfileInput,
+  ListMoversQuery,
+  MoverSort,
+  UpdateMoverProfileInput,
+} from '../validators/mover.validator'
 import { isMoverDesignated } from './move-request.service'
 import { countReviewsByRating } from './review.service'
 
@@ -59,70 +64,76 @@ export function toMoverSummary(
   }
 }
 
-export async function listMovers(
-  query: ListMoversQuery,
-  viewer?: Express.User,
+function assertMover(viewer: Express.User | undefined) {
+  if (!viewer) throw new AppError('UNAUTHORIZED')
+  if (viewer.role !== 'MOVER') throw new AppError('FORBIDDEN')
+
+  return viewer.id
+}
+
+export async function createMyProfile(
+  viewer: Express.User | undefined,
+  input: CreateMoverProfileInput,
 ) {
-  const rows = await prisma.moverProfile.findMany({
-    where: {
-      OR: query.keyword
-        ? [
-            { nickname: { contains: query.keyword, mode: 'insensitive' } },
-            { intro: { contains: query.keyword, mode: 'insensitive' } },
-            { description: { contains: query.keyword, mode: 'insensitive' } },
-          ]
-        : undefined,
-      regions: query.region ? { has: query.region } : undefined,
-      serviceTypes: query.serviceType ? { has: query.serviceType } : undefined,
-    },
-    orderBy: [ORDER_BY[query.sort], { userId: 'asc' }],
-    cursor: query.cursor ? { userId: query.cursor } : undefined,
-    skip: query.cursor ? 1 : undefined,
-    take: query.limit + 1,
-    select: moverSummarySelect,
+  const moverId = assertMover(viewer)
+
+  const existingProfile = await prisma.moverProfile.findUnique({
+    where: { userId: moverId },
+    select: { userId: true },
   })
 
-  const hasNext = rows.length > query.limit
-  const page = rows.slice(0, query.limit)
-  const favoriteIds = await findFavoriteMoverIds(
-    viewer,
-    page.map((row) => row.userId),
-  )
+  if (existingProfile) {
+    throw new AppError('PROFILE_ALREADY_EXISTS')
+  }
 
-  return {
-    items: page.map((row) =>
-      toMoverSummary(row, favoriteIds?.has(row.userId) ?? null),
-    ),
-    nextCursor: hasNext ? page[page.length - 1].userId : null,
-    hasNext,
+  try {
+    return await prisma.moverProfile.create({
+      data: {
+        userId: moverId,
+        imageUrl: input.imageUrl,
+        nickname: input.nickname,
+        careerYears: input.careerYears,
+        intro: input.intro,
+        description: input.description,
+        serviceTypes: input.serviceTypes ?? [],
+        regions: input.regions ?? [],
+      },
+    })
+  } catch (error) {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === 'P2002'
+    ) {
+      throw new AppError('PROFILE_ALREADY_EXISTS')
+    }
+
+    throw error
   }
 }
 
-export async function getMover(moverId: string, viewer?: Express.User) {
-  const mover = await prisma.moverProfile.findUnique({
+export async function updateMyProfile(
+  viewer: Express.User | undefined,
+  input: UpdateMoverProfileInput,
+) {
+  const moverId = assertMover(viewer)
+
+  const existingProfile = await prisma.moverProfile.findUnique({
     where: { userId: moverId },
-    select: { ...moverSummarySelect, description: true, regions: true },
+    select: { userId: true },
   })
-  if (!mover) throw new AppError('NOT_FOUND')
 
-  const { description, regions, ...summary } = mover
-  const [favoriteIds, ratingCounts, isDesignated] = await Promise.all([
-    findFavoriteMoverIds(viewer, [moverId]),
-    countReviewsByRating(moverId),
-    viewer?.role === 'CUSTOMER' ? isMoverDesignated(viewer.id, moverId) : null,
-  ])
-
-  return {
-    ...toMoverSummary(summary, favoriteIds?.has(moverId) ?? null),
-    description,
-    regions,
-    ratingCounts,
-    isDesignated,
+  if (!existingProfile) {
+    throw new AppError('PROFILE_REQUIRED')
   }
+
+  return prisma.moverProfile.update({
+    where: { userId: moverId },
+    data: input,
+  })
 }
 
 /**
- * 로그인한 MOVER의 마이페이지 조회
+ * 한국 시간(KST) 기준 로그인한 MOVER의 마이페이지 조회
  */
 export async function getMyMoverPage(moverId: string) {
   const mover = await prisma.moverProfile.findUnique({
@@ -171,14 +182,79 @@ export async function getMyMoverPage(moverId: string) {
   }
 }
 
+export async function listMovers(
+  query: ListMoversQuery,
+  viewer?: Express.User,
+) {
+  const rows = await prisma.moverProfile.findMany({
+    where: {
+      OR: query.keyword
+        ? [
+            { nickname: { contains: query.keyword, mode: 'insensitive' } },
+            { intro: { contains: query.keyword, mode: 'insensitive' } },
+            { description: { contains: query.keyword, mode: 'insensitive' } },
+          ]
+        : undefined,
+      regions: query.region ? { has: query.region } : undefined,
+      serviceTypes: query.serviceType ? { has: query.serviceType } : undefined,
+    },
+    orderBy: [ORDER_BY[query.sort], { userId: 'asc' }],
+    cursor: query.cursor ? { userId: query.cursor } : undefined,
+    skip: query.cursor ? 1 : undefined,
+    take: query.limit + 1,
+    select: moverSummarySelect,
+  })
+
+  const hasNext = rows.length > query.limit
+  const page = rows.slice(0, query.limit)
+  const favoriteIds = await findFavoriteMoverIds(
+    viewer,
+    page.map((row) => row.userId),
+  )
+
+  return {
+    items: page.map((row) =>
+      toMoverSummary(row, favoriteIds?.has(row.userId) ?? null),
+    ),
+    nextCursor: hasNext ? page[page.length - 1].userId : null,
+    hasNext,
+  }
+}
+
+export async function getMover(moverId: string, viewer?: Express.User) {
+  const mover = await prisma.moverProfile.findUnique({
+    where: { userId: moverId },
+    select: { ...moverSummarySelect, description: true, regions: true },
+  })
+
+  if (!mover) throw new AppError('NOT_FOUND')
+
+  const { description, regions, ...summary } = mover
+  const [favoriteIds, ratingCounts, isDesignated] = await Promise.all([
+    findFavoriteMoverIds(viewer, [moverId]),
+    countReviewsByRating(moverId),
+    viewer?.role === 'CUSTOMER' ? isMoverDesignated(viewer.id, moverId) : null,
+  ])
+
+  return {
+    ...toMoverSummary(summary, favoriteIds?.has(moverId) ?? null),
+    description,
+    regions,
+    ratingCounts,
+    isDesignated,
+  }
+}
+
 async function findFavoriteMoverIds(
   viewer: Express.User | undefined,
   moverIds: string[],
 ) {
   if (viewer?.role !== 'CUSTOMER') return null
+
   const favorites = await prisma.favorite.findMany({
     where: { customerId: viewer.id, moverId: { in: moverIds } },
     select: { moverId: true },
   })
+
   return new Set(favorites.map((favorite) => favorite.moverId))
 }
