@@ -108,11 +108,6 @@ jobs:
         run: npm run format:check
       - name: Lint
         run: npm run lint
-      - name: Debug OpenAPI file
-        run: |
-          echo "Commit: $(git rev-parse HEAD)"
-          echo "OpenAPI lines 975-995:"
-          sed -n '975,995p' docs/api/openapi.ko.yaml
       - name: Validate API spec
         run: npm run lint:api
       - name: Type check
