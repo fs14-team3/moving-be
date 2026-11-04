@@ -901,63 +901,87 @@ paths:
                 { '$ref': '#/components/schemas/WritableReviewListResponse' }
         '401': { '$ref': '#/components/responses/Unauthorized' }
         '403': { '$ref': '#/components/responses/Forbidden' }
-'/notifications':
-  get:
+  '/notifications':
+    get:
+      tags: [Notifications]
+      summary: 알림 목록
+      description:
+        '§13의 역할별 알림을 조회합니다. 새 견적·새 요청·견적 확정·이사 당일 알림을 제공하며, 전달 방식과 갱신
+        주기는 추후 결정합니다.'
+      operationId: listNotifications
+      security:
+        - sessionCookie: []
+      parameters:
+        - { '$ref': '#/components/parameters/Cursor' }
+        - { '$ref': '#/components/parameters/Limit' }
+      responses:
+        '200':
+          description: 알림 목록 페이지
+          content:
+            application/json:
+              schema:
+                { '$ref': '#/components/schemas/NotificationListResponse' }
+        '401': { '$ref': '#/components/responses/Unauthorized' }
+  '/notifications/unread-count':
+    get:
+      tags: [Notifications]
+      summary: 미읽음 알림 개수 조회
+      operationId: getUnreadNotificationCount
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: 미읽음 알림 개수
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [unreadCount]
+                properties:
+                  unreadCount: { type: integer, minimum: 0 }
+        '401': { '$ref': '#/components/responses/Unauthorized' }
+  '/notifications/read-all':
+    patch:
+      tags: [Notifications]
+      summary: 전체 알림 읽음 처리
+      operationId: readAllNotifications
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: 전체 알림 읽음 처리 결과
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [updatedCount]
+                properties:
+                  updatedCount: { type: integer, minimum: 0 }
+        '401': { '$ref': '#/components/responses/Unauthorized' }
+  '/notifications/{id}/read':
+  patch:
     tags: [Notifications]
-    summary: 알림 목록
-    description:
-      '§13의 역할별 알림을 조회합니다. 새 견적·새 요청·견적 확정·이사 당일 알림을 제공하며, 전달 방식과 갱신
-      주기는 추후 결정합니다.'
-    operationId: listNotifications
+    summary: 개별 알림 읽음 처리
+    operationId: readNotification
     security:
       - sessionCookie: []
     parameters:
-      - { '$ref': '#/components/parameters/Cursor' }
-      - { '$ref': '#/components/parameters/Limit' }
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
     responses:
       '200':
-        description: 알림 목록 페이지
-        content:
-          application/json:
-            schema: { '$ref': '#/components/schemas/NotificationListResponse' }
-      '401': { '$ref': '#/components/responses/Unauthorized' }
-'/notifications/unread-count':
-  get:
-    tags: [Notifications]
-    summary: 미읽음 알림 개수 조회
-    operationId: getUnreadNotificationCount
-    security:
-      - sessionCookie: []
-    responses:
-      '200':
-        description: 미읽음 알림 개수
+        description: 개별 알림 읽음 처리 결과
         content:
           application/json:
             schema:
               type: object
-              required: [unreadCount]
+              required: [updated]
               properties:
-                unreadCount: { type: integer, minimum: 0 }
+                updated: { type: boolean }
+      '400': { '$ref': '#/components/responses/ValidationError' }
       '401': { '$ref': '#/components/responses/Unauthorized' }
-'/notifications/read-all':
-  patch:
-    tags: [Notifications]
-    summary: 전체 알림 읽음 처리
-    operationId: readAllNotifications
-    security:
-      - sessionCookie: []
-    responses:
-      '200':
-        description: 전체 알림 읽음 처리 결과
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [updatedCount]
-              properties:
-                updatedCount: { type: integer, minimum: 0 }
-      '401': { '$ref': '#/components/responses/Unauthorized' }
-'/notifications/{id}/read':
   patch:
     tags: [Notifications]
     summary: 개별 알림 읽음 처리
