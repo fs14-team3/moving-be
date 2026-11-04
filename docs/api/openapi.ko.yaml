@@ -959,71 +959,28 @@ paths:
                   updatedCount: { type: integer, minimum: 0 }
         '401': { '$ref': '#/components/responses/Unauthorized' }
   '/notifications/{id}/read':
-  patch:
-    tags: [Notifications]
-    summary: 개별 알림 읽음 처리
-    operationId: readNotification
-    security:
-      - sessionCookie: []
-    parameters:
-      - name: id
-        in: path
-        required: true
-        schema: { type: string, format: uuid }
-    responses:
-      '200':
-        description: 개별 알림 읽음 처리 결과
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [updated]
-              properties:
-                updated: { type: boolean }
-      '400': { '$ref': '#/components/responses/ValidationError' }
-      '401': { '$ref': '#/components/responses/Unauthorized' }
-  patch:
-    tags: [Notifications]
-    summary: 개별 알림 읽음 처리
-    operationId: readNotification
-    security:
-      - sessionCookie: []
-    parameters:
-      - name: id
-        in: path
-        required: true
-        schema: { type: string, format: uuid }
-    responses:
-      '200':
-        description: 개별 알림 읽음 처리 결과
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [updated]
-              properties:
-                updated: { type: boolean }
-      '400': { '$ref': '#/components/responses/ValidationError' }
-      '401': { '$ref': '#/components/responses/Unauthorized' }
-    get:
+    patch:
       tags: [Notifications]
-      summary: 알림 목록
-      description:
-        '§13의 역할별 알림을 조회합니다. 새 견적·새 요청·견적 확정·이사 당일 알림을 제공하며, 전달 방식과 갱신
-        주기는 추후 결정합니다.'
-      operationId: listNotifications
+      summary: 개별 알림 읽음 처리
+      operationId: readNotification
       security:
         - sessionCookie: []
       parameters:
-        - { '$ref': '#/components/parameters/Cursor' }
-        - { '$ref': '#/components/parameters/Limit' }
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
       responses:
         '200':
-          description: 알림 목록 페이지
+          description: 개별 알림 읽음 처리 결과
           content:
             application/json:
               schema:
-                { '$ref': '#/components/schemas/NotificationListResponse' }
+                type: object
+                required: [updated]
+                properties:
+                  updated: { type: boolean }
+        '400': { '$ref': '#/components/responses/ValidationError' }
         '401': { '$ref': '#/components/responses/Unauthorized' }
 components:
   securitySchemes:
