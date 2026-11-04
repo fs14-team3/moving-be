@@ -74,18 +74,24 @@ export async function listMySentQuotes(
     ...new Set(page.map((quote) => quote.moveRequest.customerId)),
   ]
 
-  const customers = await prisma.user.findMany({
+  const customers = await prisma.customerProfile.findMany({
     where: {
-      id: { in: customerIds },
+      userId: { in: customerIds },
     },
     select: {
-      id: true,
-      name: true,
+      userId: true,
+      nickname: true,
+      user: {
+        select: { name: true },
+      },
     },
   })
 
   const customerNames = new Map(
-    customers.map((customer) => [customer.id, customer.name]),
+    customers.map((customer) => [
+      customer.userId,
+      customer.nickname ?? customer.user.name ?? null,
+    ]),
   )
 
   const items = page.map((quote) => {

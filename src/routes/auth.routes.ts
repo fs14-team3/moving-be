@@ -1,0 +1,10 @@
+import { Router } from 'express'
+import * as authController from '../controllers/auth.controller'
+
+export const authRouter = Router()
+
+authRouter.post('/signup', authController.signup)
+authRouter.post('/login', authController.login)
+
+authRouter.get('/:provider/callback', authController.socialCallback)
+authRouter.get('/:provider', authController.socialLogin)

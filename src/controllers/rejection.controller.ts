@@ -1,30 +1,13 @@
-import type { RequestHandler } from 'express'
+import type { Request, Response } from 'express'
 
-import { AppError } from '../errors/app-error'
-import { rejectMoveRequest as rejectMoveRequestService } from '../services/rejection.service'
+import * as rejectionService from '../services/rejection.service'
 import { rejectRequestParamsSchema } from '../validators/rejection.validator'
+import { validate } from '../validators/validate'
 
-export const rejectMoveRequest: RequestHandler = async (req, res) => {
-  const user = req.user
+export async function rejectMoveRequest(req: Request, res: Response) {
+  const { requestId } = validate(rejectRequestParamsSchema, req.params)
 
-  if (!user) {
-    throw new AppError('UNAUTHORIZED')
-  }
-
-  if (user.role !== 'MOVER') {
-    throw new AppError('FORBIDDEN')
-  }
-
-  const parsed = rejectRequestParamsSchema.safeParse(req.params)
-
-  if (!parsed.success) {
-    throw new AppError('VALIDATION_ERROR')
-  }
-
-  const result = await rejectMoveRequestService({
-    requestId: parsed.data.requestId,
-    moverId: user.id,
-  })
+  const result = await rejectionService.rejectMoveRequest(req.user, requestId)
 
   res.status(201).json(result)
 }

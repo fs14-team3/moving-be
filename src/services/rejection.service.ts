@@ -1,9 +1,16 @@
 import { AppError } from '../errors/app-error'
 import { prisma } from '../lib/prisma'
 
-type RejectMoveRequestInput = {
-  requestId: string
-  moverId: string
+function assertMover(viewer: Express.User | undefined): string {
+  if (!viewer) {
+    throw new AppError('UNAUTHORIZED')
+  }
+
+  if (viewer.role !== 'MOVER') {
+    throw new AppError('FORBIDDEN')
+  }
+
+  return viewer.id
 }
 
 function getToday(): Date {
@@ -17,10 +24,12 @@ function getToday(): Date {
   return new Date(`${today}T00:00:00.000Z`)
 }
 
-export async function rejectMoveRequest({
-  requestId,
-  moverId,
-}: RejectMoveRequestInput) {
+export async function rejectMoveRequest(
+  viewer: Express.User | undefined,
+  requestId: string,
+) {
+  const moverId = assertMover(viewer)
+
   const mover = await prisma.moverProfile.findUnique({
     where: { userId: moverId },
     select: { userId: true },

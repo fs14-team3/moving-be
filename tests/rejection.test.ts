@@ -199,7 +199,13 @@ describe('POST /api/move-requests/:requestId/rejections', () => {
     const request = await createMoveRequest()
     const otherMoverId = randomUUID()
 
-    await createMover(otherMoverId)
+    await prisma.user.create({
+      data: {
+        id: otherMoverId,
+        role: 'MOVER',
+        name: '프로필 없는 기사님',
+      },
+    })
 
     const res = await rejectRequest(request.id, {
       id: otherMoverId,
@@ -210,11 +216,26 @@ describe('POST /api/move-requests/:requestId/rejections', () => {
     expect(res.body.error.code).toBe('PROFILE_REQUIRED')
   })
 
-  it('잘못된 요청 ID는 400을 반환한다', async () => {
+  it('잘못된 요청 ID는 공통 ValidationError 형식으로 반환한다', async () => {
     const res = await rejectRequest('invalid-id', mover)
 
     expect(res.status).toBe(400)
-    expect(res.body.error.code).toBe('VALIDATION_ERROR')
+    expect(res.body).toMatchObject({
+      error: {
+        code: 'VALIDATION_ERROR',
+        message: expect.any(String),
+        details: expect.any(Array),
+      },
+    })
+
+    expect(res.body.error.details).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          field: 'requestId',
+          reason: expect.any(String),
+        }),
+      ]),
+    )
   })
 
   it('존재하지 않는 요청은 404를 반환한다', async () => {
