@@ -1,34 +1,19 @@
-import type { RequestHandler } from 'express'
+import type { Request, Response } from 'express'
 
-import { AppError } from '../errors/app-error'
-import { sendQuote as sendQuoteService } from '../services/quote.service'
+import * as quoteService from '../services/quote.service'
 import {
   sendQuoteBodySchema,
   sendQuoteParamsSchema,
 } from '../validators/quote.validator'
+import { validate } from '../validators/validate'
 
-export const sendQuote: RequestHandler = async (req, res) => {
-  const user = req.user
+export async function sendQuote(req: Request, res: Response) {
+  const { requestId } = validate(sendQuoteParamsSchema, req.params)
+  const { price } = validate(sendQuoteBodySchema, req.body)
 
-  if (!user) {
-    throw new AppError('UNAUTHORIZED')
-  }
-
-  if (user.role !== 'MOVER') {
-    throw new AppError('FORBIDDEN')
-  }
-
-  const params = sendQuoteParamsSchema.safeParse(req.params)
-  const body = sendQuoteBodySchema.safeParse(req.body)
-
-  if (!params.success || !body.success) {
-    throw new AppError('VALIDATION_ERROR')
-  }
-
-  const result = await sendQuoteService({
-    requestId: params.data.requestId,
-    moverId: user.id,
-    price: body.data.price,
+  const result = await quoteService.sendQuote(req.user, {
+    requestId,
+    price,
   })
 
   res.status(201).json(result)
