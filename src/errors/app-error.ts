@@ -12,6 +12,18 @@ const ERROR_CATALOG = {
     status: 409,
     message: '진행 중인 견적 요청이 있습니다',
   },
+  ALREADY_DESIGNATED: {
+    status: 409,
+    message: '이미 지정 견적을 요청한 기사님입니다',
+  },
+  MOVER_ALREADY_RESPONDED: {
+    status: 409,
+    message: '이미 이 요청에 응답한 기사님입니다',
+  },
+  DESIGNATION_LIMIT_REACHED: {
+    status: 409,
+    message: '지정 견적 요청은 최대 3명까지 가능합니다',
+  },
   INTERNAL_ERROR: { status: 500, message: '서버 오류가 발생했습니다' },
   SERVICE_UNAVAILABLE: {
     status: 503,

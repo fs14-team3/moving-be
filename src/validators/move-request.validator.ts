@@ -40,3 +40,5 @@ export const createMoveRequestBody = z.object({
 export type CreateMoveRequestBody = z.infer<typeof createMoveRequestBody>
 
 export const requestIdParams = z.object({ requestId: z.uuid() })
+
+export const designateMoverBody = z.object({ moverId: z.uuid() })
