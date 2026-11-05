@@ -825,7 +825,7 @@ paths:
         '400': { '$ref': '#/components/responses/ValidationError' }
         '401': { '$ref': '#/components/responses/Unauthorized' }
         '403': { '$ref': '#/components/responses/Forbidden' }
-  '/movers/me/rejected-requests':
+  '/movers/me/rejections':
     get:
       tags: [MoverInbox]
       summary: 반려한 요청 목록
