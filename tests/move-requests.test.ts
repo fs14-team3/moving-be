@@ -15,6 +15,7 @@ import {
   createMoveRequest,
   createMover,
   resetDatabase,
+  signIn,
   userId,
 } from './helpers'
 
@@ -37,9 +38,24 @@ const body = {
   to: { address: '경기 성남시 분당구 판교역로 166' },
 }
 
-function createRequest(user?: Express.User, input: object = body) {
+function createRequest(user: Express.User, input: object = body) {
   return api(user).post('/api/move-requests').send(input)
 }
+
+async function session(user?: Express.User) {
+  return user ? signIn(user) : api()
+}
+
+const deniedViewers: [string, number, string, Express.User | undefined][] = [
+  ['로그인하지 않으면', 401, 'UNAUTHORIZED', undefined],
+  ['기사님은', 403, 'FORBIDDEN', mover],
+  [
+    '프로필을 등록하지 않은 일반 유저는',
+    403,
+    'PROFILE_REQUIRED',
+    customerWithoutProfile,
+  ],
+]
 
 async function statusOf(id: string) {
   const request = await prisma.moveRequest.findUniqueOrThrow({
@@ -74,8 +90,10 @@ afterAll(async () => {
 })
 
 describe('POST /api/move-requests', () => {
-  it('프로필을 등록한 일반 유저의 요청을 지역과 함께 저장한다', async () => {
-    const res = await createRequest(customer)
+  it('로그인하고 프로필을 등록한 일반 유저의 요청을 지역과 함께 저장한다', async () => {
+    const client = await session(customer)
+
+    const res = await client.post('/api/move-requests').send(body)
 
     expect(res.status).toBe(201)
     expect(res.body).toEqual({
@@ -122,26 +140,14 @@ describe('POST /api/move-requests', () => {
     expect(res.body.to.region).toBe('전북')
   })
 
-  it('로그인하지 않으면 401을 반환한다', async () => {
-    const res = await createRequest()
+  it.each(deniedViewers)('%s %i %s 반환', async (_case, status, code, user) => {
+    const client = await session(user)
 
-    expect(res.status).toBe(401)
-    expect(res.body.error.code).toBe('UNAUTHORIZED')
-  })
+    const res = await client.post('/api/move-requests').send(body)
 
-  it('기사님은 요청을 만들 수 없다', async () => {
-    const res = await createRequest(mover)
-
-    expect(res.status).toBe(403)
-    expect(res.body.error.code).toBe('FORBIDDEN')
-  })
-
-  it('프로필을 등록하지 않은 일반 유저는 요청을 만들 수 없다', async () => {
-    const res = await createRequest(customerWithoutProfile)
-
-    expect(res.status).toBe(403)
-    expect(res.body.error.code).toBe('PROFILE_REQUIRED')
-    expect(await requestCount(customerWithoutProfile.id)).toBe(0)
+    expect(res.status).toBe(status)
+    expect(res.body.error.code).toBe(code)
+    expect(await prisma.moveRequest.count()).toBe(0)
   })
 
   it('필수 정보가 없으면 400과 누락된 필드를 반환한다', async () => {
@@ -312,11 +318,11 @@ describe('POST /api/move-requests', () => {
   })
 })
 
-function getActive(user?: Express.User) {
+function getActive(user: Express.User) {
   return api(user).get('/api/move-requests/active')
 }
 
-function getRequest(user: Express.User | undefined, id: string) {
+function getRequest(user: Express.User, id: string) {
   return api(user).get(`/api/move-requests/${id}`)
 }
 
@@ -336,22 +342,12 @@ async function createRequestWithQuote() {
   return { ...created, quoteCount: 1, designatedMoverIds: [mover.id] }
 }
 
-const deniedViewers: [string, Express.User | undefined, number, string][] = [
-  ['로그인하지 않으면', undefined, 401, 'UNAUTHORIZED'],
-  ['기사님은', mover, 403, 'FORBIDDEN'],
-  [
-    '프로필을 등록하지 않은 일반 유저는',
-    customerWithoutProfile,
-    403,
-    'PROFILE_REQUIRED',
-  ],
-]
-
 describe('GET /api/move-requests/active', () => {
   it('진행 중인 요청을 이사 정보와 함께 반환한다', async () => {
     const expected = await createRequestWithQuote()
+    const client = await session(customer)
 
-    const res = await getActive(customer)
+    const res = await client.get('/api/move-requests/active')
 
     expect(res.status).toBe(200)
     expect(res.body).toEqual({ moveRequest: expected })
@@ -421,8 +417,10 @@ describe('GET /api/move-requests/active', () => {
     expect(res.body).toEqual({ moveRequest: null })
   })
 
-  it.each(deniedViewers)('%s %i %s 반환', async (_case, user, status, code) => {
-    const res = await getActive(user)
+  it.each(deniedViewers)('%s %i %s 반환', async (_case, status, code, user) => {
+    const client = await session(user)
+
+    const res = await client.get('/api/move-requests/active')
 
     expect(res.status).toBe(status)
     expect(res.body.error.code).toBe(code)
@@ -432,8 +430,9 @@ describe('GET /api/move-requests/active', () => {
 describe('GET /api/move-requests/:requestId', () => {
   it('본인 요청을 이사 정보와 함께 반환한다', async () => {
     const expected = await createRequestWithQuote()
+    const client = await session(customer)
 
-    const res = await getRequest(customer, expected.id)
+    const res = await client.get(`/api/move-requests/${expected.id}`)
 
     expect(res.status).toBe(200)
     expect(res.body).toEqual(expected)
@@ -477,10 +476,11 @@ describe('GET /api/move-requests/:requestId', () => {
     ])
   })
 
-  it.each(deniedViewers)('%s %i %s 반환', async (_case, user, status, code) => {
+  it.each(deniedViewers)('%s %i %s 반환', async (_case, status, code, user) => {
     const own = await createMoveRequest(customer.id, 'PENDING', NEXT_WEEK)
+    const client = await session(user)
 
-    const res = await getRequest(user, own.id)
+    const res = await client.get(`/api/move-requests/${own.id}`)
 
     expect(res.status).toBe(status)
     expect(res.body.error.code).toBe(code)
@@ -490,7 +490,7 @@ describe('GET /api/move-requests/:requestId', () => {
 const otherMoverIds = ['b', 'c', 'd', 'e'].map(userId)
 
 function designate(
-  user: Express.User | undefined,
+  user: Express.User,
   requestId: string,
   input: object = { moverId: mover.id },
 ) {
@@ -514,8 +514,11 @@ describe('POST /api/move-requests/:requestId/designations', () => {
 
   it('본인의 진행 중인 요청에 기사님을 지정한다', async () => {
     const request = await createMoveRequest(customer.id, 'PENDING', NEXT_WEEK)
+    const client = await session(customer)
 
-    const res = await designate(customer, request.id)
+    const res = await client
+      .post(`/api/move-requests/${request.id}/designations`)
+      .send({ moverId: mover.id })
 
     expect(res.status).toBe(201)
     expect(res.body).toEqual({
@@ -551,10 +554,13 @@ describe('POST /api/move-requests/:requestId/designations', () => {
     expect(res.status).toBe(201)
   })
 
-  it.each(deniedViewers)('%s %i %s 반환', async (_case, user, status, code) => {
+  it.each(deniedViewers)('%s %i %s 반환', async (_case, status, code, user) => {
     const own = await createMoveRequest(customer.id, 'PENDING', NEXT_WEEK)
+    const client = await session(user)
 
-    const res = await designate(user, own.id)
+    const res = await client
+      .post(`/api/move-requests/${own.id}/designations`)
+      .send({ moverId: mover.id })
 
     expect(res.status).toBe(status)
     expect(res.body.error.code).toBe(code)
