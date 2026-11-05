@@ -102,6 +102,48 @@ export async function getMover(moverId: string, viewer?: Express.User) {
   }
 }
 
+/**
+ * 로그인한 MOVER의 마이페이지 조회
+ */
+export async function getMyMoverPage(moverId: string) {
+  const mover = await prisma.moverProfile.findUnique({
+    where: { userId: moverId },
+    select: {
+      ...moverSummarySelect,
+      description: true,
+      regions: true,
+    },
+  })
+
+  if (!mover) {
+    throw new AppError('PROFILE_REQUIRED')
+  }
+
+  const [ratingCounts, inProgressCount] = await Promise.all([
+    countReviewsByRating(moverId),
+
+    prisma.moveRequest.count({
+      where: {
+        status: 'CONFIRMED',
+        quotes: {
+          some: { moverId },
+        },
+      },
+    }),
+  ])
+
+  const { description, regions, ...summary } = mover
+
+  return {
+    ...toMoverSummary(summary, null),
+    description,
+    regions,
+    ratingCounts,
+    isDesignated: null,
+    inProgressCount,
+  }
+}
+
 async function findFavoriteMoverIds(
   viewer: Express.User | undefined,
   moverIds: string[],
