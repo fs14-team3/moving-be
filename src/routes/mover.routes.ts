@@ -4,21 +4,35 @@ import * as moverController from '../controllers/mover.controller'
 import * as reviewController from '../controllers/review.controller'
 import * as moverInboxController from '../controllers/mover-inbox.controller'
 import { listMySentQuotes } from '../controllers/sent-quote.controller'
+import { requireAuth } from '../middlewares/require-auth'
+import { requireRole } from '../middlewares/require-role'
+import { optionalAuth } from '../middlewares/optional-auth'
 
 export const moverRouter = Router()
 
-// TODO(#34): #21의 선택적 인증 미들웨어를 연결해 로그인한 일반 유저에게 찜 여부 반환
-moverRouter.get('/', moverController.listMovers)
-moverRouter.get('/:moverId', moverController.getMover)
-
+// 공개 API: 비로그인 사용자도 접근 가능
+moverRouter.get('/', optionalAuth, moverController.listMovers)
+moverRouter.get('/:moverId', optionalAuth, moverController.getMover)
 moverRouter.get('/:moverId/reviews', reviewController.listMoverReviews)
 
-// TODO(#34): #21의 인증 미들웨어를 연결해 로그인한 사용자를 req.user에 채움
-moverRouter.put('/:moverId/favorite', favoriteController.addFavorite)
-moverRouter.delete('/:moverId/favorite', favoriteController.removeFavorite)
+// 로그인한 사용자만 접근 가능
+moverRouter.put(
+  '/:moverId/favorite',
+  requireAuth,
+  favoriteController.addFavorite,
+)
 
+moverRouter.delete(
+  '/:moverId/favorite',
+  requireAuth,
+  favoriteController.removeFavorite,
+)
+
+// MOVER만 받은 이사 요청 조회 가능
 moverRouter.get(
   '/me/received-requests',
+  requireAuth,
+  requireRole('MOVER'),
   moverInboxController.listReceivedRequests,
 )
 

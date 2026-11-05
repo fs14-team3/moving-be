@@ -21,28 +21,6 @@ export async function listMySentQuotes(
 ) {
   const moverId = assertMover(viewer)
 
-  // 본인이 보낸 견적에 속하는 커서인지 확인
-  if (cursor) {
-    const cursorQuote = await prisma.quote.findFirst({
-      where: {
-        id: cursor.id,
-        moverId,
-        ...(status ? { status } : {}),
-        createdAt: cursor.createdAt,
-      },
-      select: { id: true },
-    })
-
-    if (!cursorQuote) {
-      throw new AppError('VALIDATION_ERROR', [
-        {
-          field: 'cursor',
-          reason: '유효하지 않은 견적 커서입니다',
-        },
-      ])
-    }
-  }
-
   const quotes = await prisma.quote.findMany({
     where: {
       moverId,

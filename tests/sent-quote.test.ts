@@ -219,18 +219,31 @@ describe('GET /api/movers/me/quotes', () => {
     expect(res.body.error.code).toBe('VALIDATION_ERROR')
   })
 
-  it('다른 기사님의 커서는 사용할 수 없다', async () => {
+  it('다른 기사님의 커서를 사용해도 본인의 견적만 조회한다', async () => {
     const otherQuote = await createQuote(otherMoverId)
+    const ownQuote = await createQuote()
 
     const cursor = encodeCursor({
       createdAt: otherQuote.createdAt.toISOString(),
       id: otherQuote.id,
     })
 
+    // 본인 견적이 커서보다 이전에 위치하도록 설정
+    const olderDate = new Date(otherQuote.createdAt.getTime() - 1000)
+
+    await prisma.quote.update({
+      where: { id: ownQuote.id },
+      data: { createdAt: olderDate },
+    })
+
     const res = await api(mover).get('/api/movers/me/quotes').query({ cursor })
 
-    expect(res.status).toBe(400)
-    expect(res.body.error.code).toBe('VALIDATION_ERROR')
+    expect(res.status).toBe(200)
+    expect(res.body.items).toHaveLength(1)
+    expect(res.body.items[0].id).toBe(ownQuote.id)
+    expect(
+      res.body.items.some((item: { id: string }) => item.id === otherQuote.id),
+    ).toBe(false)
   })
 
   it('비로그인 사용자는 조회할 수 없다', async () => {
