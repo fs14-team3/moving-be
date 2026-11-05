@@ -61,6 +61,22 @@ describe('Auth API', () => {
     expect(response.body.error.code).toBe('PROFILE_REQUIRED')
   })
 
+  it('같은 역할로 이미 가입된 이메일이면 409 EMAIL_ALREADY_EXISTS를 반환한다', async () => {
+    const body = {
+      role: 'CUSTOMER',
+      name: '테스트 사용자',
+      email: 'duplicate@example.com',
+      phone: '01012345678',
+      password: 'Test1234!',
+    }
+    await api().post('/api/auth/signup').send(body).expect(201)
+
+    const response = await api().post('/api/auth/signup').send(body)
+
+    expect(response.status).toBe(409)
+    expect(response.body.error.code).toBe('EMAIL_ALREADY_EXISTS')
+  })
+
   it('로그인 성공 시 사용자 정보를 반환한다', async () => {
     await api().post('/api/auth/signup').send({
       role: 'CUSTOMER',

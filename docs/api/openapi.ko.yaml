@@ -43,6 +43,12 @@ paths:
                 '$ref': '#/components/schemas/Me'
         '400':
           '$ref': '#/components/responses/ValidationError'
+        '409':
+          description: '`EMAIL_ALREADY_EXISTS`. 같은 역할로 이미 가입된 이메일인 경우'
+          content:
+            application/json:
+              schema:
+                '$ref': '#/components/schemas/ErrorResponse'
         '429':
           '$ref': '#/components/responses/RateLimited'
   '/auth/login':
@@ -1156,6 +1162,7 @@ components:
         - VALIDATION_ERROR
         - UNAUTHORIZED
         - INVALID_CREDENTIALS
+        - EMAIL_ALREADY_EXISTS
         - FORBIDDEN
         - PROFILE_REQUIRED
         - NOT_IN_SERVICE_AREA

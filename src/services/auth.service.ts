@@ -66,7 +66,7 @@ export async function signup(input: SignupInput) {
       error instanceof Prisma.PrismaClientKnownRequestError &&
       error.code === 'P2002'
     ) {
-      throw new AppError('VALIDATION_ERROR', [
+      throw new AppError('EMAIL_ALREADY_EXISTS', [
         {
           field: 'email',
           reason: '이미 사용 중인 이메일입니다',
