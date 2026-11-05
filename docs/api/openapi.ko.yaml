@@ -1258,6 +1258,7 @@ components:
           email,
           phone,
           hasProfile,
+          isProfileComplete,
           customerProfile,
           moverProfile,
         ]
@@ -1268,6 +1269,7 @@ components:
         email: { type: string, format: email, nullable: true }
         phone: { type: string, nullable: true }
         hasProfile: { type: boolean }
+        isProfileComplete: { type: boolean }
         customerProfile:
           description: role이 CUSTOMER이고 프로필이 있을 때 채워짐
           type: object
