@@ -1,11 +1,10 @@
 import { AppError } from '../errors/app-error'
 import { prisma } from '../lib/prisma'
 import { createNotification } from './notification-creation.service'
+import type { SendQuoteBody } from '../validators/quote.validator'
 
-type SendQuoteInput = {
+type SendQuoteInput = SendQuoteBody & {
   requestId: string
-  moverId: string
-  price: number
 }
 
 function getToday(): Date {
@@ -19,7 +18,24 @@ function getToday(): Date {
   return new Date(`${today}T00:00:00.000Z`)
 }
 
-export async function sendQuote({ requestId, moverId, price }: SendQuoteInput) {
+function assertMover(viewer: Express.User | undefined): string {
+  if (!viewer) {
+    throw new AppError('UNAUTHORIZED')
+  }
+
+  if (viewer.role !== 'MOVER') {
+    throw new AppError('FORBIDDEN')
+  }
+
+  return viewer.id
+}
+
+export async function sendQuote(
+  viewer: Express.User | undefined,
+  { requestId, price }: SendQuoteInput,
+) {
+  const moverId = assertMover(viewer)
+
   const mover = await prisma.moverProfile.findUnique({
     where: { userId: moverId },
     select: {
@@ -46,8 +62,17 @@ export async function sendQuote({ requestId, moverId, price }: SendQuoteInput) {
 
     const request = await tx.moveRequest.findUniqueOrThrow({
       where: { id: requestId },
+      include: {
+        customer: {
+          select: {
+            nickname: true,
+            user: {
+              select: { name: true },
+            },
+          },
+        },
+      },
     })
-
     if (request.status !== 'PENDING' || request.moveDate < getToday()) {
       throw new AppError('REQUEST_NOT_PENDING')
     }
@@ -139,11 +164,6 @@ export async function sendQuote({ requestId, moverId, price }: SendQuoteInput) {
       tx,
     )
 
-    const customer = await tx.user.findUnique({
-      where: { id: request.customerId },
-      select: { name: true },
-    })
-
     // OpenAPI SentQuote 응답 구조
     return {
       id: quote.id,
@@ -153,7 +173,8 @@ export async function sendQuote({ requestId, moverId, price }: SendQuoteInput) {
       createdAt: quote.createdAt,
       moveRequest: {
         id: request.id,
-        customerName: customer?.name ?? null,
+        customerName:
+          request.customer.nickname ?? request.customer.user.name ?? null,
         moveType: request.moveType,
         moveDate: request.moveDate.toISOString().slice(0, 10),
         from: {
