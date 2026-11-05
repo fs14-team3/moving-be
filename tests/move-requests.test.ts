@@ -12,6 +12,7 @@ import { prisma } from '../src/lib/prisma'
 import {
   api,
   createCustomer,
+  createMoveRequest,
   createMover,
   resetDatabase,
   userId,
@@ -38,26 +39,6 @@ const body = {
 
 function createRequest(user?: Express.User, input: object = body) {
   return api(user).post('/api/move-requests').send(input)
-}
-
-async function seedRequest(
-  customerId: string,
-  status: MoveRequestStatus,
-  moveDate: string,
-) {
-  return prisma.moveRequest.create({
-    data: {
-      customerId,
-      moveType: 'SMALL',
-      moveDate: new Date(moveDate),
-      fromAddress: '서울 출발지',
-      fromRegion: '서울',
-      toAddress: '서울 도착지',
-      toRegion: '서울',
-      status,
-    },
-    select: { id: true },
-  })
 }
 
 async function statusOf(id: string) {
@@ -237,7 +218,7 @@ describe('POST /api/move-requests', () => {
   ])(
     '이사일이 지나지 않은 %s 요청(%s)이 있으면 409를 반환한다',
     async (status, moveDate) => {
-      const existing = await seedRequest(customer.id, status, moveDate)
+      const existing = await createMoveRequest(customer.id, status, moveDate)
 
       const res = await createRequest(customer)
 
@@ -257,7 +238,7 @@ describe('POST /api/move-requests', () => {
   ])(
     '이사일이 지난 %s 요청은 %s로 바꾸고 새 요청을 허용한다',
     async (status, closedStatus) => {
-      const previous = await seedRequest(customer.id, status, YESTERDAY)
+      const previous = await createMoveRequest(customer.id, status, YESTERDAY)
 
       const res = await createRequest(customer)
 
@@ -273,7 +254,7 @@ describe('POST /api/move-requests', () => {
   ])(
     '종료된 %s 요청(%s)만 있으면 새 요청을 허용한다',
     async (status, moveDate) => {
-      const previous = await seedRequest(customer.id, status, moveDate)
+      const previous = await createMoveRequest(customer.id, status, moveDate)
 
       const res = await createRequest(customer)
 
@@ -283,7 +264,11 @@ describe('POST /api/move-requests', () => {
   )
 
   it('다른 일반 유저의 요청은 제한하거나 바꾸지 않는다', async () => {
-    const others = await seedRequest(otherCustomer.id, 'PENDING', YESTERDAY)
+    const others = await createMoveRequest(
+      otherCustomer.id,
+      'PENDING',
+      YESTERDAY,
+    )
 
     const res = await createRequest(customer)
 
@@ -292,7 +277,7 @@ describe('POST /api/move-requests', () => {
   })
 
   it('다른 일반 유저에게 진행 중인 요청이 있어도 요청할 수 있다', async () => {
-    await seedRequest(otherCustomer.id, 'PENDING', NEXT_WEEK)
+    await createMoveRequest(otherCustomer.id, 'PENDING', NEXT_WEEK)
 
     const res = await createRequest(customer)
 
@@ -309,7 +294,7 @@ describe('POST /api/move-requests', () => {
   })
 
   it('동시에 제출해도 진행 중인 요청은 하나만 생성된다', async () => {
-    const previous = await seedRequest(customer.id, 'PENDING', YESTERDAY)
+    const previous = await createMoveRequest(customer.id, 'PENDING', YESTERDAY)
 
     const results = await Promise.all(
       Array.from({ length: 5 }, () => createRequest(customer)),
@@ -382,7 +367,7 @@ describe('GET /api/move-requests/active', () => {
   ])(
     '이사일이 지나지 않은 %s 요청(%s)을 반환한다',
     async (status, moveDate) => {
-      const active = await seedRequest(customer.id, status, moveDate)
+      const active = await createMoveRequest(customer.id, status, moveDate)
 
       const res = await getActive(customer)
 
@@ -402,7 +387,7 @@ describe('GET /api/move-requests/active', () => {
   ])(
     '%s 요청(%s)은 반환하지 않고 상태도 바꾸지 않는다',
     async (status, moveDate) => {
-      const previous = await seedRequest(customer.id, status, moveDate)
+      const previous = await createMoveRequest(customer.id, status, moveDate)
 
       const res = await getActive(customer)
 
@@ -420,7 +405,7 @@ describe('GET /api/move-requests/active', () => {
   })
 
   it('다른 일반 유저의 진행 중인 요청은 반환하지 않는다', async () => {
-    await seedRequest(otherCustomer.id, 'PENDING', NEXT_WEEK)
+    await createMoveRequest(otherCustomer.id, 'PENDING', NEXT_WEEK)
 
     const res = await getActive(customer)
 
@@ -428,7 +413,7 @@ describe('GET /api/move-requests/active', () => {
   })
 
   it('UTC로는 아직 이사일이어도 한국 날짜가 바뀌었으면 반환하지 않는다', async () => {
-    await seedRequest(customer.id, 'PENDING', TODAY)
+    await createMoveRequest(customer.id, 'PENDING', TODAY)
     vi.setSystemTime(new Date('2026-11-02T15:30:00Z'))
 
     const res = await getActive(customer)
@@ -455,7 +440,7 @@ describe('GET /api/move-requests/:requestId', () => {
   })
 
   it('이사일이 지나 종료된 본인 요청도 반환한다', async () => {
-    const previous = await seedRequest(customer.id, 'EXPIRED', YESTERDAY)
+    const previous = await createMoveRequest(customer.id, 'EXPIRED', YESTERDAY)
 
     const res = await getRequest(customer, previous.id)
 
@@ -464,7 +449,11 @@ describe('GET /api/move-requests/:requestId', () => {
   })
 
   it('다른 일반 유저의 요청은 404를 반환한다', async () => {
-    const others = await seedRequest(otherCustomer.id, 'PENDING', NEXT_WEEK)
+    const others = await createMoveRequest(
+      otherCustomer.id,
+      'PENDING',
+      NEXT_WEEK,
+    )
 
     const res = await getRequest(customer, others.id)
 
@@ -489,7 +478,7 @@ describe('GET /api/move-requests/:requestId', () => {
   })
 
   it.each(deniedViewers)('%s %i %s 반환', async (_case, user, status, code) => {
-    const own = await seedRequest(customer.id, 'PENDING', NEXT_WEEK)
+    const own = await createMoveRequest(customer.id, 'PENDING', NEXT_WEEK)
 
     const res = await getRequest(user, own.id)
 
