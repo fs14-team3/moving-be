@@ -47,6 +47,10 @@ const ERROR_CATALOG = {
     status: 409,
     message: '견적을 받을 수 없는 요청입니다',
   },
+  PROFILE_ALREADY_EXISTS: {
+    status: 409,
+    message: '프로필이 이미 등록되어 있습니다',
+  },
 } as const
 
 export type ErrorCode = keyof typeof ERROR_CATALOG
