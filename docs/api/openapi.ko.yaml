@@ -797,7 +797,7 @@ paths:
         고객명은 닉네임을 우선 사용하며, 닉네임이 없으면 사용자 이름을 반환합니다.
       operationId: listMySentQuotes
       security:
-        - bearerAuth: []
+        - sessionCookie: []
       x-roles: [MOVER]
       parameters:
         - name: status
