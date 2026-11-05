@@ -37,11 +37,7 @@ export async function createMoveRequest(
   try {
     const request = await prisma.$transaction(async (tx) => {
       const active = await tx.moveRequest.findFirst({
-        where: {
-          customerId,
-          status: { in: ['PENDING', 'CONFIRMED', 'COMPLETED'] },
-          moveDate: { gte: today },
-        },
+        where: activeRequestWhere(customerId, today),
         select: { id: true },
       })
       if (active) throw new AppError('ACTIVE_REQUEST_EXISTS')
@@ -80,6 +76,43 @@ export async function createMoveRequest(
       throw new AppError('ACTIVE_REQUEST_EXISTS')
     }
     throw error
+  }
+}
+
+export async function getActiveMoveRequest(viewer: Express.User | undefined) {
+  const customerId = assertCustomer(viewer)
+  await assertCustomerProfile(prisma, customerId)
+
+  const request = await prisma.moveRequest.findFirst({
+    where: activeRequestWhere(customerId, new Date(todayInSeoul())),
+    select: moveRequestSelect,
+  })
+  return { moveRequest: request && toMoveRequest(request) }
+}
+
+export async function getMoveRequest(
+  viewer: Express.User | undefined,
+  requestId: string,
+) {
+  const customerId = assertCustomer(viewer)
+  await assertCustomerProfile(prisma, customerId)
+
+  const request = await prisma.moveRequest.findFirst({
+    where: { id: requestId, customerId },
+    select: moveRequestSelect,
+  })
+  if (!request) throw new AppError('NOT_FOUND')
+  return toMoveRequest(request)
+}
+
+function activeRequestWhere(
+  customerId: string,
+  today: Date,
+): Prisma.MoveRequestWhereInput {
+  return {
+    customerId,
+    status: { in: ['PENDING', 'CONFIRMED', 'COMPLETED'] },
+    moveDate: { gte: today },
   }
 }
 

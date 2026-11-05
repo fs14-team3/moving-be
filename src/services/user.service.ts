@@ -1,6 +1,13 @@
+import { Prisma } from '../generated/prisma/client'
 import { AppError } from '../errors/app-error'
 import { prisma } from '../lib/prisma'
+import { hashPassword, verifyPassword } from '../utils/password'
+import type {
+  UpdateUserInput,
+  ChangePasswordInput,
+} from '../validators/user.validator'
 
+// 내 정보 조회
 export async function getMe(viewer: Express.User | undefined) {
   if (!viewer) {
     throw new AppError('UNAUTHORIZED')
@@ -31,5 +38,104 @@ export async function getMe(viewer: Express.User | undefined) {
   return {
     ...user,
     hasProfile,
+  }
+}
+
+// 내 회원 정보 수정
+export async function updateMe(
+  viewer: Express.User | undefined,
+  input: UpdateUserInput,
+) {
+  if (!viewer) {
+    throw new AppError('UNAUTHORIZED')
+  }
+
+  try {
+    return await prisma.user.update({
+      where: { id: viewer.id },
+      data: input,
+      select: {
+        id: true,
+        role: true,
+        name: true,
+        email: true,
+        phone: true,
+        updatedAt: true,
+      },
+    })
+  } catch (error) {
+    // 같은 역할의 사용자에게 이미 등록된 이메일
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === 'P2002'
+    ) {
+      throw new AppError('VALIDATION_ERROR', [
+        {
+          field: 'email',
+          reason: '이미 사용 중인 이메일입니다',
+        },
+      ])
+    }
+
+    // 존재하지 않는 사용자
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === 'P2025'
+    ) {
+      throw new AppError('NOT_FOUND')
+    }
+
+    throw error
+  }
+}
+
+// 비밀번호 변경
+export async function changePassword(
+  viewer: Express.User | undefined,
+  input: ChangePasswordInput,
+) {
+  if (!viewer) {
+    throw new AppError('UNAUTHORIZED')
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { id: viewer.id },
+    select: {
+      id: true,
+      passwordHash: true,
+    },
+  })
+
+  if (!user) {
+    throw new AppError('NOT_FOUND')
+  }
+
+  // 소셜 로그인 전용 계정은 비밀번호 변경 제한
+  if (!user.passwordHash) {
+    throw new AppError('FORBIDDEN')
+  }
+
+  // 현재 비밀번호 확인
+  const isValidPassword = await verifyPassword(
+    input.currentPassword,
+    user.passwordHash,
+  )
+
+  if (!isValidPassword) {
+    throw new AppError('INVALID_CREDENTIALS')
+  }
+
+  // 새 비밀번호 암호화
+  const newPasswordHash = await hashPassword(input.newPassword)
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      passwordHash: newPasswordHash,
+    },
+  })
+
+  return {
+    message: '비밀번호가 변경되었습니다',
   }
 }

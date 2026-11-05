@@ -8,12 +8,6 @@ const imageUrlSchema = z
   .nullable()
   .optional()
 
-const nicknameSchema = z
-  .string()
-  .trim()
-  .min(1, '닉네임을 입력해 주세요')
-  .max(30, '닉네임은 30자 이하여야 합니다')
-
 const serviceTypesSchema = z
   .array(z.enum(ServiceType))
   .min(1, '이용 서비스를 하나 이상 선택해 주세요')
@@ -24,7 +18,6 @@ const regionsSchema = z
 
 export const createCustomerProfileInput = z.object({
   imageUrl: imageUrlSchema,
-  nickname: nicknameSchema,
   serviceTypes: serviceTypesSchema,
   regions: regionsSchema,
 })
@@ -32,7 +25,6 @@ export const createCustomerProfileInput = z.object({
 export const updateCustomerProfileInput = z
   .object({
     imageUrl: imageUrlSchema,
-    nickname: nicknameSchema.optional(),
     serviceTypes: serviceTypesSchema.optional(),
     regions: regionsSchema.optional(),
   })

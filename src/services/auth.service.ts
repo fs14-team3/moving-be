@@ -105,6 +105,7 @@ export async function login(input: LoginInput) {
   }
 
   const { passwordHash: _, ...safeUser } = user
+
   return toMe(safeUser)
 }
 

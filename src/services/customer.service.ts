@@ -33,13 +33,11 @@ export async function createProfile(
       data: {
         userId: customerId,
         imageUrl: input.imageUrl,
-        nickname: input.nickname,
         serviceTypes: input.serviceTypes,
         regions: input.regions,
       },
     })
   } catch (error) {
-    // 동시에 중복 등록 요청이 들어온 경우도 409로 처리
     if (
       error instanceof Prisma.PrismaClientKnownRequestError &&
       error.code === 'P2002'

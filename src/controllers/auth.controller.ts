@@ -83,7 +83,6 @@ export async function signup(req: Request, res: Response) {
 }
 
 // 이메일 로그인
-
 export async function login(req: Request, res: Response) {
   const body = validate(loginInput, req.body)
   const user = await authService.login(body)
@@ -172,6 +171,9 @@ export async function socialCallback(req: Request, res: Response) {
 
     await establishSession(req, result.user)
 
+    await establishSession(req, result.user)
+
+    await establishSession(req, result.user)
     return redirectToLanding(res, {
       provider,
       status: 'success',

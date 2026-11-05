@@ -8,6 +8,12 @@ const ERROR_CATALOG = {
   FORBIDDEN: { status: 403, message: '접근 권한이 없습니다' },
   PROFILE_REQUIRED: { status: 403, message: '프로필 등록이 필요합니다' },
   NOT_FOUND: { status: 404, message: '요청한 리소스를 찾을 수 없습니다' },
+
+  PROFILE_ALREADY_EXISTS: {
+    status: 409,
+    message: '이미 프로필이 등록되어 있습니다',
+  },
+
   ACTIVE_REQUEST_EXISTS: {
     status: 409,
     message: '진행 중인 견적 요청이 있습니다',
@@ -17,9 +23,13 @@ const ERROR_CATALOG = {
     status: 503,
     message: '일시적으로 서비스를 이용할 수 없습니다',
   },
-  PROFILE_ALREADY_EXISTS: {
+  QUOTE_LIMIT_REACHED: {
     status: 409,
-    message: '이미 프로필이 등록되어 있습니다',
+    message: '견적 접수 한도에 도달했습니다',
+  },
+  REQUEST_NOT_PENDING: {
+    status: 409,
+    message: '견적을 받을 수 없는 요청입니다',
   },
 } as const
 
