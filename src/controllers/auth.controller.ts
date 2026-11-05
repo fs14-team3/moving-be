@@ -42,11 +42,43 @@ function redirectToLanding(res: Response, params: Record<string, string>) {
   return res.redirect(302, url.toString())
 }
 
+// 로그인 성공 시 세션 생성
+async function establishSession(
+  req: Request,
+  user: {
+    id: string
+    role: 'CUSTOMER' | 'MOVER'
+  },
+): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    req.session.regenerate((error) => {
+      if (error) {
+        reject(error)
+        return
+      }
+
+      req.session.user = {
+        userId: user.id,
+        role: user.role,
+      }
+
+      req.session.save((saveError) => {
+        if (saveError) {
+          reject(saveError)
+          return
+        }
+
+        resolve()
+      })
+    })
+  })
+}
+
+// 이메일 회원가입
 export async function signup(req: Request, res: Response) {
   const body = validate(signupInput, req.body)
   const user = await authService.signup(body)
-
-  res.set('Cache-Control', 'no-store').status(201).json(user)
+  return res.set('Cache-Control', 'no-store').status(201).json(user)
 }
 
 // 이메일 로그인
@@ -55,7 +87,34 @@ export async function login(req: Request, res: Response) {
   const body = validate(loginInput, req.body)
   const user = await authService.login(body)
 
-  res.set('Cache-Control', 'no-store').status(200).json({ user })
+  await establishSession(req, user)
+
+  return res.set('Cache-Control', 'no-store').status(200).json({ user })
+}
+
+// 로그아웃
+export async function logout(req: Request, res: Response) {
+  await new Promise<void>((resolve, reject) => {
+    req.session.destroy((error) => {
+      if (error) {
+        reject(error)
+        return
+      }
+
+      resolve()
+    })
+  })
+
+  res.clearCookie('moving.sid', {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    path: '/',
+  })
+
+  return res.set('Cache-Control', 'no-store').status(200).json({
+    message: '로그아웃되었습니다.',
+  })
 }
 
 // 소셜 로그인 시작
@@ -99,13 +158,14 @@ export async function socialCallback(req: Request, res: Response) {
   }
 
   try {
-    await authService.completeSocialLogin(
+    const result = await authService.completeSocialLogin(
       provider,
       query.code,
       query.state,
       cookieNonce,
     )
 
+    await establishSession(req, result.user)
     return redirectToLanding(res, {
       provider,
       status: 'success',
