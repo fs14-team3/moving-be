@@ -25,7 +25,7 @@ paths:
     post:
       tags: [Auth]
       summary: 이메일 회원가입
-      description: 요청한 역할의 이메일 계정을 생성합니다. 이름·이메일·전화번호·비밀번호는 validator 기준에 따라 검증합니다.
+      description: 요청한 역할의 이메일 계정을 생성하고 로그인 세션을 발급합니다. 이름·이메일·전화번호·비밀번호는 validator 기준에 따라 검증합니다.
       operationId: signup
       security: []
       requestBody:
