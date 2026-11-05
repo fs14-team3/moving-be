@@ -242,7 +242,6 @@ model Session {
   sid    String   @id @db.VarChar
   sess   Json
   expire DateTime @db.Timestamp(6)
-  
   @@index([expire])
   @@map("session")
 }
