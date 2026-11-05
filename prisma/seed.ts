@@ -14,6 +14,7 @@ import {
   reviewsByType,
   routes,
 } from './seed-data'
+import bcrypt from 'bcrypt'
 
 type Route = Pick<
   Prisma.MoveRequestCreateManyInput,
@@ -86,7 +87,9 @@ function rotate<T>(items: T[], offset: number) {
   return [...items.slice(start), ...items.slice(0, start)]
 }
 
-function buildSeedData() {
+async function buildSeedData() {
+  const passwordHash = await bcrypt.hash('Test1234!', 10)
+
   const users: Prisma.UserCreateManyInput[] = []
   const socialAccounts: Prisma.SocialAccountCreateManyInput[] = []
   const customerProfiles: Prisma.CustomerProfileCreateManyInput[] = []
@@ -303,6 +306,7 @@ function buildSeedData() {
       role: 'CUSTOMER',
       name,
       email: `${email}@example.test`,
+      passwordHash,
       phone: i % 10 === 0 ? null : `0101000${String(i + 1).padStart(4, '0')}`,
       createdAt: joinedAt,
       updatedAt: joinedAt,
@@ -367,6 +371,7 @@ function buildSeedData() {
         role: 'MOVER',
         name,
         email: `mover${i + 1}@example.test`,
+        passwordHash,
         phone: `0102000${String(i + 1).padStart(4, '0')}`,
         createdAt: joinedAt,
         updatedAt: joinedAt,
@@ -408,7 +413,7 @@ async function main() {
   if (env.NODE_ENV === 'production') {
     throw new Error('Seeding is disabled when NODE_ENV=production')
   }
-  const data = buildSeedData()
+  const data = await buildSeedData()
   await prisma.$transaction([
     prisma.user.createMany({ data: data.users }),
     prisma.socialAccount.createMany({ data: data.socialAccounts }),

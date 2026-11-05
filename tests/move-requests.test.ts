@@ -326,3 +326,174 @@ describe('POST /api/move-requests', () => {
     ).toBe(1)
   })
 })
+
+function getActive(user?: Express.User) {
+  return api(user).get('/api/move-requests/active')
+}
+
+function getRequest(user: Express.User | undefined, id: string) {
+  return api(user).get(`/api/move-requests/${id}`)
+}
+
+async function createRequestWithQuote() {
+  const { body: created } = await createRequest(customer)
+  await prisma.designatedRequest.create({
+    data: { moveRequestId: created.id, moverId: mover.id },
+  })
+  await prisma.quote.create({
+    data: {
+      moveRequestId: created.id,
+      moverId: mover.id,
+      price: 100000,
+      isDesignated: true,
+    },
+  })
+  return { ...created, quoteCount: 1, designatedMoverIds: [mover.id] }
+}
+
+const deniedViewers: [string, Express.User | undefined, number, string][] = [
+  ['로그인하지 않으면', undefined, 401, 'UNAUTHORIZED'],
+  ['기사님은', mover, 403, 'FORBIDDEN'],
+  [
+    '프로필을 등록하지 않은 일반 유저는',
+    customerWithoutProfile,
+    403,
+    'PROFILE_REQUIRED',
+  ],
+]
+
+describe('GET /api/move-requests/active', () => {
+  it('진행 중인 요청을 이사 정보와 함께 반환한다', async () => {
+    const expected = await createRequestWithQuote()
+
+    const res = await getActive(customer)
+
+    expect(res.status).toBe(200)
+    expect(res.body).toEqual({ moveRequest: expected })
+  })
+
+  it.each<[MoveRequestStatus, string]>([
+    ['PENDING', NEXT_WEEK],
+    ['PENDING', TODAY],
+    ['CONFIRMED', NEXT_WEEK],
+    ['CONFIRMED', TODAY],
+    ['COMPLETED', NEXT_WEEK],
+    ['COMPLETED', TODAY],
+  ])(
+    '이사일이 지나지 않은 %s 요청(%s)을 반환한다',
+    async (status, moveDate) => {
+      const active = await seedRequest(customer.id, status, moveDate)
+
+      const res = await getActive(customer)
+
+      expect(res.body.moveRequest).toMatchObject({
+        id: active.id,
+        status,
+        moveDate,
+      })
+    },
+  )
+
+  it.each<[MoveRequestStatus, string]>([
+    ['PENDING', YESTERDAY],
+    ['CONFIRMED', YESTERDAY],
+    ['EXPIRED', NEXT_WEEK],
+    ['COMPLETED', YESTERDAY],
+  ])(
+    '%s 요청(%s)은 반환하지 않고 상태도 바꾸지 않는다',
+    async (status, moveDate) => {
+      const previous = await seedRequest(customer.id, status, moveDate)
+
+      const res = await getActive(customer)
+
+      expect(res.status).toBe(200)
+      expect(res.body).toEqual({ moveRequest: null })
+      expect(await statusOf(previous.id)).toBe(status)
+    },
+  )
+
+  it('요청이 없으면 null을 반환한다', async () => {
+    const res = await getActive(customer)
+
+    expect(res.status).toBe(200)
+    expect(res.body).toEqual({ moveRequest: null })
+  })
+
+  it('다른 일반 유저의 진행 중인 요청은 반환하지 않는다', async () => {
+    await seedRequest(otherCustomer.id, 'PENDING', NEXT_WEEK)
+
+    const res = await getActive(customer)
+
+    expect(res.body).toEqual({ moveRequest: null })
+  })
+
+  it('UTC로는 아직 이사일이어도 한국 날짜가 바뀌었으면 반환하지 않는다', async () => {
+    await seedRequest(customer.id, 'PENDING', TODAY)
+    vi.setSystemTime(new Date('2026-11-02T15:30:00Z'))
+
+    const res = await getActive(customer)
+
+    expect(res.body).toEqual({ moveRequest: null })
+  })
+
+  it.each(deniedViewers)('%s %i %s 반환', async (_case, user, status, code) => {
+    const res = await getActive(user)
+
+    expect(res.status).toBe(status)
+    expect(res.body.error.code).toBe(code)
+  })
+})
+
+describe('GET /api/move-requests/:requestId', () => {
+  it('본인 요청을 이사 정보와 함께 반환한다', async () => {
+    const expected = await createRequestWithQuote()
+
+    const res = await getRequest(customer, expected.id)
+
+    expect(res.status).toBe(200)
+    expect(res.body).toEqual(expected)
+  })
+
+  it('이사일이 지나 종료된 본인 요청도 반환한다', async () => {
+    const previous = await seedRequest(customer.id, 'EXPIRED', YESTERDAY)
+
+    const res = await getRequest(customer, previous.id)
+
+    expect(res.status).toBe(200)
+    expect(res.body).toMatchObject({ id: previous.id, status: 'EXPIRED' })
+  })
+
+  it('다른 일반 유저의 요청은 404를 반환한다', async () => {
+    const others = await seedRequest(otherCustomer.id, 'PENDING', NEXT_WEEK)
+
+    const res = await getRequest(customer, others.id)
+
+    expect(res.status).toBe(404)
+    expect(res.body.error.code).toBe('NOT_FOUND')
+  })
+
+  it('없는 요청은 404를 반환한다', async () => {
+    const res = await getRequest(customer, userId('f'))
+
+    expect(res.status).toBe(404)
+    expect(res.body.error.code).toBe('NOT_FOUND')
+  })
+
+  it('요청 번호가 UUID 형식이 아니면 400을 반환한다', async () => {
+    const res = await getRequest(customer, 'not-a-uuid')
+
+    expect(res.status).toBe(400)
+    expect(res.body.error.details).toEqual([
+      { field: 'requestId', reason: expect.any(String) },
+    ])
+  })
+
+  it.each(deniedViewers)('%s %i %s 반환', async (_case, user, status, code) => {
+    const own = await seedRequest(customer.id, 'PENDING', NEXT_WEEK)
+
+    const res = await getRequest(user, own.id)
+
+    expect(res.status).toBe(status)
+    expect(res.body.error.code).toBe(code)
+  })
+})
