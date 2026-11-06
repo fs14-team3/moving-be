@@ -1,9 +1,11 @@
 import { Router } from 'express'
 import * as notificationController from '../controllers/notification.controller'
+import { requireAuth } from '../middlewares/require-auth'
 
 export const notificationRouter = Router()
 
-// TODO: 인증 미들웨어 구현 후 로그인 사용자 정보 연결
+notificationRouter.use(requireAuth)
+
 notificationRouter.get('/', notificationController.listNotifications)
 
 // 안읽은 알림 갯수 조회
