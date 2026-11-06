@@ -1,4 +1,6 @@
+import request from 'supertest'
 import { beforeEach, describe, expect, it } from 'vitest'
+import { createApp } from '../src/app'
 import { api, resetDatabase } from './helpers'
 
 describe('Auth API', () => {
@@ -36,6 +38,43 @@ describe('Auth API', () => {
     expect(response.body.moverProfile).toBeNull()
     expect(response.body).not.toHaveProperty('password')
     expect(response.body).not.toHaveProperty('passwordHash')
+  })
+
+  it('회원가입하면 바로 로그인 세션이 발급된다', async () => {
+    const agent = request.agent(createApp())
+
+    await agent
+      .post('/api/auth/signup')
+      .send({
+        role: 'CUSTOMER',
+        name: '테스트 사용자',
+        email: 'signup-session@example.com',
+        phone: '01012345678',
+        password: 'Test1234!',
+      })
+      .expect(201)
+
+    // 세션이 없으면 401, 로그인 상태면 프로필 미등록으로 403
+    const response = await agent.get('/api/customers/me/favorites')
+
+    expect(response.status).toBe(403)
+    expect(response.body.error.code).toBe('PROFILE_REQUIRED')
+  })
+
+  it('같은 역할로 이미 가입된 이메일이면 409 EMAIL_ALREADY_EXISTS를 반환한다', async () => {
+    const body = {
+      role: 'CUSTOMER',
+      name: '테스트 사용자',
+      email: 'duplicate@example.com',
+      phone: '01012345678',
+      password: 'Test1234!',
+    }
+    await api().post('/api/auth/signup').send(body).expect(201)
+
+    const response = await api().post('/api/auth/signup').send(body)
+
+    expect(response.status).toBe(409)
+    expect(response.body.error.code).toBe('EMAIL_ALREADY_EXISTS')
   })
 
   it('로그인 성공 시 사용자 정보를 반환한다', async () => {

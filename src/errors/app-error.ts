@@ -5,6 +5,10 @@ const ERROR_CATALOG = {
     status: 401,
     message: '이메일 또는 비밀번호가 올바르지 않습니다',
   },
+  EMAIL_ALREADY_EXISTS: {
+    status: 409,
+    message: '이미 사용 중인 이메일입니다',
+  },
   FORBIDDEN: { status: 403, message: '접근 권한이 없습니다' },
   PROFILE_REQUIRED: { status: 403, message: '프로필 등록이 필요합니다' },
   NOT_FOUND: { status: 404, message: '요청한 리소스를 찾을 수 없습니다' },
