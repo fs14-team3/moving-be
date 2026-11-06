@@ -10,6 +10,7 @@ import { quoteRouter } from './quote.routes'
 import { rejectionRouter } from './rejection.routes'
 import { notificationRouter } from './notification.routes'
 import { moveRequestRouter } from './move-request.routes'
+import { confirmQuoteRouter } from './confirm-quote.routes'
 
 export const apiRouter = Router()
 
@@ -47,3 +48,4 @@ apiRouter.use('/move-requests', quoteRouter)
 apiRouter.use('/move-requests', rejectionRouter)
 apiRouter.use('/notifications', notificationRouter)
 apiRouter.use('/move-requests', moveRequestRouter)
+apiRouter.use('/quotes', confirmQuoteRouter)
