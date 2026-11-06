@@ -400,6 +400,7 @@ paths:
           content:
             application/json:
               schema: { '$ref': '#/components/schemas/ErrorResponse' }
+        '401': { '$ref': '#/components/responses/InvalidSession' }
   '/movers/{moverId}':
     get:
       tags: [Movers]
@@ -421,6 +422,7 @@ paths:
             application/json:
               schema: { '$ref': '#/components/schemas/MoverDetail' }
         '400': { '$ref': '#/components/responses/ValidationError' }
+        '401': { '$ref': '#/components/responses/InvalidSession' }
         '404': { '$ref': '#/components/responses/NotFound' }
   '/movers/{moverId}/reviews':
     get:
@@ -1183,6 +1185,11 @@ components:
                     and a special character
     Unauthorized:
       description: 인증 정보가 없거나 유효하지 않음
+      content:
+        application/json:
+          schema: { '$ref': '#/components/schemas/ErrorResponse' }
+    InvalidSession:
+      description: '`UNAUTHORIZED`. 만료되었거나 유효하지 않은 세션 쿠키를 보낸 경우. 응답에서 쿠키를 지우므로 다시 요청하면 비회원으로 조회됩니다.'
       content:
         application/json:
           schema: { '$ref': '#/components/schemas/ErrorResponse' }
