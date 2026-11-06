@@ -2,6 +2,7 @@ import type { Request, Response } from 'express'
 import * as moveRequestService from '../services/move-request.service'
 import {
   createMoveRequestBody,
+  designateMoverBody,
   requestIdParams,
 } from '../validators/move-request.validator'
 import { validate } from '../validators/validate'
@@ -20,4 +21,12 @@ export async function getActiveMoveRequest(req: Request, res: Response) {
 export async function getMoveRequest(req: Request, res: Response) {
   const { requestId } = validate(requestIdParams, req.params)
   res.json(await moveRequestService.getMoveRequest(req.user, requestId))
+}
+
+export async function designateMover(req: Request, res: Response) {
+  const { requestId } = validate(requestIdParams, req.params)
+  const { moverId } = validate(designateMoverBody, req.body)
+  res
+    .status(201)
+    .json(await moveRequestService.designateMover(req.user, requestId, moverId))
 }
