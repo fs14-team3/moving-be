@@ -657,9 +657,13 @@ paths:
     get:
       tags: [MoveRequests]
       summary: 받은 견적 목록 (대기 중인 견적)
-      description:
-        요청자 본인만 조회합니다. 지정 요청 라벨과 기사님 찜 상태를 제공합니다. 최대 8개이므로 별도 페이지네이션은 두지
-        않습니다.
+      description: 요청자 본인만 받은 견적을 조회할 수 있습니다.
+        일반 견적은 최대 5건, 지정 견적은 최대 3건으로 총 8건까지 조회할 수 있습니다.
+        지정 견적을 먼저 반환하며, 같은 유형에서는 최신 견적 순으로 정렬합니다.
+        생성 시각이 동일하면 견적 ID 내림차순으로 정렬합니다.
+        견적 금액, 지정 여부, 기사님 요약 정보 및 찜 상태를 제공합니다.
+        status 쿼리로 견적 상태를 필터링할 수 있습니다.
+        별도 페이지네이션은 제공하지 않습니다.
       operationId: listQuotesForRequest
       security:
         - sessionCookie: []
@@ -682,6 +686,7 @@ paths:
                     type: array
                     maxItems: 8
                     items: { '$ref': '#/components/schemas/CustomerQuote' }
+        '400': { '$ref': '#/components/responses/ValidationError' }
         '401': { '$ref': '#/components/responses/Unauthorized' }
         '403': { '$ref': '#/components/responses/Forbidden' }
         '404': { '$ref': '#/components/responses/NotFound' }
@@ -861,6 +866,7 @@ paths:
           content:
             application/json:
               schema: { '$ref': '#/components/schemas/QuoteDetail' }
+        '400': { '$ref': '#/components/responses/ValidationError' }
         '401': { '$ref': '#/components/responses/Unauthorized' }
         '403': { '$ref': '#/components/responses/Forbidden' }
         '404': { '$ref': '#/components/responses/NotFound' }
@@ -1607,8 +1613,14 @@ components:
         - type: object
           required: [confirmedAt, moveRequest]
           properties:
-            confirmedAt: { type: string, format: date-time, nullable: true }
-            moveRequest: { '$ref': '#/components/schemas/MoveRequest' }
+            confirmedAt:
+              type: string
+              format: date-time
+              nullable: true
+            moveRequest:
+              '$ref': '#/components/schemas/MoveRequest'
+            mover:
+              '$ref': '#/components/schemas/MoverDetail'
     QuoteCreate:
       type: object
       required: [price]

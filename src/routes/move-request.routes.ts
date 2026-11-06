@@ -1,5 +1,8 @@
 import { Router } from 'express'
 import * as moveRequestController from '../controllers/move-request.controller'
+import * as receivedQuoteController from '../controllers/received-quote.controller'
+import { requireAuth } from '../middlewares/require-auth'
+import { requireRole } from '../middlewares/require-role'
 
 export const moveRequestRouter = Router()
 
@@ -7,3 +10,9 @@ export const moveRequestRouter = Router()
 moveRequestRouter.post('/', moveRequestController.createMoveRequest)
 moveRequestRouter.get('/active', moveRequestController.getActiveMoveRequest)
 moveRequestRouter.get('/:requestId', moveRequestController.getMoveRequest)
+moveRequestRouter.get(
+  '/:requestId/quotes',
+  requireAuth,
+  requireRole('CUSTOMER'),
+  receivedQuoteController.listReceivedQuotes,
+)
