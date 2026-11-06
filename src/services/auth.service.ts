@@ -44,11 +44,11 @@ function toMe(user: UserResponse) {
 
   const isProfileComplete =
     profile !== null &&
-    Boolean(profile.nickname?.trim()) &&
     profile.serviceTypes.length > 0 &&
     profile.regions.length > 0 &&
     (user.role === 'CUSTOMER' ||
-      (profile.careerYears !== null &&
+      (Boolean(profile.nickname?.trim()) &&
+        profile.careerYears !== null &&
         profile.careerYears >= 0 &&
         Boolean(profile.intro?.trim()) &&
         Boolean(profile.description?.trim())))
