@@ -33,3 +33,9 @@ customerRouter.get(
   requireAuth,
   favoriteController.listMyFavorites,
 )
+
+customerRouter.delete(
+  '/me/favorites',
+  requireAuth,
+  favoriteController.removeMyFavorites,
+)

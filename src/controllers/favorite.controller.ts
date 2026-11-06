@@ -1,6 +1,9 @@
 import type { Request, Response } from 'express'
 import * as favoriteService from '../services/favorite.service'
-import { listFavoritesQuery } from '../validators/favorite.validator'
+import {
+  listFavoritesQuery,
+  removeFavoritesBody,
+} from '../validators/favorite.validator'
 import { moverIdParams } from '../validators/mover.validator'
 import { validate } from '../validators/validate'
 
@@ -17,4 +20,9 @@ export async function removeFavorite(req: Request, res: Response) {
 export async function listMyFavorites(req: Request, res: Response) {
   const query = validate(listFavoritesQuery, req.query)
   res.json(await favoriteService.listFavorites(req.user, query))
+}
+
+export async function removeMyFavorites(req: Request, res: Response) {
+  const body = validate(removeFavoritesBody, req.body)
+  res.json(await favoriteService.removeFavorites(req.user, body))
 }
