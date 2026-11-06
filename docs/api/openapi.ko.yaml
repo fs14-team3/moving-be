@@ -325,10 +325,10 @@ paths:
       x-roles: [MOVER]
       responses:
         '200':
-          description: 공개 기사님 상세와 같은 형태. `isFavorite`, `isDesignated`는 null입니다.
+          description: 기사님 본인의 프로필·평점·진행 중인 이사 건수. isFavorite과 isDesignated는 null입니다.
           content:
             application/json:
-              schema: { '$ref': '#/components/schemas/MoverDetail' }
+              schema: { '$ref': '#/components/schemas/MoverMyPage' }
         '401': { '$ref': '#/components/responses/Unauthorized' }
         '403': { '$ref': '#/components/responses/Forbidden' }
   '/uploads/images':
@@ -1548,6 +1548,17 @@ components:
                 description: 활성 견적 요청이 있는
                   일반 유저가 아니면 null,
               }
+    MoverMyPage:
+      description: 기사님 본인 마이페이지 응답
+      allOf:
+        - { '$ref': '#/components/schemas/MoverDetail' }
+        - type: object
+          required: [inProgressCount]
+          properties:
+            inProgressCount:
+              type: integer
+              minimum: 0
+              description: 해당 기사님의 견적과 연결된 CONFIRMED 상태 이사 요청 수
     MoverListResponse:
       allOf:
         - { '$ref': '#/components/schemas/CursorMeta' }
