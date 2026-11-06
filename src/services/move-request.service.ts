@@ -4,6 +4,10 @@ import { prisma } from '../lib/prisma'
 import { todayInSeoul } from '../utils/date'
 import type { CreateMoveRequestBody } from '../validators/move-request.validator'
 import { assertCustomer, assertCustomerProfile } from './customer-access'
+import {
+  createNewRequestNotifications,
+  createNotification,
+} from './notification-creation.service'
 
 const MAX_DESIGNATED_MOVERS = 3
 
@@ -53,8 +57,7 @@ export async function createMoveRequest(
         data: { status: 'COMPLETED' },
       })
 
-      // TODO(#58): 출발지나 도착지가 서비스 가능 지역인 기사님에게 NEW_REQUEST 알림 생성
-      return tx.moveRequest.create({
+      const created = await tx.moveRequest.create({
         data: {
           customerId,
           moveType: body.moveType,
@@ -68,6 +71,18 @@ export async function createMoveRequest(
         },
         select: moveRequestSelect,
       })
+      await createNewRequestNotifications(
+        {
+          moveRequestId: created.id,
+          regions: [created.fromRegion, created.toRegion],
+          payload: {
+            customerName: await customerNameOf(tx, customerId),
+            moveType: created.moveType,
+          },
+        },
+        tx,
+      )
+      return created
     })
     return toMoveRequest(request)
   } catch (error) {
@@ -129,6 +144,7 @@ export async function designateMover(
       where: { id: requestId },
       select: {
         status: true,
+        moveType: true,
         moveDate: true,
         designatedRequests: { select: { moverId: true } },
         quotes: { where: { moverId }, select: { id: true } },
@@ -162,11 +178,23 @@ export async function designateMover(
       throw new AppError('DESIGNATION_LIMIT_REACHED')
     }
 
-    // TODO(#58): 지정된 기사님에게 NEW_DESIGNATED_REQUEST 알림 생성
-    return tx.designatedRequest.create({
+    const designation = await tx.designatedRequest.create({
       data: { moveRequestId: requestId, moverId: mover.userId },
       select: { moveRequestId: true, moverId: true, createdAt: true },
     })
+    await createNotification(
+      {
+        type: 'NEW_DESIGNATED_REQUEST',
+        userId: mover.userId,
+        moveRequestId: requestId,
+        payload: {
+          customerName: await customerNameOf(tx, customerId),
+          moveType: request.moveType,
+        },
+      },
+      tx,
+    )
+    return designation
   })
 }
 
@@ -178,6 +206,17 @@ export async function isMoverDesignated(customerId: string, moverId: string) {
     },
   })
   return request ? request.designatedRequests.length > 0 : null
+}
+
+async function customerNameOf(
+  tx: Prisma.TransactionClient,
+  customerId: string,
+) {
+  const customer = await tx.customerProfile.findUniqueOrThrow({
+    where: { userId: customerId },
+    select: { nickname: true, user: { select: { name: true } } },
+  })
+  return customer.nickname?.trim() || customer.user.name?.trim() || '고객'
 }
 
 function activeRequestWhere(
