@@ -5,6 +5,24 @@ import type { ListMoversQuery, MoverSort } from '../validators/mover.validator'
 import { isMoverDesignated } from './move-request.service'
 import { countReviewsByRating } from './review.service'
 
+/**
+ * 한국 시간(KST) 기준 오늘 날짜 반환
+ */
+function getTodayKstDate() {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Seoul',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date())
+
+  const year = Number(parts.find((part) => part.type === 'year')!.value)
+  const month = Number(parts.find((part) => part.type === 'month')!.value)
+  const day = Number(parts.find((part) => part.type === 'day')!.value)
+
+  return new Date(Date.UTC(year, month - 1, day))
+}
+
 const ORDER_BY = {
   REVIEW_COUNT: { reviewCount: 'desc' },
   RATING: { averageRating: 'desc' },
@@ -119,14 +137,22 @@ export async function getMyMoverPage(moverId: string) {
     throw new AppError('PROFILE_REQUIRED')
   }
 
+  const todayKst = getTodayKstDate()
+
   const [ratingCounts, inProgressCount] = await Promise.all([
     countReviewsByRating(moverId),
 
     prisma.moveRequest.count({
       where: {
         status: 'CONFIRMED',
+        moveDate: {
+          gte: todayKst,
+        },
         quotes: {
-          some: { moverId },
+          some: {
+            moverId,
+            status: 'CONFIRMED',
+          },
         },
       },
     }),
