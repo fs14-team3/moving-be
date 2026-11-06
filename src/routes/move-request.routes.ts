@@ -7,3 +7,7 @@ export const moveRequestRouter = Router()
 moveRequestRouter.post('/', moveRequestController.createMoveRequest)
 moveRequestRouter.get('/active', moveRequestController.getActiveMoveRequest)
 moveRequestRouter.get('/:requestId', moveRequestController.getMoveRequest)
+moveRequestRouter.post(
+  '/:requestId/designations',
+  moveRequestController.designateMover,
+)

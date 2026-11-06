@@ -12,6 +12,7 @@ import { prisma } from '../src/lib/prisma'
 import {
   api,
   createCustomer,
+  createMoveRequest,
   createMover,
   resetDatabase,
   userId,
@@ -38,26 +39,6 @@ const body = {
 
 function createRequest(user?: Express.User, input: object = body) {
   return api(user).post('/api/move-requests').send(input)
-}
-
-async function seedRequest(
-  customerId: string,
-  status: MoveRequestStatus,
-  moveDate: string,
-) {
-  return prisma.moveRequest.create({
-    data: {
-      customerId,
-      moveType: 'SMALL',
-      moveDate: new Date(moveDate),
-      fromAddress: '서울 출발지',
-      fromRegion: '서울',
-      toAddress: '서울 도착지',
-      toRegion: '서울',
-      status,
-    },
-    select: { id: true },
-  })
 }
 
 async function statusOf(id: string) {
@@ -237,7 +218,7 @@ describe('POST /api/move-requests', () => {
   ])(
     '이사일이 지나지 않은 %s 요청(%s)이 있으면 409를 반환한다',
     async (status, moveDate) => {
-      const existing = await seedRequest(customer.id, status, moveDate)
+      const existing = await createMoveRequest(customer.id, status, moveDate)
 
       const res = await createRequest(customer)
 
@@ -257,7 +238,7 @@ describe('POST /api/move-requests', () => {
   ])(
     '이사일이 지난 %s 요청은 %s로 바꾸고 새 요청을 허용한다',
     async (status, closedStatus) => {
-      const previous = await seedRequest(customer.id, status, YESTERDAY)
+      const previous = await createMoveRequest(customer.id, status, YESTERDAY)
 
       const res = await createRequest(customer)
 
@@ -273,7 +254,7 @@ describe('POST /api/move-requests', () => {
   ])(
     '종료된 %s 요청(%s)만 있으면 새 요청을 허용한다',
     async (status, moveDate) => {
-      const previous = await seedRequest(customer.id, status, moveDate)
+      const previous = await createMoveRequest(customer.id, status, moveDate)
 
       const res = await createRequest(customer)
 
@@ -283,7 +264,11 @@ describe('POST /api/move-requests', () => {
   )
 
   it('다른 일반 유저의 요청은 제한하거나 바꾸지 않는다', async () => {
-    const others = await seedRequest(otherCustomer.id, 'PENDING', YESTERDAY)
+    const others = await createMoveRequest(
+      otherCustomer.id,
+      'PENDING',
+      YESTERDAY,
+    )
 
     const res = await createRequest(customer)
 
@@ -292,7 +277,7 @@ describe('POST /api/move-requests', () => {
   })
 
   it('다른 일반 유저에게 진행 중인 요청이 있어도 요청할 수 있다', async () => {
-    await seedRequest(otherCustomer.id, 'PENDING', NEXT_WEEK)
+    await createMoveRequest(otherCustomer.id, 'PENDING', NEXT_WEEK)
 
     const res = await createRequest(customer)
 
@@ -309,7 +294,7 @@ describe('POST /api/move-requests', () => {
   })
 
   it('동시에 제출해도 진행 중인 요청은 하나만 생성된다', async () => {
-    const previous = await seedRequest(customer.id, 'PENDING', YESTERDAY)
+    const previous = await createMoveRequest(customer.id, 'PENDING', YESTERDAY)
 
     const results = await Promise.all(
       Array.from({ length: 5 }, () => createRequest(customer)),
@@ -382,7 +367,7 @@ describe('GET /api/move-requests/active', () => {
   ])(
     '이사일이 지나지 않은 %s 요청(%s)을 반환한다',
     async (status, moveDate) => {
-      const active = await seedRequest(customer.id, status, moveDate)
+      const active = await createMoveRequest(customer.id, status, moveDate)
 
       const res = await getActive(customer)
 
@@ -402,7 +387,7 @@ describe('GET /api/move-requests/active', () => {
   ])(
     '%s 요청(%s)은 반환하지 않고 상태도 바꾸지 않는다',
     async (status, moveDate) => {
-      const previous = await seedRequest(customer.id, status, moveDate)
+      const previous = await createMoveRequest(customer.id, status, moveDate)
 
       const res = await getActive(customer)
 
@@ -420,7 +405,7 @@ describe('GET /api/move-requests/active', () => {
   })
 
   it('다른 일반 유저의 진행 중인 요청은 반환하지 않는다', async () => {
-    await seedRequest(otherCustomer.id, 'PENDING', NEXT_WEEK)
+    await createMoveRequest(otherCustomer.id, 'PENDING', NEXT_WEEK)
 
     const res = await getActive(customer)
 
@@ -428,7 +413,7 @@ describe('GET /api/move-requests/active', () => {
   })
 
   it('UTC로는 아직 이사일이어도 한국 날짜가 바뀌었으면 반환하지 않는다', async () => {
-    await seedRequest(customer.id, 'PENDING', TODAY)
+    await createMoveRequest(customer.id, 'PENDING', TODAY)
     vi.setSystemTime(new Date('2026-11-02T15:30:00Z'))
 
     const res = await getActive(customer)
@@ -455,7 +440,7 @@ describe('GET /api/move-requests/:requestId', () => {
   })
 
   it('이사일이 지나 종료된 본인 요청도 반환한다', async () => {
-    const previous = await seedRequest(customer.id, 'EXPIRED', YESTERDAY)
+    const previous = await createMoveRequest(customer.id, 'EXPIRED', YESTERDAY)
 
     const res = await getRequest(customer, previous.id)
 
@@ -464,7 +449,11 @@ describe('GET /api/move-requests/:requestId', () => {
   })
 
   it('다른 일반 유저의 요청은 404를 반환한다', async () => {
-    const others = await seedRequest(otherCustomer.id, 'PENDING', NEXT_WEEK)
+    const others = await createMoveRequest(
+      otherCustomer.id,
+      'PENDING',
+      NEXT_WEEK,
+    )
 
     const res = await getRequest(customer, others.id)
 
@@ -489,11 +478,339 @@ describe('GET /api/move-requests/:requestId', () => {
   })
 
   it.each(deniedViewers)('%s %i %s 반환', async (_case, user, status, code) => {
-    const own = await seedRequest(customer.id, 'PENDING', NEXT_WEEK)
+    const own = await createMoveRequest(customer.id, 'PENDING', NEXT_WEEK)
 
     const res = await getRequest(user, own.id)
 
     expect(res.status).toBe(status)
     expect(res.body.error.code).toBe(code)
+  })
+})
+
+const otherMoverIds = ['b', 'c', 'd', 'e'].map(userId)
+
+function designate(
+  user: Express.User | undefined,
+  requestId: string,
+  input: object = { moverId: mover.id },
+) {
+  return api(user)
+    .post(`/api/move-requests/${requestId}/designations`)
+    .send(input)
+}
+
+async function designatedMoverIds(requestId: string) {
+  const designations = await prisma.designatedRequest.findMany({
+    where: { moveRequestId: requestId },
+    select: { moverId: true },
+  })
+  return designations.map(({ moverId }) => moverId)
+}
+
+describe('POST /api/move-requests/:requestId/designations', () => {
+  beforeEach(async () => {
+    for (const id of otherMoverIds) await createMover(id, {})
+  })
+
+  it('본인의 진행 중인 요청에 기사님을 지정한다', async () => {
+    const request = await createMoveRequest(customer.id, 'PENDING', NEXT_WEEK)
+
+    const res = await designate(customer, request.id)
+
+    expect(res.status).toBe(201)
+    expect(res.body).toEqual({
+      moveRequestId: request.id,
+      moverId: mover.id,
+      createdAt: expect.any(String),
+    })
+    expect(await designatedMoverIds(request.id)).toEqual([mover.id])
+  })
+
+  it('지정한 기사님을 요청 조회와 기사님 상세 정보에서 확인한다', async () => {
+    const request = await createMoveRequest(customer.id, 'PENDING', NEXT_WEEK)
+    await designate(customer, request.id)
+
+    const active = await getActive(customer)
+    const detail = await getRequest(customer, request.id)
+    const designated = await api(customer).get(`/api/movers/${mover.id}`)
+    const notDesignated = await api(customer).get(
+      `/api/movers/${otherMoverIds[0]}`,
+    )
+
+    expect(active.body.moveRequest.designatedMoverIds).toEqual([mover.id])
+    expect(detail.body.designatedMoverIds).toEqual([mover.id])
+    expect(designated.body.isDesignated).toBe(true)
+    expect(notDesignated.body.isDesignated).toBe(false)
+  })
+
+  it('이사일이 오늘인 요청에도 지정할 수 있다', async () => {
+    const request = await createMoveRequest(customer.id, 'PENDING', TODAY)
+
+    const res = await designate(customer, request.id)
+
+    expect(res.status).toBe(201)
+  })
+
+  it.each(deniedViewers)('%s %i %s 반환', async (_case, user, status, code) => {
+    const own = await createMoveRequest(customer.id, 'PENDING', NEXT_WEEK)
+
+    const res = await designate(user, own.id)
+
+    expect(res.status).toBe(status)
+    expect(res.body.error.code).toBe(code)
+    expect(await designatedMoverIds(own.id)).toEqual([])
+  })
+
+  it('없는 요청은 404를 반환한다', async () => {
+    const res = await designate(customer, userId('f'))
+
+    expect(res.status).toBe(404)
+    expect(res.body.error.code).toBe('NOT_FOUND')
+  })
+
+  it('다른 일반 유저의 요청에는 지정할 수 없다', async () => {
+    const others = await createMoveRequest(
+      otherCustomer.id,
+      'PENDING',
+      NEXT_WEEK,
+    )
+
+    const res = await designate(customer, others.id)
+
+    expect(res.status).toBe(404)
+    expect(res.body.error.code).toBe('NOT_FOUND')
+    expect(await designatedMoverIds(others.id)).toEqual([])
+  })
+
+  it.each<[MoveRequestStatus, string]>([
+    ['CONFIRMED', NEXT_WEEK],
+    ['PENDING', YESTERDAY],
+    ['EXPIRED', NEXT_WEEK],
+    ['COMPLETED', NEXT_WEEK],
+  ])('%s 요청(%s)에는 지정할 수 없다', async (status, moveDate) => {
+    const request = await createMoveRequest(customer.id, status, moveDate)
+
+    const res = await designate(customer, request.id)
+
+    expect(res.status).toBe(409)
+    expect(res.body.error).toMatchObject({
+      code: 'REQUEST_NOT_PENDING',
+      message: expect.any(String),
+    })
+    expect(await designatedMoverIds(request.id)).toEqual([])
+  })
+
+  it('UTC로는 아직 이사일이어도 한국 날짜가 바뀌었으면 지정할 수 없다', async () => {
+    const request = await createMoveRequest(customer.id, 'PENDING', TODAY)
+    vi.setSystemTime(new Date('2026-11-02T15:30:00Z'))
+
+    const res = await designate(customer, request.id)
+
+    expect(res.status).toBe(409)
+    expect(res.body.error.code).toBe('REQUEST_NOT_PENDING')
+  })
+
+  it.each([
+    ['없는 기사님', userId('9')],
+    ['프로필을 등록하지 않은 기사님', userId('f')],
+  ])('%s은 지정할 수 없다', async (_case, moverId) => {
+    await createMover(userId('f'))
+    const request = await createMoveRequest(customer.id, 'PENDING', NEXT_WEEK)
+
+    const res = await designate(customer, request.id, { moverId })
+
+    expect(res.status).toBe(404)
+    expect(res.body.error).toMatchObject({
+      code: 'NOT_FOUND',
+      details: [{ field: 'moverId', reason: expect.any(String) }],
+    })
+    expect(await designatedMoverIds(request.id)).toEqual([])
+  })
+
+  it('이미 지정한 기사님은 409 ALREADY_DESIGNATED를 반환한다', async () => {
+    const request = await createMoveRequest(customer.id, 'PENDING', NEXT_WEEK)
+    await designate(customer, request.id)
+
+    const res = await designate(customer, request.id)
+
+    expect(res.status).toBe(409)
+    expect(res.body.error).toMatchObject({
+      code: 'ALREADY_DESIGNATED',
+      message: expect.any(String),
+    })
+    expect(await designatedMoverIds(request.id)).toEqual([mover.id])
+  })
+
+  it('기사님은 3명까지 지정할 수 있고 4번째는 409 DESIGNATION_LIMIT_REACHED를 반환한다', async () => {
+    const request = await createMoveRequest(customer.id, 'PENDING', NEXT_WEEK)
+    const [fourth, ...firstThree] = [mover.id, ...otherMoverIds.slice(0, 3)]
+    for (const moverId of firstThree) {
+      const res = await designate(customer, request.id, { moverId })
+      expect(res.status).toBe(201)
+    }
+
+    const res = await designate(customer, request.id, { moverId: fourth })
+
+    expect(res.status).toBe(409)
+    expect(res.body.error).toMatchObject({
+      code: 'DESIGNATION_LIMIT_REACHED',
+      message: expect.any(String),
+    })
+    expect((await designatedMoverIds(request.id)).sort()).toEqual(firstThree)
+  })
+
+  it('3명을 지정한 뒤 이미 지정한 기사님을 다시 지정하면 ALREADY_DESIGNATED를 반환한다', async () => {
+    const request = await createMoveRequest(customer.id, 'PENDING', NEXT_WEEK)
+    const moverIds = otherMoverIds.slice(0, 3)
+    await prisma.designatedRequest.createMany({
+      data: moverIds.map((moverId) => ({ moveRequestId: request.id, moverId })),
+    })
+
+    const res = await designate(customer, request.id, { moverId: moverIds[0] })
+
+    expect(res.status).toBe(409)
+    expect(res.body.error.code).toBe('ALREADY_DESIGNATED')
+  })
+
+  it('이미 지정한 기사님 번호를 대문자로 보내도 ALREADY_DESIGNATED를 반환한다', async () => {
+    const request = await createMoveRequest(customer.id, 'PENDING', NEXT_WEEK)
+    await designate(customer, request.id)
+
+    const res = await designate(customer, request.id, {
+      moverId: mover.id.toUpperCase(),
+    })
+
+    expect(res.status).toBe(409)
+    expect(res.body.error.code).toBe('ALREADY_DESIGNATED')
+    expect(await designatedMoverIds(request.id)).toEqual([mover.id])
+  })
+
+  it.each([
+    [
+      '이미 견적을 보낸',
+      (moveRequestId: string) =>
+        prisma.quote.create({
+          data: { moveRequestId, moverId: mover.id, price: 100000 },
+        }),
+    ],
+    [
+      '요청을 반려한',
+      (moveRequestId: string) =>
+        prisma.requestRejection.create({
+          data: { moveRequestId, moverId: mover.id },
+        }),
+    ],
+  ])(
+    '%s 기사님은 409 MOVER_ALREADY_RESPONDED를 반환한다',
+    async (_case, respond) => {
+      const request = await createMoveRequest(customer.id, 'PENDING', NEXT_WEEK)
+      await respond(request.id)
+
+      const res = await designate(customer, request.id)
+
+      expect(res.status).toBe(409)
+      expect(res.body.error).toMatchObject({
+        code: 'MOVER_ALREADY_RESPONDED',
+        message: expect.any(String),
+      })
+      expect(await designatedMoverIds(request.id)).toEqual([])
+    },
+  )
+
+  it('지정한 뒤 견적을 보낸 기사님을 다시 지정하면 ALREADY_DESIGNATED를 반환한다', async () => {
+    const request = await createMoveRequest(customer.id, 'PENDING', NEXT_WEEK)
+    await designate(customer, request.id)
+    await prisma.quote.create({
+      data: {
+        moveRequestId: request.id,
+        moverId: mover.id,
+        price: 100000,
+        isDesignated: true,
+      },
+    })
+
+    const res = await designate(customer, request.id)
+
+    expect(res.status).toBe(409)
+    expect(res.body.error.code).toBe('ALREADY_DESIGNATED')
+  })
+
+  it('다른 요청에 지정된 기사님 수는 한도에 포함하지 않는다', async () => {
+    const others = await createMoveRequest(
+      otherCustomer.id,
+      'PENDING',
+      NEXT_WEEK,
+    )
+    await prisma.designatedRequest.createMany({
+      data: otherMoverIds
+        .slice(0, 3)
+        .map((moverId) => ({ moveRequestId: others.id, moverId })),
+    })
+    const request = await createMoveRequest(customer.id, 'PENDING', NEXT_WEEK)
+
+    const res = await designate(customer, request.id)
+
+    expect(res.status).toBe(201)
+  })
+
+  it.each([
+    ['기사님 번호가 없으면', {}],
+    ['기사님 번호가 UUID 형식이 아니면', { moverId: 'not-a-uuid' }],
+  ])('%s 400을 반환한다', async (_case, input) => {
+    const request = await createMoveRequest(customer.id, 'PENDING', NEXT_WEEK)
+
+    const res = await designate(customer, request.id, input)
+
+    expect(res.status).toBe(400)
+    expect(res.body.error.details).toEqual([
+      { field: 'moverId', reason: expect.any(String) },
+    ])
+  })
+
+  it('요청 번호가 UUID 형식이 아니면 400을 반환한다', async () => {
+    const res = await designate(customer, 'not-a-uuid')
+
+    expect(res.status).toBe(400)
+    expect(res.body.error.details).toEqual([
+      { field: 'requestId', reason: expect.any(String) },
+    ])
+  })
+
+  it('동시에 5명을 지정해도 3명만 지정된다', async () => {
+    const request = await createMoveRequest(customer.id, 'PENDING', NEXT_WEEK)
+
+    const results = await Promise.all(
+      [mover.id, ...otherMoverIds].map((moverId) =>
+        designate(customer, request.id, { moverId }),
+      ),
+    )
+
+    expect(results.map((res) => res.status).sort()).toEqual([
+      201, 201, 201, 409, 409,
+    ])
+    expect(
+      results
+        .filter((res) => res.status === 409)
+        .map((res) => res.body.error.code),
+    ).toEqual(['DESIGNATION_LIMIT_REACHED', 'DESIGNATION_LIMIT_REACHED'])
+    expect(await designatedMoverIds(request.id)).toHaveLength(3)
+  })
+
+  it('같은 기사님을 동시에 지정해도 한 번만 지정된다', async () => {
+    const request = await createMoveRequest(customer.id, 'PENDING', NEXT_WEEK)
+
+    const results = await Promise.all(
+      Array.from({ length: 5 }, () => designate(customer, request.id)),
+    )
+
+    expect(results.map((res) => res.status).sort()).toEqual([
+      201, 409, 409, 409, 409,
+    ])
+    expect(
+      results
+        .filter((res) => res.status === 409)
+        .map((res) => res.body.error.code),
+    ).toEqual(Array(4).fill('ALREADY_DESIGNATED'))
+    expect(await designatedMoverIds(request.id)).toEqual([mover.id])
   })
 })

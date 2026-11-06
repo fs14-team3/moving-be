@@ -629,8 +629,9 @@ paths:
       tags: [MoveRequests]
       summary: 지정 견적 요청
       description: |-
-        호출자 본인의 일반 견적 요청이 먼저 있어야 합니다(§6.5). 해당 요청에 기사님을 지정합니다.
-        지정 요청 인원에는 별도의 상한을 두지 않습니다. 받은 지정 견적에만 3개 상한을 적용합니다(§7.1.1).
+        호출자 본인의 일반 견적 요청이 먼저 있어야 합니다(§6.5). 대기 중이고 이사일이 지나지 않은 요청에 기사님을 지정합니다.
+        한 요청에 기사님을 최대 3명까지 지정할 수 있으며, 동시에 요청해도 인원과 중복 제한을 지킵니다(§7.1.1).
+        이 요청에 이미 견적을 보냈거나 요청을 반려한 기사님은 지정할 수 없습니다.
         지정 요청은 기사님에게 라벨로 강조 표시하며, 기사님의 서비스 가능 지역과 관계없이 요청할 수 있습니다.
       operationId: designateMover
       security:
@@ -652,7 +653,21 @@ paths:
         '400': { '$ref': '#/components/responses/ValidationError' }
         '401': { '$ref': '#/components/responses/Unauthorized' }
         '403': { '$ref': '#/components/responses/Forbidden' }
-        '404': { '$ref': '#/components/responses/NotFound' }
+        '404':
+          description:
+            '`NOT_FOUND`. 요청이 없거나 다른 사용자의 요청인 경우. 기사님이 없는 경우에는 `details`에 `moverId`가
+            담깁니다.'
+          content:
+            application/json:
+              schema: { '$ref': '#/components/schemas/ErrorResponse' }
+        '409':
+          description:
+            '`REQUEST_NOT_PENDING` (확정되었거나 이사일이 지난 요청), `ALREADY_DESIGNATED` (이미 지정한 기사님),
+            `MOVER_ALREADY_RESPONDED` (이미 견적을 보냈거나 요청을 반려한 기사님) 또는 `DESIGNATION_LIMIT_REACHED`
+            (이미 3명을 지정함)'
+          content:
+            application/json:
+              schema: { '$ref': '#/components/schemas/ErrorResponse' }
   '/move-requests/{requestId}/quotes':
     get:
       tags: [MoveRequests]
@@ -1201,6 +1216,9 @@ components:
         - NOT_FOUND
         - PROFILE_ALREADY_EXISTS
         - ACTIVE_REQUEST_EXISTS
+        - ALREADY_DESIGNATED
+        - MOVER_ALREADY_RESPONDED
+        - DESIGNATION_LIMIT_REACHED
         - REQUEST_NOT_PENDING
         - QUOTE_LIMIT_REACHED
         - RATE_LIMITED
@@ -1556,6 +1574,7 @@ components:
         quoteCount: { type: integer, maximum: 8 }
         designatedMoverIds:
           type: array
+          maxItems: 3
           items: { type: string, format: uuid }
         createdAt: { type: string, format: date-time }
         confirmedAt: { type: string, format: date-time, nullable: true }
