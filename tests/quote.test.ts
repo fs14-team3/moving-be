@@ -193,6 +193,19 @@ describe('POST /api/move-requests/:requestId/quotes', () => {
         moveType: 'HOME',
       })
     })
+
+    it('고객 닉네임이 있으면 이름보다 우선 반환한다', async () => {
+      await prisma.customerProfile.update({
+        where: { userId: customerId },
+        data: { nickname: '이사왕' },
+      })
+
+      const request = await createMoveRequest()
+      const res = await sendQuote(request.id, mover)
+
+      expect(res.status).toBe(201)
+      expect(res.body.moveRequest.customerName).toBe('이사왕')
+    })
   })
 
   describe('인증 및 권한', () => {
@@ -237,22 +250,52 @@ describe('POST /api/move-requests/:requestId/quotes', () => {
   })
 
   describe('요청값 검증', () => {
-    it('잘못된 요청 ID는 400을 반환한다', async () => {
+    it('잘못된 요청 ID는 공통 ValidationError 형식으로 반환한다', async () => {
       const res = await sendQuote('invalid-uuid', mover)
 
       expect(res.status).toBe(400)
-      expect(res.body.error.code).toBe('VALIDATION_ERROR')
+      expect(res.body).toMatchObject({
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: expect.any(String),
+          details: expect.any(Array),
+        },
+      })
+
+      expect(res.body.error.details).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            field: 'requestId',
+            reason: expect.any(String),
+          }),
+        ]),
+      )
     })
 
     it.each([0, -1, 1.5, 2147483648, '350000'])(
-      '잘못된 견적 금액 %s는 400을 반환한다',
+      '잘못된 견적 금액 %s는 공통 ValidationError 형식으로 반환한다',
       async (price) => {
         const request = await createMoveRequest()
 
         const res = await sendQuote(request.id, mover, price)
 
         expect(res.status).toBe(400)
-        expect(res.body.error.code).toBe('VALIDATION_ERROR')
+        expect(res.body).toMatchObject({
+          error: {
+            code: 'VALIDATION_ERROR',
+            message: expect.any(String),
+            details: expect.any(Array),
+          },
+        })
+
+        expect(res.body.error.details).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              field: 'price',
+              reason: expect.any(String),
+            }),
+          ]),
+        )
       },
     )
 

@@ -66,7 +66,7 @@ export async function signup(input: SignupInput) {
       error instanceof Prisma.PrismaClientKnownRequestError &&
       error.code === 'P2002'
     ) {
-      throw new AppError('VALIDATION_ERROR', [
+      throw new AppError('EMAIL_ALREADY_EXISTS', [
         {
           field: 'email',
           reason: '이미 사용 중인 이메일입니다',
@@ -235,14 +235,6 @@ function getProviderConfig(provider: SocialProviderName) {
   if (!clientId || !callbackUrl) {
     throw new Error(`${provider} OAuth 환경 변수가 설정되지 않았습니다`)
   }
-  if (provider === 'naver') {
-    console.log('[NAVER OAuth 설정 확인]', {
-      clientIdExists: Boolean(clientId),
-      clientIdLength: clientId.length,
-      callbackUrl,
-    })
-  }
-
   return { ...config, clientId, callbackUrl }
 }
 

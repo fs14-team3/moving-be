@@ -5,6 +5,8 @@ import { todayInSeoul } from '../utils/date'
 import type { CreateMoveRequestBody } from '../validators/move-request.validator'
 import { assertCustomer, assertCustomerProfile } from './customer-access'
 
+const MAX_DESIGNATED_MOVERS = 3
+
 const moveRequestSelect = {
   id: true,
   moveType: true,
@@ -37,11 +39,7 @@ export async function createMoveRequest(
   try {
     const request = await prisma.$transaction(async (tx) => {
       const active = await tx.moveRequest.findFirst({
-        where: {
-          customerId,
-          status: { in: ['PENDING', 'CONFIRMED', 'COMPLETED'] },
-          moveDate: { gte: today },
-        },
+        where: activeRequestWhere(customerId, today),
         select: { id: true },
       })
       if (active) throw new AppError('ACTIVE_REQUEST_EXISTS')
@@ -80,6 +78,116 @@ export async function createMoveRequest(
       throw new AppError('ACTIVE_REQUEST_EXISTS')
     }
     throw error
+  }
+}
+
+export async function getActiveMoveRequest(viewer: Express.User | undefined) {
+  const customerId = assertCustomer(viewer)
+  await assertCustomerProfile(prisma, customerId)
+
+  const request = await prisma.moveRequest.findFirst({
+    where: activeRequestWhere(customerId, new Date(todayInSeoul())),
+    select: moveRequestSelect,
+  })
+  return { moveRequest: request && toMoveRequest(request) }
+}
+
+export async function getMoveRequest(
+  viewer: Express.User | undefined,
+  requestId: string,
+) {
+  const customerId = assertCustomer(viewer)
+  await assertCustomerProfile(prisma, customerId)
+
+  const request = await prisma.moveRequest.findFirst({
+    where: { id: requestId, customerId },
+    select: moveRequestSelect,
+  })
+  if (!request) throw new AppError('NOT_FOUND')
+  return toMoveRequest(request)
+}
+
+export async function designateMover(
+  viewer: Express.User | undefined,
+  requestId: string,
+  moverId: string,
+) {
+  const customerId = assertCustomer(viewer)
+  await assertCustomerProfile(prisma, customerId)
+  const today = new Date(todayInSeoul())
+
+  return prisma.$transaction(async (tx) => {
+    const locked = await tx.$queryRaw<{ id: string }[]>`
+      SELECT id
+      FROM move_requests
+      WHERE id = ${requestId}::uuid AND customer_id = ${customerId}::uuid
+      FOR UPDATE
+    `
+    if (locked.length === 0) throw new AppError('NOT_FOUND')
+
+    const request = await tx.moveRequest.findUniqueOrThrow({
+      where: { id: requestId },
+      select: {
+        status: true,
+        moveDate: true,
+        designatedRequests: { select: { moverId: true } },
+        quotes: { where: { moverId }, select: { id: true } },
+        requestRejections: { where: { moverId }, select: { moverId: true } },
+      },
+    })
+    if (request.status !== 'PENDING' || request.moveDate < today) {
+      throw new AppError('REQUEST_NOT_PENDING')
+    }
+
+    const mover = await tx.moverProfile.findUnique({
+      where: { userId: moverId },
+      select: { userId: true },
+    })
+    if (!mover) {
+      throw new AppError('NOT_FOUND', [
+        { field: 'moverId', reason: '존재하지 않는 기사님입니다' },
+      ])
+    }
+
+    const designatedMoverIds = request.designatedRequests.map(
+      (designation) => designation.moverId,
+    )
+    if (designatedMoverIds.includes(mover.userId)) {
+      throw new AppError('ALREADY_DESIGNATED')
+    }
+    if (request.quotes.length > 0 || request.requestRejections.length > 0) {
+      throw new AppError('MOVER_ALREADY_RESPONDED')
+    }
+    if (designatedMoverIds.length >= MAX_DESIGNATED_MOVERS) {
+      throw new AppError('DESIGNATION_LIMIT_REACHED')
+    }
+
+    // TODO(#58): 지정된 기사님에게 NEW_DESIGNATED_REQUEST 알림 생성
+    return tx.designatedRequest.create({
+      data: { moveRequestId: requestId, moverId: mover.userId },
+      select: { moveRequestId: true, moverId: true, createdAt: true },
+    })
+  })
+}
+
+export async function isMoverDesignated(customerId: string, moverId: string) {
+  const request = await prisma.moveRequest.findFirst({
+    where: activeRequestWhere(customerId, new Date(todayInSeoul())),
+    select: {
+      designatedRequests: { where: { moverId }, select: { moverId: true } },
+    },
+  })
+  return request ? request.designatedRequests.length > 0 : null
+}
+
+function activeRequestWhere(
+  customerId: string,
+  today: Date,
+): Prisma.MoveRequestWhereInput {
+  return {
+    customerId,
+    status: { in: ['PENDING', 'CONFIRMED', 'COMPLETED'] },
+    moveDate: { gte: today },
   }
 }
 

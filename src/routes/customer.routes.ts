@@ -1,8 +1,27 @@
-import { Router } from 'express'
+import { Router, type RequestHandler } from 'express'
 import * as favoriteController from '../controllers/favorite.controller'
+import { requireAuth } from '../middlewares/require-auth'
+import { listFavoritesQuery } from '../validators/favorite.validator'
+import { validate } from '../validators/validate'
 
 export const customerRouter = Router()
 
-// TODO(#34): #21의 인증 미들웨어를 연결해 로그인한 사용자를 req.user에 채움
-customerRouter.get('/me/favorites', favoriteController.listMyFavorites)
-customerRouter.delete('/me/favorites', favoriteController.removeMyFavorites)
+// 찜 목록 조회 쿼리 검증
+const validateFavoriteQuery: RequestHandler = (req, _res, next) => {
+  validate(listFavoritesQuery, req.query)
+  next()
+}
+
+// 로그인한 사용자만 내 찜 목록 조회 가능
+customerRouter.get(
+  '/me/favorites',
+  validateFavoriteQuery,
+  requireAuth,
+  favoriteController.listMyFavorites,
+)
+
+customerRouter.delete(
+  '/me/favorites',
+  requireAuth,
+  favoriteController.removeMyFavorites,
+)

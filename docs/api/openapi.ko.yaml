@@ -25,7 +25,7 @@ paths:
     post:
       tags: [Auth]
       summary: 이메일 회원가입
-      description: 요청한 역할의 이메일 계정을 생성합니다. 이름·이메일·전화번호·비밀번호는 validator 기준에 따라 검증합니다.
+      description: 요청한 역할의 이메일 계정을 생성하고 로그인 세션을 발급합니다. 이름·이메일·전화번호·비밀번호는 validator 기준에 따라 검증합니다.
       operationId: signup
       security: []
       requestBody:
@@ -43,6 +43,12 @@ paths:
                 '$ref': '#/components/schemas/Me'
         '400':
           '$ref': '#/components/responses/ValidationError'
+        '409':
+          description: '`EMAIL_ALREADY_EXISTS`. 같은 역할로 이미 가입된 이메일인 경우'
+          content:
+            application/json:
+              schema:
+                '$ref': '#/components/schemas/ErrorResponse'
         '429':
           '$ref': '#/components/responses/RateLimited'
   '/auth/login':
@@ -92,6 +98,7 @@ paths:
           required: true
           schema: { '$ref': '#/components/schemas/Role' }
       responses:
+        '200': { description: OAuth 인증 요청 안내 }
         '302':
           {
             description: Google / Kakao / Naver 인가(authorize) URL로 리다이렉트,
@@ -106,7 +113,7 @@ paths:
     get:
       tags: [Auth]
       summary: 소셜 로그인 콜백 (등록된 redirect URI)
-      description: 소셜 제공자의 응답을 검증한 뒤 가입 또는 로그인합니다. 동일 역할과 이메일을 가진 기존 계정이 있으면 소셜 계정을 연결하며, 처리 결과에 따라 프론트엔드로 리다이렉트합니다.
+      description: 소셜 제공자의 응답을 검증한 뒤 가입 또는 로그인합니다.
       operationId: socialLoginCallback
       security: []
       parameters:
@@ -114,29 +121,77 @@ paths:
         - name: code
           in: query
           required: false
-          schema: { type: string }
+          schema:
+            type: string
         - name: state
           in: query
           required: true
-          schema: { type: string }
+          schema:
+            type: string
         - name: error
           in: query
           required: false
-          schema: { type: string }
+          schema:
+            type: string
         - name: error_description
           in: query
           required: false
-          description: OAuth 제공자가 전달하는 인증 실패 상세 설명
-          schema: { type: string }
+          schema:
+            type: string
       responses:
-        '302': { description: 로그인 결과 화면으로 이동 }
+        '302':
+          description: 로그인 결과 화면으로 이동
+          headers:
+            Location:
+              description: 로그인 결과에 따른 프론트엔드 이동 URL
+              schema:
+                type: string
+        '400':
+          description: 잘못된 OAuth 요청 또는 인증 실패
+        '401':
+          description: OAuth 인증 실패
+        '500':
+          description: 서버 내부 오류
+  '/auth/logout':
+    post:
+      tags: [Auth]
+      summary: 로그아웃
+      description: 현재 로그인된 세션을 종료하고 세션 쿠키를 삭제합니다.
+      operationId: logout
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: 로그아웃 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - message
+                properties:
+                  message:
+                    type: string
+                    example: 로그아웃되었습니다.
+        '401':
+          description: 인증되지 않은 사용자
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 로그아웃 처리 실패
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   '/users/me':
     get:
       tags: [Me]
       summary: 내 정보 (GNB, 라우트 가드용)
       operationId: getMe
       security:
-        - bearerAuth: []
+        - sessionCookie: []
       responses:
         '200':
           description: 현재 사용자
@@ -150,7 +205,7 @@ paths:
       description: 일반 유저 정보 수정과 기사님 기본정보 수정에서 사용합니다. 변경 가능 항목과 인증 확인 방식은 추후 결정합니다.
       operationId: updateMe
       security:
-        - bearerAuth: []
+        - sessionCookie: []
       requestBody:
         required: true
         content:
@@ -170,7 +225,7 @@ paths:
       summary: 일반 유저 프로필 등록
       operationId: createCustomerProfile
       security:
-        - bearerAuth: []
+        - sessionCookie: []
       x-roles: [CUSTOMER]
       requestBody:
         required: true
@@ -196,7 +251,7 @@ paths:
       summary: 일반 유저 프로필 수정
       operationId: updateCustomerProfile
       security:
-        - bearerAuth: []
+        - sessionCookie: []
       x-roles: [CUSTOMER]
       requestBody:
         required: true
@@ -218,7 +273,7 @@ paths:
       summary: 기사님 프로필 등록
       operationId: createMoverProfile
       security:
-        - bearerAuth: []
+        - sessionCookie: []
       x-roles: [MOVER]
       requestBody:
         required: true
@@ -244,7 +299,7 @@ paths:
       summary: 기사님 프로필 수정
       operationId: updateMoverProfile
       security:
-        - bearerAuth: []
+        - sessionCookie: []
       x-roles: [MOVER]
       requestBody:
         required: true
@@ -266,7 +321,7 @@ paths:
       summary: 기사님 마이페이지 (내 프로필·평점)
       operationId: getMyMoverPage
       security:
-        - bearerAuth: []
+        - sessionCookie: []
       x-roles: [MOVER]
       responses:
         '200':
@@ -283,7 +338,7 @@ paths:
       description: 프로필 등록·수정에 사용할 이미지 URL을 반환합니다. 저장소, 허용 형식 및 용량 제한은 추후 결정합니다.
       operationId: uploadImage
       security:
-        - bearerAuth: []
+        - sessionCookie: []
       requestBody:
         required: true
         content:
@@ -312,7 +367,7 @@ paths:
       operationId: listMovers
       security:
         - {}
-        - bearerAuth: []
+        - sessionCookie: []
       parameters:
         - name: keyword
           in: query
@@ -356,7 +411,7 @@ paths:
       operationId: getMover
       security:
         - {}
-        - bearerAuth: []
+        - sessionCookie: []
       parameters:
         - { '$ref': '#/components/parameters/MoverIdPath' }
       responses:
@@ -397,7 +452,7 @@ paths:
         프로필을 등록하지 않은 기사님은 찜할 수 없습니다 (404).
       operationId: addFavorite
       security:
-        - bearerAuth: []
+        - sessionCookie: []
       x-roles: [CUSTOMER]
       parameters:
         - { '$ref': '#/components/parameters/MoverIdPath' }
@@ -417,7 +472,7 @@ paths:
       description: 찜하지 않은 기사님이면 그대로 두고 현재 상태를 반환합니다. 그 외 조건은 찜하기와 같습니다.
       operationId: removeFavorite
       security:
-        - bearerAuth: []
+        - sessionCookie: []
       x-roles: [CUSTOMER]
       parameters:
         - { '$ref': '#/components/parameters/MoverIdPath' }
@@ -440,7 +495,7 @@ paths:
         PC 사이드바에서는 `limit=3`으로 최대 3명을 표시할 수 있습니다. 다음 페이지를 요청할 때는 `cursor`를 더해 보내며, 그 사이에 찜을 취소했더라도 이어서 조회됩니다.
       operationId: listMyFavorites
       security:
-        - bearerAuth: []
+        - sessionCookie: []
       x-roles: [CUSTOMER]
       parameters:
         - { '$ref': '#/components/parameters/Cursor' }
@@ -469,7 +524,7 @@ paths:
         `all: true`를 보내면 본인의 찜을 모두 해제합니다. 찜하지 않았거나 없는 기사님과 중복된 id는 건너뛰고 실제 해제된 수를 반환하며, `moverIds`는 한 번에 최대 500개입니다.
       operationId: removeMyFavorites
       security:
-        - bearerAuth: []
+        - sessionCookie: []
       x-roles: [CUSTOMER]
       requestBody:
         required: true
@@ -514,7 +569,7 @@ paths:
         입력 중 수정(§4.1.4)은 제출 전 프론트엔드 폼에서 처리합니다.
       operationId: createMoveRequest
       security:
-        - bearerAuth: []
+        - sessionCookie: []
       x-roles: [CUSTOMER]
       requestBody:
         required: true
@@ -545,10 +600,12 @@ paths:
     get:
       tags: [MoveRequests]
       summary: 현재 활성 견적 요청 (없으면 null)
-      description: '§4.2.1의 활성 요청을 반환합니다. 이사일이 지난 요청을 계속 활성으로 반환하지 않도록 상태를 확인합니다.'
+      description: |-
+        §4.2.1의 활성 요청을 반환합니다. 활성 여부는 견적 요청 생성의 제한과 같은 기준으로 판단합니다.
+        이사일이 지난 요청은 아직 `EXPIRED` 또는 `COMPLETED`로 바뀌지 않았어도 반환하지 않습니다.
       operationId: getActiveMoveRequest
       security:
-        - bearerAuth: []
+        - sessionCookie: []
       x-roles: [CUSTOMER]
       responses:
         '200':
@@ -573,7 +630,7 @@ paths:
       description: 완료된 이사의 정보와 받은 전체 견적을 반환합니다. 확정 견적 필터를 제공합니다.
       operationId: listMoveRequestHistory
       security:
-        - bearerAuth: []
+        - sessionCookie: []
       x-roles: [CUSTOMER]
       parameters:
         - name: confirmedOnly
@@ -595,9 +652,10 @@ paths:
     get:
       tags: [MoveRequests]
       summary: 견적 요청 상세 (요청자 본인)
+      description: 이사일이 지났거나 종료된 요청도 조회할 수 있습니다. 다른 사용자의 요청은 없는 요청과 같이 404를 반환합니다.
       operationId: getMoveRequest
       security:
-        - bearerAuth: []
+        - sessionCookie: []
       x-roles: [CUSTOMER]
       parameters:
         - { '$ref': '#/components/parameters/RequestIdPath' }
@@ -607,6 +665,7 @@ paths:
           content:
             application/json:
               schema: { '$ref': '#/components/schemas/MoveRequest' }
+        '400': { '$ref': '#/components/responses/ValidationError' }
         '401': { '$ref': '#/components/responses/Unauthorized' }
         '403': { '$ref': '#/components/responses/Forbidden' }
         '404': { '$ref': '#/components/responses/NotFound' }
@@ -615,12 +674,13 @@ paths:
       tags: [MoveRequests]
       summary: 지정 견적 요청
       description: |-
-        호출자 본인의 일반 견적 요청이 먼저 있어야 합니다(§6.5). 해당 요청에 기사님을 지정합니다.
-        지정 요청 인원에는 별도의 상한을 두지 않습니다. 받은 지정 견적에만 3개 상한을 적용합니다(§7.1.1).
+        호출자 본인의 일반 견적 요청이 먼저 있어야 합니다(§6.5). 대기 중이고 이사일이 지나지 않은 요청에 기사님을 지정합니다.
+        한 요청에 기사님을 최대 3명까지 지정할 수 있으며, 동시에 요청해도 인원과 중복 제한을 지킵니다(§7.1.1).
+        이 요청에 이미 견적을 보냈거나 요청을 반려한 기사님은 지정할 수 없습니다.
         지정 요청은 기사님에게 라벨로 강조 표시하며, 기사님의 서비스 가능 지역과 관계없이 요청할 수 있습니다.
       operationId: designateMover
       security:
-        - bearerAuth: []
+        - sessionCookie: []
       x-roles: [CUSTOMER]
       parameters:
         - { '$ref': '#/components/parameters/RequestIdPath' }
@@ -638,7 +698,21 @@ paths:
         '400': { '$ref': '#/components/responses/ValidationError' }
         '401': { '$ref': '#/components/responses/Unauthorized' }
         '403': { '$ref': '#/components/responses/Forbidden' }
-        '404': { '$ref': '#/components/responses/NotFound' }
+        '404':
+          description:
+            '`NOT_FOUND`. 요청이 없거나 다른 사용자의 요청인 경우. 기사님이 없는 경우에는 `details`에 `moverId`가
+            담깁니다.'
+          content:
+            application/json:
+              schema: { '$ref': '#/components/schemas/ErrorResponse' }
+        '409':
+          description:
+            '`REQUEST_NOT_PENDING` (확정되었거나 이사일이 지난 요청), `ALREADY_DESIGNATED` (이미 지정한 기사님),
+            `MOVER_ALREADY_RESPONDED` (이미 견적을 보냈거나 요청을 반려한 기사님) 또는 `DESIGNATION_LIMIT_REACHED`
+            (이미 3명을 지정함)'
+          content:
+            application/json:
+              schema: { '$ref': '#/components/schemas/ErrorResponse' }
   '/move-requests/{requestId}/quotes':
     get:
       tags: [MoveRequests]
@@ -648,7 +722,7 @@ paths:
         않습니다.
       operationId: listQuotesForRequest
       security:
-        - bearerAuth: []
+        - sessionCookie: []
       x-roles: [CUSTOMER]
       parameters:
         - { '$ref': '#/components/parameters/RequestIdPath' }
@@ -681,7 +755,7 @@ paths:
         지정 여부의 견적 분류 시점과 재응답 정책은 추후 결정합니다. 일반 유저에게 새 견적 알림을 보냅니다.
       operationId: sendQuote
       security:
-        - bearerAuth: []
+        - sessionCookie: []
       x-roles: [MOVER]
       parameters:
         - { '$ref': '#/components/parameters/RequestIdPath' }
@@ -715,10 +789,11 @@ paths:
       summary: 견적 요청 반려 (기사님)
       operationId: rejectMoveRequest
       security:
-        - bearerAuth: []
+        - sessionCookie: []
       x-roles: [MOVER]
       parameters:
         - { '$ref': '#/components/parameters/RequestIdPath' }
+      description: 지역에 관계없이 받은 요청을 반려합니다(§8.3). 반려 사유 입력은 요구하지 않습니다.
       responses:
         '201':
           description: 반려 완료. 해당 요청은 받은 요청 목록에서 사라집니다.
@@ -729,7 +804,6 @@ paths:
         '401': { '$ref': '#/components/responses/Unauthorized' }
         '403': { '$ref': '#/components/responses/Forbidden' }
         '404': { '$ref': '#/components/responses/NotFound' }
-      description: 지역에 관계없이 받은 요청을 반려합니다(§8.3). 반려 사유 입력은 요구하지 않습니다.
   '/movers/me/received-requests':
     get:
       tags: [MoverInbox]
@@ -740,7 +814,7 @@ paths:
         이사 빠른 순·최근 요청 순 정렬을 지원합니다. 지역 단위와 매핑 방식은 추후 결정합니다.
       operationId: listReceivedRequests
       security:
-        - bearerAuth: []
+        - sessionCookie: []
       x-roles: [MOVER]
       parameters:
         - name: moveTypes
@@ -773,13 +847,51 @@ paths:
                 { '$ref': '#/components/schemas/ReceivedRequestListResponse' }
         '401': { '$ref': '#/components/responses/Unauthorized' }
         '403': { '$ref': '#/components/responses/Forbidden' }
+  '/movers/me/quotes':
+    get:
+      tags: [MoverInbox]
+      summary: 보낸 견적 목록 조회 (기사님)
+      description: |-
+        로그인한 기사님이 본인이 보낸 견적을 최신순으로 조회합니다.
+        견적 상태별 필터링과 커서 기반 페이지네이션을 지원합니다.
+        고객명은 닉네임을 우선 사용하며, 닉네임이 없으면 사용자 이름을 반환합니다.
+      operationId: listMySentQuotes
+      security:
+        - sessionCookie: []
+      x-roles: [MOVER]
+      parameters:
+        - name: status
+          in: query
+          description: 견적 상태 필터. 생략하면 전체 조회.
+          required: false
+          schema:
+            '$ref': '#/components/schemas/QuoteStatus'
+        - { '$ref': '#/components/parameters/Cursor' }
+        - name: limit
+          in: query
+          description: 페이지당 조회 개수. 생략하면 10.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 10
+      responses:
+        '200':
+          description: 보낸 견적 목록 페이지. 견적이 없으면 빈 배열을 반환합니다.
+          content:
+            application/json:
+              schema:
+                '$ref': '#/components/schemas/SentQuoteListResponse'
+        '400': { '$ref': '#/components/responses/ValidationError' }
+        '401': { '$ref': '#/components/responses/Unauthorized' }
+        '403': { '$ref': '#/components/responses/Forbidden' }
   '/movers/me/rejected-requests':
     get:
       tags: [MoverInbox]
       summary: 반려한 요청 목록
       operationId: listMyRejectedRequests
       security:
-        - bearerAuth: []
+        - sessionCookie: []
       x-roles: [MOVER]
       parameters:
         - { '$ref': '#/components/parameters/Cursor' }
@@ -800,7 +912,7 @@ paths:
       description: 견적 요청자 본인이 견적가와 기사님 정보를 조회합니다.
       operationId: getQuote
       security:
-        - bearerAuth: []
+        - sessionCookie: []
       parameters:
         - { '$ref': '#/components/parameters/QuoteIdPath' }
       responses:
@@ -822,7 +934,7 @@ paths:
         요청 상태와 견적 상태는 함께 갱신합니다. 기사님과 일반 유저에게 확정 알림을 보냅니다.
       operationId: confirmQuote
       security:
-        - bearerAuth: []
+        - sessionCookie: []
       x-roles: [CUSTOMER]
       parameters:
         - { '$ref': '#/components/parameters/QuoteIdPath' }
@@ -849,7 +961,7 @@ paths:
         추후 결정하며, 다음 날까지 기다려야 한다는 별도 제한은 두지 않습니다.
       operationId: createReview
       security:
-        - bearerAuth: []
+        - sessionCookie: []
       x-roles: [CUSTOMER]
       requestBody:
         required: true
@@ -876,7 +988,7 @@ paths:
       summary: 내가 작성한 리뷰
       operationId: listMyReviews
       security:
-        - bearerAuth: []
+        - sessionCookie: []
       x-roles: [CUSTOMER]
       parameters:
         - { '$ref': '#/components/parameters/Page' }
@@ -895,7 +1007,7 @@ paths:
       summary: 작성 가능한 리뷰 목록
       operationId: listWritableReviews
       security:
-        - bearerAuth: []
+        - sessionCookie: []
       x-roles: [CUSTOMER]
       parameters:
         - { '$ref': '#/components/parameters/Page' }
@@ -916,7 +1028,7 @@ paths:
       description: 현재 사용자의 미읽음 알림을 최신순으로 3개씩 조회합니다.
       operationId: listNotifications
       security:
-        - bearerAuth: []
+        - sessionCookie: []
       parameters:
         - { '$ref': '#/components/parameters/Cursor' }
       responses:
@@ -926,8 +1038,10 @@ paths:
             application/json:
               schema:
                 { '$ref': '#/components/schemas/NotificationListResponse' }
-        '400': { '$ref': '#/components/responses/ValidationError' }
-        '401': { '$ref': '#/components/responses/Unauthorized' }
+        '400':
+          '$ref': '#/components/responses/ValidationError'
+        '401':
+          '$ref': '#/components/responses/Unauthorized'
 
   '/notifications/unread-count':
     get:
@@ -935,7 +1049,7 @@ paths:
       summary: 미읽음 알림 개수 조회
       operationId: getUnreadNotificationCount
       security:
-        - bearerAuth: []
+        - sessionCookie: []
       responses:
         '200':
           description: 미읽음 알림 개수
@@ -945,15 +1059,19 @@ paths:
                 type: object
                 required: [unreadCount]
                 properties:
-                  unreadCount: { type: integer, minimum: 0 }
-        '401': { '$ref': '#/components/responses/Unauthorized' }
+                  unreadCount:
+                    type: integer
+                    minimum: 0
+        '401':
+          '$ref': '#/components/responses/Unauthorized'
+
   '/notifications/read-all':
     patch:
       tags: [Notifications]
       summary: 전체 알림 읽음 처리
       operationId: readAllNotifications
       security:
-        - bearerAuth: []
+        - sessionCookie: []
       responses:
         '200':
           description: 전체 알림 읽음 처리 결과
@@ -963,20 +1081,26 @@ paths:
                 type: object
                 required: [updatedCount]
                 properties:
-                  updatedCount: { type: integer, minimum: 0 }
-        '401': { '$ref': '#/components/responses/Unauthorized' }
+                  updatedCount:
+                    type: integer
+                    minimum: 0
+        '401':
+          '$ref': '#/components/responses/Unauthorized'
+
   '/notifications/{id}/read':
     patch:
       tags: [Notifications]
       summary: 개별 알림 읽음 처리
       operationId: readNotification
       security:
-        - bearerAuth: []
+        - sessionCookie: []
       parameters:
         - name: id
           in: path
           required: true
-          schema: { type: string, format: uuid }
+          schema:
+            type: string
+            format: uuid
       responses:
         '200':
           description: 개별 알림 읽음 처리 결과
@@ -986,18 +1110,19 @@ paths:
                 type: object
                 required: [updated]
                 properties:
-                  updated: { type: boolean }
-        '400': { '$ref': '#/components/responses/ValidationError' }
-        '401': { '$ref': '#/components/responses/Unauthorized' }
+                  updated:
+                    type: boolean
+        '400':
+          '$ref': '#/components/responses/ValidationError'
+        '401':
+          '$ref': '#/components/responses/Unauthorized'
 components:
   securitySchemes:
-    bearerAuth:
-      {
-        type: http,
-        scheme: bearer,
-        description: 인증이 필요한 API를 나타내는 초기 표현입니다.
-          토큰 형식·수명·저장·갱신 방식은 추후 결정합니다.,
-      }
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: moving.sid
+      description: express-session에서 발급한 세션 쿠키
   parameters:
     ProviderPath:
       name: provider
@@ -1129,6 +1254,7 @@ components:
         - VALIDATION_ERROR
         - UNAUTHORIZED
         - INVALID_CREDENTIALS
+        - EMAIL_ALREADY_EXISTS
         - FORBIDDEN
         - PROFILE_REQUIRED
         - NOT_IN_SERVICE_AREA
@@ -1136,6 +1262,9 @@ components:
         - NOT_FOUND
         - PROFILE_ALREADY_EXISTS
         - ACTIVE_REQUEST_EXISTS
+        - ALREADY_DESIGNATED
+        - MOVER_ALREADY_RESPONDED
+        - DESIGNATION_LIMIT_REACHED
         - REQUEST_NOT_PENDING
         - QUOTE_LIMIT_REACHED
         - RATE_LIMITED
@@ -1530,6 +1659,7 @@ components:
         quoteCount: { type: integer, maximum: 8 }
         designatedMoverIds:
           type: array
+          maxItems: 3
           items: { type: string, format: uuid }
         createdAt: { type: string, format: date-time }
         confirmedAt: { type: string, format: date-time, nullable: true }
@@ -1633,6 +1763,15 @@ components:
         isDesignated: { type: boolean }
         createdAt: { type: string, format: date-time }
         moveRequest: { '$ref': '#/components/schemas/RequestForMover' }
+    SentQuoteListResponse:
+      allOf:
+        - { '$ref': '#/components/schemas/CursorMeta' }
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items: { '$ref': '#/components/schemas/SentQuote' }
     RejectedRequest:
       type: object
       required: [moveRequest, rejectedAt]
