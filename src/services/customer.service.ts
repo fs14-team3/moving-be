@@ -13,6 +13,12 @@ function assertCustomer(viewer: Express.User | undefined) {
   return viewer.id
 }
 
+const customerProfileSelect = {
+  imageUrl: true,
+  serviceTypes: true,
+  regions: true,
+} as const
+
 export async function createProfile(
   viewer: Express.User | undefined,
   input: CreateCustomerProfileInput,
@@ -36,6 +42,7 @@ export async function createProfile(
         serviceTypes: input.serviceTypes,
         regions: input.regions,
       },
+      select: customerProfileSelect,
     })
   } catch (error) {
     if (

@@ -282,7 +282,7 @@ async function buildSeedData() {
     chosen.ratingSum += rating
   }
 
-  customers.forEach(([name, email, nickname], i) => {
+  customers.forEach(([name, email], i) => {
     const customerId = id(`customer:${i}`)
     const joinedAt = at(-1000 + i, 10)
     const [fromAddress, toAddress, fromZonecode = null, toZonecode = null] =
@@ -319,7 +319,6 @@ async function buildSeedData() {
     })
     customerProfiles.push({
       userId: customerId,
-      nickname,
       imageUrl: i % 7 === 3 ? `https://i.pravatar.cc/160?img=${i % 70}` : null,
       serviceTypes: [customer.moveType],
       regions: [customer.route.fromRegion],

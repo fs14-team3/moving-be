@@ -172,10 +172,6 @@ export async function socialCallback(req: Request, res: Response) {
     )
 
     await establishSession(req, result.user)
-
-    await establishSession(req, result.user)
-
-    await establishSession(req, result.user)
     return redirectToLanding(res, {
       provider,
       status: 'success',

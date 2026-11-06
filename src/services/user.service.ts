@@ -7,12 +7,25 @@ import type {
   ChangePasswordInput,
 } from '../validators/user.validator'
 
+const customerProfileSelect = {
+  imageUrl: true,
+  serviceTypes: true,
+  regions: true,
+} as const
+const moverProfileSelect = {
+  imageUrl: true,
+  nickname: true,
+  careerYears: true,
+  intro: true,
+  description: true,
+  serviceTypes: true,
+  regions: true,
+} as const
 // 내 정보 조회
 export async function getMe(viewer: Express.User | undefined) {
   if (!viewer) {
     throw new AppError('UNAUTHORIZED')
   }
-
   const user = await prisma.user.findUnique({
     where: { id: viewer.id },
     select: {
@@ -21,20 +34,17 @@ export async function getMe(viewer: Express.User | undefined) {
       name: true,
       email: true,
       phone: true,
-      customerProfile: true,
-      moverProfile: true,
+      customerProfile: { select: customerProfileSelect },
+      moverProfile: { select: moverProfileSelect },
     },
   })
-
   if (!user) {
     throw new AppError('NOT_FOUND')
   }
-
   const hasProfile =
     user.role === 'CUSTOMER'
       ? user.customerProfile !== null
       : user.moverProfile !== null
-
   return {
     ...user,
     hasProfile,
@@ -51,18 +61,11 @@ export async function updateMe(
   }
 
   try {
-    return await prisma.user.update({
+    await prisma.user.update({
       where: { id: viewer.id },
       data: input,
-      select: {
-        id: true,
-        role: true,
-        name: true,
-        email: true,
-        phone: true,
-        updatedAt: true,
-      },
     })
+    return getMe(viewer)
   } catch (error) {
     // 같은 역할의 사용자에게 이미 등록된 이메일
     if (

@@ -10,7 +10,12 @@ import {
 } from '../utils/password'
 import type { LoginInput, SignupInput } from '../validators/auth.validator'
 
-const profileSelect = {
+const customerProfileSelect = {
+  imageUrl: true,
+  serviceTypes: true,
+  regions: true,
+} as const
+const moverProfileSelect = {
   imageUrl: true,
   nickname: true,
   careerYears: true,
@@ -19,19 +24,15 @@ const profileSelect = {
   serviceTypes: true,
   regions: true,
 } as const
-
 const userResponseSelect = {
   id: true,
   role: true,
   name: true,
   email: true,
   phone: true,
-  createdAt: true,
-  updatedAt: true,
-  customerProfile: { select: profileSelect },
-  moverProfile: { select: profileSelect },
+  customerProfile: { select: customerProfileSelect },
+  moverProfile: { select: moverProfileSelect },
 } satisfies Prisma.UserSelect
-
 type UserResponse = Prisma.UserGetPayload<{
   select: typeof userResponseSelect
 }>

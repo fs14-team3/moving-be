@@ -105,8 +105,6 @@ describe('Auth API', () => {
           hasProfile: expect.any(Boolean),
           customerProfile: null,
           moverProfile: null,
-          createdAt: expect.any(String),
-          updatedAt: expect.any(String),
         }),
       }),
     )
