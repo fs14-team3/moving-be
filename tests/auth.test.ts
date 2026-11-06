@@ -2,6 +2,7 @@ import request from 'supertest'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { createApp } from '../src/app'
 import { api, resetDatabase } from './helpers'
+import { prisma } from '../src/lib/prisma'
 
 describe('Auth API', () => {
   beforeEach(async () => {
@@ -166,5 +167,116 @@ describe('Auth API', () => {
 
     expect(response.status).toBe(401)
     expect(response.body.error.code).toBe('INVALID_CREDENTIALS')
+  })
+
+  it('CUSTOMER는 닉네임 없이 서비스 유형과 지역을 등록하면 프로필이 완성된 것으로 반환한다', async () => {
+    const signupResponse = await api().post('/api/auth/signup').send({
+      role: 'CUSTOMER',
+      name: '테스트 고객',
+      email: 'customer-profile@example.com',
+      phone: '01012345678',
+      password: 'Test1234!',
+    })
+
+    expect(signupResponse.status).toBe(201)
+
+    await prisma.customerProfile.create({
+      data: {
+        userId: signupResponse.body.id,
+        nickname: null,
+        serviceTypes: ['HOME'],
+        regions: ['서울'],
+      },
+    })
+
+    const loginResponse = await api().post('/api/auth/login').send({
+      role: 'CUSTOMER',
+      email: 'customer-profile@example.com',
+      password: 'Test1234!',
+    })
+
+    expect(loginResponse.status).toBe(200)
+    expect(loginResponse.body.user).toEqual(
+      expect.objectContaining({
+        hasProfile: true,
+        isProfileComplete: true,
+      }),
+    )
+  })
+
+  it('MOVER는 닉네임이 없으면 프로필이 완성되지 않은 것으로 반환한다', async () => {
+    const signupResponse = await api().post('/api/auth/signup').send({
+      role: 'MOVER',
+      name: '테스트 기사',
+      email: 'mover-incomplete@example.com',
+      phone: '01012345678',
+      password: 'Test1234!',
+    })
+
+    expect(signupResponse.status).toBe(201)
+
+    await prisma.moverProfile.create({
+      data: {
+        userId: signupResponse.body.id,
+        nickname: null,
+        careerYears: 3,
+        intro: '안녕하세요.',
+        description: '꼼꼼하게 이사 서비스를 제공합니다.',
+        serviceTypes: ['HOME'],
+        regions: ['서울'],
+      },
+    })
+
+    const loginResponse = await api().post('/api/auth/login').send({
+      role: 'MOVER',
+      email: 'mover-incomplete@example.com',
+      password: 'Test1234!',
+    })
+
+    expect(loginResponse.status).toBe(200)
+    expect(loginResponse.body.user).toEqual(
+      expect.objectContaining({
+        hasProfile: true,
+        isProfileComplete: false,
+      }),
+    )
+  })
+
+  it('MOVER가 모든 필수 프로필 정보를 등록하면 프로필이 완성된 것으로 반환한다', async () => {
+    const signupResponse = await api().post('/api/auth/signup').send({
+      role: 'MOVER',
+      name: '테스트 기사',
+      email: 'mover-complete@example.com',
+      phone: '01012345678',
+      password: 'Test1234!',
+    })
+
+    expect(signupResponse.status).toBe(201)
+
+    await prisma.moverProfile.create({
+      data: {
+        userId: signupResponse.body.id,
+        nickname: '친절한 기사',
+        careerYears: 3,
+        intro: '안녕하세요.',
+        description: '꼼꼼하게 이사 서비스를 제공합니다.',
+        serviceTypes: ['HOME'],
+        regions: ['서울'],
+      },
+    })
+
+    const loginResponse = await api().post('/api/auth/login').send({
+      role: 'MOVER',
+      email: 'mover-complete@example.com',
+      password: 'Test1234!',
+    })
+
+    expect(loginResponse.status).toBe(200)
+    expect(loginResponse.body.user).toEqual(
+      expect.objectContaining({
+        hasProfile: true,
+        isProfileComplete: true,
+      }),
+    )
   })
 })
