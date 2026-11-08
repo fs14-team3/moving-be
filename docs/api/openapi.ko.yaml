@@ -1562,6 +1562,7 @@ components:
           averageRating,
           reviewCount,
           confirmedCount,
+          favoriteCount,
           isFavorite,
         ]
       properties:
@@ -1579,6 +1580,7 @@ components:
               (소수점 둘째 자리까지). 리뷰가 없으면 0. 평점은 1~5점 정수입니다. }
         reviewCount: { type: integer }
         confirmedCount: { type: integer }
+        favoriteCount: { type: integer, description: 기사님이 받은 전체 찜 수 }
         isFavorite:
           {
             type: boolean,
