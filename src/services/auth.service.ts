@@ -38,21 +38,25 @@ type UserResponse = Prisma.UserGetPayload<{
 }>
 
 function toMe(user: UserResponse) {
-  const profile =
-    user.role === 'CUSTOMER' ? user.customerProfile : user.moverProfile
+  const customerProfile = user.customerProfile
+  const moverProfile = user.moverProfile
 
-  const hasProfile = profile !== null
+  const hasProfile =
+    user.role === 'CUSTOMER' ? customerProfile !== null : moverProfile !== null
 
   const isProfileComplete =
-    profile !== null &&
-    profile.serviceTypes.length > 0 &&
-    profile.regions.length > 0 &&
-    (user.role === 'CUSTOMER' ||
-      (Boolean(profile.nickname?.trim()) &&
-        profile.careerYears !== null &&
-        profile.careerYears >= 0 &&
-        Boolean(profile.intro?.trim()) &&
-        Boolean(profile.description?.trim())))
+    user.role === 'CUSTOMER'
+      ? customerProfile !== null &&
+        customerProfile.serviceTypes.length > 0 &&
+        customerProfile.regions.length > 0
+      : moverProfile !== null &&
+        moverProfile.serviceTypes.length > 0 &&
+        moverProfile.regions.length > 0 &&
+        Boolean(moverProfile.nickname?.trim()) &&
+        moverProfile.careerYears !== null &&
+        moverProfile.careerYears >= 0 &&
+        Boolean(moverProfile.intro?.trim()) &&
+        Boolean(moverProfile.description?.trim())
 
   return {
     ...user,
