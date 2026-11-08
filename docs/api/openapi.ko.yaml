@@ -829,13 +829,24 @@ paths:
     get:
       tags: [MoverInbox]
       summary: 반려한 요청 목록
+      description: |-
+        로그인한 기사님이 본인이 반려한 이사 요청 목록을 조회합니다.
+        반려 시각 최신순으로 정렬합니다.
+        이사 요청의 상태가 변경되더라도 반려 이력은 목록에 유지됩니다.
+        요청 상태에 따른 별도 필터링은 적용하지 않습니다.
       operationId: listMyRejectedRequests
       security:
         - sessionCookie: []
       x-roles: [MOVER]
       parameters:
-        - { '$ref': '#/components/parameters/Cursor' }
-        - { '$ref': '#/components/parameters/Limit' }
+        - name: limit
+          in: query
+          description: 페이지 크기
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 10
       responses:
         '200':
           description: 반려한 요청 목록 페이지
@@ -843,6 +854,7 @@ paths:
             application/json:
               schema:
                 { '$ref': '#/components/schemas/RejectedRequestListResponse' }
+        '400': { '$ref': '#/components/responses/ValidationError' }
         '401': { '$ref': '#/components/responses/Unauthorized' }
         '403': { '$ref': '#/components/responses/Forbidden' }
   '/quotes/{quoteId}':

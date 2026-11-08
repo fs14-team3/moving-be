@@ -62,7 +62,6 @@ export async function listMyRejectedRequests(
         include: {
           customer: {
             select: {
-              nickname: true,
               user: {
                 select: { name: true },
               },
@@ -88,8 +87,7 @@ export async function listMyRejectedRequests(
     return {
       moveRequest: {
         id: request.id,
-        customerName:
-          request.customer.nickname ?? request.customer.user.name ?? null,
+        customerName: request.customer.user.name ?? null,
         moveType: request.moveType,
         moveDate: request.moveDate.toISOString().slice(0, 10),
         from: {
