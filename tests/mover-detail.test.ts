@@ -1,9 +1,10 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
-import type { Prisma } from '../src/generated/prisma/client'
+import type { MoveRequestStatus, Prisma } from '../src/generated/prisma/client'
 import { prisma } from '../src/lib/prisma'
 import {
   api,
   createCustomer,
+  createMoveRequest,
   createMover,
   createReview,
   resetDatabase,
@@ -11,8 +12,11 @@ import {
 } from './helpers'
 
 const customer: Express.User = { id: userId('1'), role: 'CUSTOMER' }
+const otherCustomerId = userId('2')
 const moverId = userId('a')
 const otherMoverId = userId('b')
+const PAST = '2026-01-01'
+const FUTURE = '2999-12-31'
 const profile = {
   nickname: '든든이사',
   intro: '20년 경력의 든든한 이사',
@@ -27,6 +31,10 @@ const profile = {
 
 function getMover(id: string, user?: Express.User) {
   return api(user).get(`/api/movers/${id}`)
+}
+
+function designate(moveRequestId: string) {
+  return prisma.designatedRequest.create({ data: { moveRequestId, moverId } })
 }
 
 async function getRatingCounts(id: string) {
@@ -84,11 +92,53 @@ describe('GET /api/movers/:moverId', () => {
     expect(notFavorited.body.isFavorite).toBe(false)
   })
 
-  it('기사님으로 로그인하면 찜 여부는 null이다', async () => {
+  it('기사님으로 로그인하면 찜·지정 여부는 null이다', async () => {
     const res = await getMover(moverId, { id: otherMoverId, role: 'MOVER' })
 
     expect(res.status).toBe(200)
     expect(res.body.isFavorite).toBeNull()
+    expect(res.body.isDesignated).toBeNull()
+  })
+
+  it.each<MoveRequestStatus>(['PENDING', 'CONFIRMED'])(
+    '진행 중인 %s 요청에 지정한 기사님만 지정 여부가 true이다',
+    async (status) => {
+      const request = await createMoveRequest(customer.id, status, FUTURE)
+      await designate(request.id)
+
+      const designated = await getMover(moverId, customer)
+      const notDesignated = await getMover(otherMoverId, customer)
+
+      expect(designated.body.isDesignated).toBe(true)
+      expect(notDesignated.body.isDesignated).toBe(false)
+    },
+  )
+
+  it.each<[MoveRequestStatus, string]>([
+    ['PENDING', PAST],
+    ['EXPIRED', FUTURE],
+  ])(
+    '기사님을 지정한 %s 요청(%s)이 진행 중이 아니면 지정 여부는 null이다',
+    async (status, moveDate) => {
+      const request = await createMoveRequest(customer.id, status, moveDate)
+      await designate(request.id)
+
+      const res = await getMover(moverId, customer)
+
+      expect(res.status).toBe(200)
+      expect(res.body.isDesignated).toBeNull()
+    },
+  )
+
+  it('다른 일반 유저가 지정한 기사님은 지정 여부에 반영하지 않는다', async () => {
+    await createCustomer(otherCustomerId)
+    const others = await createMoveRequest(otherCustomerId, 'PENDING', FUTURE)
+    await designate(others.id)
+    await createMoveRequest(customer.id, 'PENDING', FUTURE)
+
+    const res = await getMover(moverId, customer)
+
+    expect(res.body.isDesignated).toBe(false)
   })
 
   it('점수별 리뷰 수에 다른 기사님의 리뷰는 포함하지 않는다', async () => {

@@ -12,3 +12,7 @@ export async function getMover(req: Request, res: Response) {
   const { moverId } = validate(moverIdParams, req.params)
   res.json(await moverService.getMover(moverId, req.user))
 }
+
+export async function getMyMoverPage(req: Request, res: Response) {
+  res.json(await moverService.getMyMoverPage(req.user!.id))
+}

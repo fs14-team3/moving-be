@@ -91,10 +91,6 @@ model SocialAccount {
 model CustomerProfile {
   userId       String        @id @map("user_id") @db.Uuid
   imageUrl     String?       @map("image_url")
-  nickname     String?
-  careerYears  Int?          @map("career_years")
-  intro        String?
-  description  String?
   serviceTypes ServiceType[] @map("service_types")
   regions      String[]
   createdAt    DateTime      @default(now()) @map("created_at") @db.Timestamptz
