@@ -125,12 +125,12 @@ describe('GET /api/movers/me/rejections', () => {
     })
   })
 
-  it('고객 닉네임을 이름보다 우선 반환한다', async () => {
+  it('고객의 사용자 이름을 반환한다', async () => {
     const { customerId: requestCustomerId } = await createRejection()
 
-    await prisma.customerProfile.update({
-      where: { userId: requestCustomerId },
-      data: { nickname: '이사왕' },
+    await prisma.user.update({
+      where: { id: requestCustomerId },
+      data: { name: '이사왕' },
     })
 
     const res = await api(mover).get('/api/movers/me/rejections')
@@ -139,27 +139,8 @@ describe('GET /api/movers/me/rejections', () => {
     expect(res.body.items[0].moveRequest.customerName).toBe('이사왕')
   })
 
-  it('닉네임이 없으면 사용자 이름을 반환한다', async () => {
+  it('고객의 사용자 이름이 없으면 null을 반환한다', async () => {
     const { customerId: requestCustomerId } = await createRejection()
-
-    await prisma.customerProfile.update({
-      where: { userId: requestCustomerId },
-      data: { nickname: null },
-    })
-
-    const res = await api(mover).get('/api/movers/me/rejections')
-
-    expect(res.status).toBe(200)
-    expect(res.body.items[0].moveRequest.customerName).toBe('테스트 고객')
-  })
-
-  it('닉네임과 이름이 모두 없으면 null을 반환한다', async () => {
-    const { customerId: requestCustomerId } = await createRejection()
-
-    await prisma.customerProfile.update({
-      where: { userId: requestCustomerId },
-      data: { nickname: null },
-    })
 
     await prisma.user.update({
       where: { id: requestCustomerId },
