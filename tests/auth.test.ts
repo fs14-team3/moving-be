@@ -183,7 +183,6 @@ describe('Auth API', () => {
     await prisma.customerProfile.create({
       data: {
         userId: signupResponse.body.id,
-        nickname: null,
         serviceTypes: ['HOME'],
         regions: ['서울'],
       },
