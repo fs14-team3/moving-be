@@ -11,6 +11,7 @@ import { rejectionRouter } from './rejection.routes'
 import { notificationRouter } from './notification.routes'
 import { moveRequestRouter } from './move-request.routes'
 import { receivedQuoteRouter } from './received-quote.routes'
+import { userRouter } from './user.routes'
 
 export const apiRouter = Router()
 
@@ -49,3 +50,4 @@ apiRouter.use('/move-requests', rejectionRouter)
 apiRouter.use('/notifications', notificationRouter)
 apiRouter.use('/move-requests', moveRequestRouter)
 apiRouter.use('/quotes', receivedQuoteRouter)
+apiRouter.use('/users', userRouter)

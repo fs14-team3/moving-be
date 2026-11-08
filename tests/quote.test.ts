@@ -194,17 +194,12 @@ describe('POST /api/move-requests/:requestId/quotes', () => {
       })
     })
 
-    it('고객 닉네임이 있으면 이름보다 우선 반환한다', async () => {
-      await prisma.customerProfile.update({
-        where: { userId: customerId },
-        data: { nickname: '이사왕' },
-      })
-
+    it('고객 이름은 회원 이름을 반환한다', async () => {
       const request = await createMoveRequest()
       const res = await sendQuote(request.id, mover)
 
       expect(res.status).toBe(201)
-      expect(res.body.moveRequest.customerName).toBe('이사왕')
+      expect(res.body.moveRequest.customerName).toBe('견적 요청 고객')
     })
   })
 

@@ -25,7 +25,7 @@ paths:
     post:
       tags: [Auth]
       summary: 이메일 회원가입
-      description: 요청한 역할의 이메일 계정을 생성합니다. 이름·이메일·전화번호·비밀번호는 validator 기준에 따라 검증합니다.
+      description: 요청한 역할의 이메일 계정을 생성하고 로그인 세션을 발급합니다. 이름·이메일·전화번호·비밀번호는 validator 기준에 따라 검증합니다.
       operationId: signup
       security: []
       requestBody:
@@ -43,6 +43,12 @@ paths:
                 '$ref': '#/components/schemas/Me'
         '400':
           '$ref': '#/components/responses/ValidationError'
+        '409':
+          description: '`EMAIL_ALREADY_EXISTS`. 같은 역할로 이미 가입된 이메일인 경우'
+          content:
+            application/json:
+              schema:
+                '$ref': '#/components/schemas/ErrorResponse'
         '429':
           '$ref': '#/components/responses/RateLimited'
   '/auth/login':
@@ -213,6 +219,43 @@ paths:
               schema: { '$ref': '#/components/schemas/Me' }
         '400': { '$ref': '#/components/responses/ValidationError' }
         '401': { '$ref': '#/components/responses/Unauthorized' }
+  '/users/me/password':
+    patch:
+      tags: [Me]
+      summary: 비밀번호 변경
+      description: 이메일 계정의 비밀번호를 변경합니다. 소셜 로그인 전용 계정은 변경할 수 없습니다.
+      operationId: changePassword
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { '$ref': '#/components/schemas/PasswordChange' }
+      responses:
+        '200':
+          description: 변경 완료
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [message]
+                properties:
+                  message:
+                    type: string
+                    example: 비밀번호가 변경되었습니다
+        '400': { '$ref': '#/components/responses/ValidationError' }
+        '401':
+          description: '`UNAUTHORIZED` 또는 `INVALID_CREDENTIALS`'
+          content:
+            application/json:
+              schema: { '$ref': '#/components/schemas/ErrorResponse' }
+        '403':
+          description: '`FORBIDDEN`. 비밀번호가 없는 소셜 계정'
+          content:
+            application/json:
+              schema: { '$ref': '#/components/schemas/ErrorResponse' }
+        '404': { '$ref': '#/components/responses/NotFound' }
   '/customers/me/profile':
     post:
       tags: [Profiles]
@@ -498,12 +541,51 @@ paths:
           schema: { type: integer, minimum: 1, maximum: 50, default: 10 }
       responses:
         '200':
-          description: 찜한 기사님 목록 페이지 (`isFavorite`는 항상 true). 찜한 기사님이 없으면 `items`는 빈 배열, `nextCursor`는 null, `hasNext`는 false입니다.
+          description: 찜한 기사님 목록 페이지 (`isFavorite`는 항상 true, `totalCount`는 찜한 기사님 전체 수). 찜한 기사님이 없으면 `items`는 빈 배열, `totalCount`는 0, `nextCursor`는 null, `hasNext`는 false입니다.
           content:
             application/json:
-              schema: { '$ref': '#/components/schemas/MoverListResponse' }
+              schema: { '$ref': '#/components/schemas/FavoriteListResponse' }
         '400':
           description: '`VALIDATION_ERROR`. `limit`이 허용 범위를 벗어나거나 `cursor`가 잘못된 경우'
+          content:
+            application/json:
+              schema: { '$ref': '#/components/schemas/ErrorResponse' }
+        '401': { '$ref': '#/components/responses/Unauthorized' }
+        '403': { '$ref': '#/components/responses/Forbidden' }
+    delete:
+      tags: [Favorites]
+      summary: 찜 일괄 해제 (멱등)
+      description: |
+        프로필을 등록한 일반 유저만 호출할 수 있습니다. 찜한 기사님 페이지의 선택 항목 삭제에 씁니다.
+        화면에서 선택한 기사님의 id를 `moverIds`로 보내면 그 기사님들만 해제합니다. 전체 선택도 화면에 보이는 기사님만 선택하므로 같은 방식으로 보냅니다.
+        `all: true`를 보내면 본인의 찜을 모두 해제합니다. 찜하지 않았거나 없는 기사님과 중복된 id는 건너뛰고 실제 해제된 수를 반환하며, `moverIds`는 한 번에 최대 500개입니다.
+      operationId: removeMyFavorites
+      security:
+        - sessionCookie: []
+      x-roles: [CUSTOMER]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { '$ref': '#/components/schemas/FavoriteRemoveRequest' }
+            examples:
+              selected:
+                summary: 선택한 기사님 해제
+                value:
+                  moverIds:
+                    - 11111111-1111-4111-8111-111111111111
+                    - 22222222-2222-4222-8222-222222222222
+              all:
+                summary: 전체 해제
+                value: { all: true }
+      responses:
+        '200':
+          description: 이번 요청으로 실제 해제된 찜 수. 해제된 찜이 없으면 0입니다.
+          content:
+            application/json:
+              schema: { '$ref': '#/components/schemas/FavoriteRemoveResult' }
+        '400':
+          description: '`VALIDATION_ERROR`. `moverIds`가 없거나 비어 있거나, 500개를 넘거나, uuid가 아닌 값이 있거나, `all: true`와 `moverIds`를 함께 보낸 경우'
           content:
             application/json:
               schema: { '$ref': '#/components/schemas/ErrorResponse' }
@@ -629,8 +711,9 @@ paths:
       tags: [MoveRequests]
       summary: 지정 견적 요청
       description: |-
-        호출자 본인의 일반 견적 요청이 먼저 있어야 합니다(§6.5). 해당 요청에 기사님을 지정합니다.
-        지정 요청 인원에는 별도의 상한을 두지 않습니다. 받은 지정 견적에만 3개 상한을 적용합니다(§7.1.1).
+        호출자 본인의 일반 견적 요청이 먼저 있어야 합니다(§6.5). 대기 중이고 이사일이 지나지 않은 요청에 기사님을 지정합니다.
+        한 요청에 기사님을 최대 3명까지 지정할 수 있으며, 동시에 요청해도 인원과 중복 제한을 지킵니다(§7.1.1).
+        이 요청에 이미 견적을 보냈거나 요청을 반려한 기사님은 지정할 수 없습니다.
         지정 요청은 기사님에게 라벨로 강조 표시하며, 기사님의 서비스 가능 지역과 관계없이 요청할 수 있습니다.
       operationId: designateMover
       security:
@@ -652,7 +735,21 @@ paths:
         '400': { '$ref': '#/components/responses/ValidationError' }
         '401': { '$ref': '#/components/responses/Unauthorized' }
         '403': { '$ref': '#/components/responses/Forbidden' }
-        '404': { '$ref': '#/components/responses/NotFound' }
+        '404':
+          description:
+            '`NOT_FOUND`. 요청이 없거나 다른 사용자의 요청인 경우. 기사님이 없는 경우에는 `details`에 `moverId`가
+            담깁니다.'
+          content:
+            application/json:
+              schema: { '$ref': '#/components/schemas/ErrorResponse' }
+        '409':
+          description:
+            '`REQUEST_NOT_PENDING` (확정되었거나 이사일이 지난 요청), `ALREADY_DESIGNATED` (이미 지정한 기사님),
+            `MOVER_ALREADY_RESPONDED` (이미 견적을 보냈거나 요청을 반려한 기사님) 또는 `DESIGNATION_LIMIT_REACHED`
+            (이미 3명을 지정함)'
+          content:
+            application/json:
+              schema: { '$ref': '#/components/schemas/ErrorResponse' }
   '/move-requests/{requestId}/quotes':
     get:
       tags: [MoveRequests]
@@ -1200,6 +1297,7 @@ components:
         - VALIDATION_ERROR
         - UNAUTHORIZED
         - INVALID_CREDENTIALS
+        - EMAIL_ALREADY_EXISTS
         - FORBIDDEN
         - PROFILE_REQUIRED
         - NOT_IN_SERVICE_AREA
@@ -1207,6 +1305,9 @@ components:
         - NOT_FOUND
         - PROFILE_ALREADY_EXISTS
         - ACTIVE_REQUEST_EXISTS
+        - ALREADY_DESIGNATED
+        - MOVER_ALREADY_RESPONDED
+        - DESIGNATION_LIMIT_REACHED
         - REQUEST_NOT_PENDING
         - QUOTE_LIMIT_REACHED
         - RATE_LIMITED
@@ -1302,6 +1403,7 @@ components:
           email,
           phone,
           hasProfile,
+          isProfileComplete,
           customerProfile,
           moverProfile,
         ]
@@ -1312,6 +1414,7 @@ components:
         email: { type: string, format: email, nullable: true }
         phone: { type: string, nullable: true }
         hasProfile: { type: boolean }
+        isProfileComplete: { type: boolean }
         customerProfile:
           description: role이 CUSTOMER이고 프로필이 있을 때 채워짐
           type: object
@@ -1336,10 +1439,6 @@ components:
       description: '§3.4의 프로필 항목. 필수 입력 여부는 추후 결정합니다.'
       properties:
         imageUrl: { type: string, format: uri, nullable: true }
-        nickname: { type: string, description: 별명, nullable: true }
-        careerYears: { type: integer, description: 경력 (년), nullable: true }
-        intro: { type: string, description: 한 줄 소개, nullable: true }
-        description: { type: string, description: 상세 설명, nullable: true }
         serviceTypes:
           type: array
           items: { '$ref': '#/components/schemas/ServiceType' }
@@ -1348,15 +1447,32 @@ components:
           type: array
           items: { '$ref': '#/components/schemas/Region' }
           nullable: true
+    PasswordChange:
+      type: object
+      required: [currentPassword, newPassword, confirmPassword]
+      properties:
+        currentPassword: { type: string, format: password, minLength: 1 }
+        newPassword:
+          {
+            type: string,
+            format: password,
+            description: '공백을 제외한 ASCII 문자 8~16자. 영문·숫자·특수문자를 각각 1자 이상 포함. 현재 비밀번호와 달라야 함',
+            minLength: 8,
+            maxLength: 16,
+          }
+        confirmPassword:
+          {
+            type: string,
+            format: password,
+            minLength: 1,
+            description: newPassword와 같아야 함,
+          }
     CustomerProfileCreate:
       type: object
       description: '§3.4의 프로필 항목. 필수 입력 여부는 추후 결정합니다.'
+      required: [serviceTypes, regions]
       properties:
         imageUrl: { type: string, format: uri, nullable: true }
-        nickname: { type: string, description: 별명 }
-        careerYears: { type: integer, description: 경력 (년) }
-        intro: { type: string, description: 한 줄 소개 }
-        description: { type: string, description: 상세 설명 }
         serviceTypes:
           type: array
           items: { '$ref': '#/components/schemas/ServiceType' }
@@ -1368,10 +1484,6 @@ components:
       description: '§3.4의 프로필 항목. 필수 입력 여부는 추후 결정합니다.'
       properties:
         imageUrl: { type: string, format: uri, nullable: true }
-        nickname: { type: string, description: 별명 }
-        careerYears: { type: integer, description: 경력 (년) }
-        intro: { type: string, description: 한 줄 소개 }
-        description: { type: string, description: 상세 설명 }
         serviceTypes:
           type: array
           items: { '$ref': '#/components/schemas/ServiceType' }
@@ -1499,6 +1611,13 @@ components:
             items:
               type: array
               items: { '$ref': '#/components/schemas/MoverSummary' }
+    FavoriteListResponse:
+      allOf:
+        - { '$ref': '#/components/schemas/MoverListResponse' }
+        - type: object
+          required: [totalCount]
+          properties:
+            totalCount: { type: integer, description: 찜한 기사님 전체 수 }
     FavoriteState:
       type: object
       required: [moverId, isFavorite, favoriteCount]
@@ -1506,6 +1625,38 @@ components:
         moverId: { type: string, format: uuid }
         isFavorite: { type: boolean }
         favoriteCount: { type: integer, description: 기사님이 받은 전체 찜 수 }
+    FavoriteRemoveRequest:
+      oneOf:
+        - type: object
+          title: 선택한 기사님 해제
+          required: [moverIds]
+          additionalProperties: false
+          properties:
+            all:
+              { type: boolean, enum: [false], description: 생략할 수 있습니다 }
+            moverIds:
+              type: array
+              description: 해제할 기사님의 user id. 중복은 한 번만 처리합니다.
+              minItems: 1
+              maxItems: 500
+              items: { type: string, format: uuid }
+        - type: object
+          title: 전체 해제
+          required: [all]
+          additionalProperties: false
+          properties:
+            all:
+              {
+                type: boolean,
+                enum: [true],
+                description: 본인의 찜을 모두 해제합니다,
+              }
+    FavoriteRemoveResult:
+      type: object
+      required: [removedCount]
+      properties:
+        removedCount:
+          { type: integer, description: 이번 요청으로 실제 해제된 찜 수 }
     AddressInput:
       type: object
       description: 우편번호 서비스로 입력한 주소. 제공자는 특정하지 않으며, 지역은 서버가 주소로 판별합니다.
@@ -1562,6 +1713,7 @@ components:
         quoteCount: { type: integer, maximum: 8 }
         designatedMoverIds:
           type: array
+          maxItems: 3
           items: { type: string, format: uuid }
         createdAt: { type: string, format: date-time }
         confirmedAt: { type: string, format: date-time, nullable: true }

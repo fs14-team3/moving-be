@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 import { prisma } from '../src/lib/prisma'
 import { api, createCustomer, createMover, resetDatabase } from './helpers'
@@ -216,4 +217,148 @@ describe('PUT·DELETE /api/movers/{moverId}/favorite', () => {
       expect(res.body.error.details[0].field).toBe('moverId')
     },
   )
+})
+
+describe('DELETE /api/customers/me/favorites', () => {
+  const thirdMoverId = userId('c')
+  const allThree = [moverId, otherMoverId, thirdMoverId]
+
+  function removeFavorites(
+    user?: Express.User,
+    body: object = { moverIds: [moverId, otherMoverId] },
+  ) {
+    return api(user).delete('/api/customers/me/favorites').send(body)
+  }
+
+  async function favoriteAllThree() {
+    for (const id of allThree) await favorite('put', customer, id)
+  }
+
+  async function favoriteCounts() {
+    return Promise.all(allThree.map((id) => favoriteCount(id)))
+  }
+
+  beforeEach(async () => {
+    await createMover(thirdMoverId, { nickname: '세번째 이사' })
+  })
+
+  it('선택한 기사님의 찜만 해제하고 해제된 수를 반환한다', async () => {
+    await favoriteAllThree()
+    await favorite('put', otherCustomer)
+
+    const res = await removeFavorites(customer, {
+      moverIds: [moverId, otherMoverId],
+    })
+
+    expect(res.status).toBe(200)
+    expect(res.body).toEqual({ removedCount: 2 })
+    expect(await favoritesOf(customer.id)).toEqual([thirdMoverId])
+    expect(await favoritesOf(otherCustomer.id)).toEqual([moverId])
+    expect(await favoriteCounts()).toEqual([1, 0, 1])
+  })
+
+  it('찜하지 않았거나 없는 기사님과 중복된 id는 건너뛰고 찜 수를 유지한다', async () => {
+    await favorite('put', customer)
+    await favorite('put', otherCustomer, otherMoverId)
+
+    const res = await removeFavorites(customer, {
+      moverIds: [moverId, moverId, otherMoverId, userId('9')],
+    })
+
+    expect(res.status).toBe(200)
+    expect(res.body).toEqual({ removedCount: 1 })
+    expect(await favoritesOf(customer.id)).toEqual([])
+    expect(await favoritesOf(otherCustomer.id)).toEqual([otherMoverId])
+    expect(await favoriteCounts()).toEqual([0, 1, 0])
+  })
+
+  it('전체 해제면 본인의 찜을 모두 해제한다', async () => {
+    await favoriteAllThree()
+    await favorite('put', otherCustomer)
+
+    const res = await removeFavorites(customer, { all: true })
+
+    expect(res.status).toBe(200)
+    expect(res.body).toEqual({ removedCount: 3 })
+    expect(await favoritesOf(customer.id)).toEqual([])
+    expect(await favoritesOf(otherCustomer.id)).toEqual([moverId])
+    expect(await favoriteCounts()).toEqual([1, 0, 0])
+  })
+
+  it.each([
+    ['선택한 기사님', { moverIds: [moverId] }],
+    ['전체 해제', { all: true }],
+  ])('%s 중 해제할 찜이 없으면 0을 반환한다', async (_name, body) => {
+    const res = await removeFavorites(customer, body)
+
+    expect(res.status).toBe(200)
+    expect(res.body).toEqual({ removedCount: 0 })
+  })
+
+  it('같은 요청을 동시에 보내도 찜 수는 한 번만 줄어든다', async () => {
+    await favoriteAllThree()
+
+    const results = await Promise.all(
+      Array.from({ length: 5 }, () => removeFavorites(customer, { all: true })),
+    )
+
+    expect(results.map((res) => res.status)).toEqual([200, 200, 200, 200, 200])
+    expect(
+      results.reduce((sum, res) => sum + (res.body.removedCount as number), 0),
+    ).toBe(3)
+    expect(await favoritesOf(customer.id)).toEqual([])
+    expect(await favoriteCounts()).toEqual([0, 0, 0])
+  })
+
+  it('비회원은 찜을 일괄 해제할 수 없다', async () => {
+    await favorite('put', customer)
+
+    const res = await removeFavorites()
+
+    expect(res.status).toBe(401)
+    expect(res.body.error.code).toBe('UNAUTHORIZED')
+    await expectOnlyCustomerFavorite()
+  })
+
+  it('기사님 계정은 찜을 일괄 해제할 수 없다', async () => {
+    await favorite('put', customer)
+
+    const res = await removeFavorites({ id: otherMoverId, role: 'MOVER' })
+
+    expect(res.status).toBe(403)
+    expect(res.body.error.code).toBe('FORBIDDEN')
+    await expectOnlyCustomerFavorite()
+  })
+
+  it('프로필을 등록하지 않은 일반 유저는 찜을 일괄 해제할 수 없다', async () => {
+    await favorite('put', customer)
+    const id = userId('3')
+    await prisma.user.create({ data: { id, role: 'CUSTOMER' } })
+
+    const res = await removeFavorites({ id, role: 'CUSTOMER' })
+
+    expect(res.status).toBe(403)
+    expect(res.body.error.code).toBe('PROFILE_REQUIRED')
+    await expectOnlyCustomerFavorite()
+  })
+
+  it.each([
+    ['moverIds가 없으면', {}],
+    ['moverIds가 비어 있으면', { moverIds: [] }],
+    ['uuid가 아닌 id가 있으면', { moverIds: [moverId, 'not-a-uuid'] }],
+    [
+      '500개를 넘으면',
+      { moverIds: Array.from({ length: 501 }, () => randomUUID()) },
+    ],
+    ['전체 해제에 moverIds를 함께 보내면', { all: true, moverIds: [moverId] }],
+  ])('%s 400을 반환한다', async (_name, body) => {
+    await favorite('put', customer)
+
+    const res = await removeFavorites(customer, body)
+
+    expect(res.status).toBe(400)
+    expect(res.body.error.code).toBe('VALIDATION_ERROR')
+    expect(res.body.error.details).not.toHaveLength(0)
+    await expectOnlyCustomerFavorite()
+  })
 })

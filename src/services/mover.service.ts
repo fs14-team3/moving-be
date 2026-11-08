@@ -2,6 +2,7 @@ import { AppError } from '../errors/app-error'
 import type { Prisma } from '../generated/prisma/client'
 import { prisma } from '../lib/prisma'
 import type { ListMoversQuery, MoverSort } from '../validators/mover.validator'
+import { isMoverDesignated } from './move-request.service'
 import { countReviewsByRating } from './review.service'
 
 const ORDER_BY = {
@@ -86,9 +87,10 @@ export async function getMover(moverId: string, viewer?: Express.User) {
   if (!mover) throw new AppError('NOT_FOUND')
 
   const { description, regions, ...summary } = mover
-  const [favoriteIds, ratingCounts] = await Promise.all([
+  const [favoriteIds, ratingCounts, isDesignated] = await Promise.all([
     findFavoriteMoverIds(viewer, [moverId]),
     countReviewsByRating(moverId),
+    viewer?.role === 'CUSTOMER' ? isMoverDesignated(viewer.id, moverId) : null,
   ])
 
   return {
@@ -96,8 +98,7 @@ export async function getMover(moverId: string, viewer?: Express.User) {
     description,
     regions,
     ratingCounts,
-    // TODO(#13): 로그인한 일반 유저의 활성 견적 요청에 지정된 기사님이면 true, 아니면 false 반환
-    isDesignated: null,
+    isDesignated,
   }
 }
 

@@ -167,7 +167,6 @@ export async function listReceivedRequests({
     include: {
       customer: {
         select: {
-          nickname: true,
           user: {
             select: { name: true },
           },
@@ -202,8 +201,7 @@ export async function listReceivedRequests({
 
   const items = page.map((request) => ({
     id: request.id,
-    customerName:
-      request.customer.nickname ?? request.customer.user.name ?? null,
+    customerName: request.customer.user.name ?? null,
     moveType: request.moveType,
     moveDate: request.moveDate.toISOString().slice(0, 10),
     from: {
