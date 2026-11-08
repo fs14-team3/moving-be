@@ -167,6 +167,12 @@ describe('POST /api/quotes/:quoteId/confirm', () => {
     expect(selected?.status).toBe('CONFIRMED')
     expect(selected?.confirmedAt).toBeInstanceOf(Date)
     expect(selected?.confirmedAt?.getTime()).toBe(saved.confirmedAt?.getTime())
+
+    const moverProfile = await prisma.moverProfile.findUniqueOrThrow({
+      where: { userId: moverId },
+    })
+
+    expect(moverProfile.confirmedCount).toBe(1)
   })
 
   it('같은 요청의 다른 견적은 NOT_SELECTED로 변경한다', async () => {
@@ -248,6 +254,12 @@ describe('POST /api/quotes/:quoteId/confirm', () => {
     expect(second.body.error.code).toBe('REQUEST_NOT_PENDING')
     expect(saved.status).toBe('CONFIRMED')
     expect(notificationsAfter).toBe(notificationsBefore)
+
+    const moverProfile = await prisma.moverProfile.findUniqueOrThrow({
+      where: { userId: moverId },
+    })
+
+    expect(moverProfile.confirmedCount).toBe(1)
   })
 
   it.each(['CONFIRMED', 'COMPLETED', 'EXPIRED'] as MoveRequestStatus[])(
@@ -394,6 +406,25 @@ describe('POST /api/quotes/:quoteId/confirm', () => {
         },
       }),
     ).toBe(2)
+
+    const moverProfiles = await prisma.moverProfile.findMany({
+      where: {
+        userId: { in: [moverId, secondMoverId] },
+      },
+      select: {
+        userId: true,
+        confirmedCount: true,
+      },
+    })
+
+    const counts = new Map(
+      moverProfiles.map((profile) => [profile.userId, profile.confirmedCount]),
+    )
+
+    expect(counts.get(confirmed[0].moverId)).toBe(1)
+
+    const unselectedMoverId = notSelected[0].moverId
+    expect(counts.get(unselectedMoverId)).toBe(0)
   })
 
   it('알림 저장에 실패하면 견적과 요청 상태가 모두 롤백된다', async () => {
@@ -429,5 +460,11 @@ describe('POST /api/quotes/:quoteId/confirm', () => {
         },
       }),
     ).toBe(0)
+
+    const moverProfile = await prisma.moverProfile.findUniqueOrThrow({
+      where: { userId: moverId },
+    })
+
+    expect(moverProfile.confirmedCount).toBe(0)
   })
 })

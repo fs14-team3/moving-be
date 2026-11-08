@@ -34,7 +34,6 @@ export async function confirmQuote(
           include: {
             customer: {
               select: {
-                nickname: true,
                 user: { select: { name: true } },
               },
             },
@@ -93,11 +92,16 @@ export async function confirmQuote(
       },
     })
 
+    // 기사님의 확정 횟수 증가
+    await tx.moverProfile.update({
+      where: { userId: quote.moverId },
+      data: {
+        confirmedCount: { increment: 1 },
+      },
+    })
+
     const moverNickname = quote.mover.nickname?.trim() || '기사님'
-    const customerName =
-      request.customer.nickname?.trim() ||
-      request.customer.user.name?.trim() ||
-      '고객'
+    const customerName = request.customer.user.name?.trim() || '고객'
 
     // 기사님에게 확정 알림
     await createNotification(
