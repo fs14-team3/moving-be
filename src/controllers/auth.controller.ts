@@ -42,7 +42,7 @@ function redirectToLanding(res: Response, params: Record<string, string>) {
   return res.redirect(302, url.toString())
 }
 
-// 로그인 성공 시 세션 생성
+// 회원가입·로그인 성공 시 세션 생성
 async function establishSession(
   req: Request,
   user: {
@@ -74,15 +74,17 @@ async function establishSession(
   })
 }
 
-// 이메일 회원가입
+// 이메일 회원가입 (가입 후 바로 로그인 상태)
 export async function signup(req: Request, res: Response) {
   const body = validate(signupInput, req.body)
   const user = await authService.signup(body)
+
+  await establishSession(req, user)
+
   return res.set('Cache-Control', 'no-store').status(201).json(user)
 }
 
 // 이메일 로그인
-
 export async function login(req: Request, res: Response) {
   const body = validate(loginInput, req.body)
   const user = await authService.login(body)
@@ -127,8 +129,12 @@ export function socialLogin(req: Request, res: Response) {
     query.role,
   )
 
-  res.cookie(`oauth_state_${provider}`, nonce, stateCookieOptions())
+  const cookieName = `oauth_state_${provider}`
+  const cookieOptions = stateCookieOptions()
+
+  res.cookie(cookieName, nonce, cookieOptions)
   res.set('Cache-Control', 'no-store')
+
   return res.redirect(302, authorizationUrl)
 }
 
@@ -170,7 +176,13 @@ export async function socialCallback(req: Request, res: Response) {
       provider,
       status: 'success',
     })
-  } catch {
+  } catch (error) {
+    console.error('[Social Login Callback Error]', {
+      provider,
+      message: error instanceof Error ? error.message : '알 수 없는 오류',
+      stack: error instanceof Error ? error.stack : undefined,
+    })
+
     return redirectToLanding(res, {
       provider,
       status: 'error',

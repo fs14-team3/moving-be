@@ -2,7 +2,26 @@ import { AppError } from '../errors/app-error'
 import type { Prisma } from '../generated/prisma/client'
 import { prisma } from '../lib/prisma'
 import type { ListMoversQuery, MoverSort } from '../validators/mover.validator'
+import { isMoverDesignated } from './move-request.service'
 import { countReviewsByRating } from './review.service'
+
+/**
+ * 한국 시간(KST) 기준 오늘 날짜 반환
+ */
+function getTodayKstDate() {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Seoul',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date())
+
+  const year = Number(parts.find((part) => part.type === 'year')!.value)
+  const month = Number(parts.find((part) => part.type === 'month')!.value)
+  const day = Number(parts.find((part) => part.type === 'day')!.value)
+
+  return new Date(Date.UTC(year, month - 1, day))
+}
 
 const ORDER_BY = {
   REVIEW_COUNT: { reviewCount: 'desc' },
@@ -86,9 +105,10 @@ export async function getMover(moverId: string, viewer?: Express.User) {
   if (!mover) throw new AppError('NOT_FOUND')
 
   const { description, regions, ...summary } = mover
-  const [favoriteIds, ratingCounts] = await Promise.all([
+  const [favoriteIds, ratingCounts, isDesignated] = await Promise.all([
     findFavoriteMoverIds(viewer, [moverId]),
     countReviewsByRating(moverId),
+    viewer?.role === 'CUSTOMER' ? isMoverDesignated(viewer.id, moverId) : null,
   ])
 
   return {
@@ -96,8 +116,57 @@ export async function getMover(moverId: string, viewer?: Express.User) {
     description,
     regions,
     ratingCounts,
-    // TODO(#13): 로그인한 일반 유저의 활성 견적 요청에 지정된 기사님이면 true, 아니면 false 반환
+    isDesignated,
+  }
+}
+
+/**
+ * 로그인한 MOVER의 마이페이지 조회
+ */
+export async function getMyMoverPage(moverId: string) {
+  const mover = await prisma.moverProfile.findUnique({
+    where: { userId: moverId },
+    select: {
+      ...moverSummarySelect,
+      description: true,
+      regions: true,
+    },
+  })
+
+  if (!mover) {
+    throw new AppError('PROFILE_REQUIRED')
+  }
+
+  const todayKst = getTodayKstDate()
+
+  const [ratingCounts, inProgressCount] = await Promise.all([
+    countReviewsByRating(moverId),
+
+    prisma.moveRequest.count({
+      where: {
+        status: 'CONFIRMED',
+        moveDate: {
+          gte: todayKst,
+        },
+        quotes: {
+          some: {
+            moverId,
+            status: 'CONFIRMED',
+          },
+        },
+      },
+    }),
+  ])
+
+  const { description, regions, ...summary } = mover
+
+  return {
+    ...toMoverSummary(summary, null),
+    description,
+    regions,
+    ratingCounts,
     isDesignated: null,
+    inProgressCount,
   }
 }
 

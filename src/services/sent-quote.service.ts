@@ -58,7 +58,6 @@ export async function listMySentQuotes(
     },
     select: {
       userId: true,
-      nickname: true,
       user: {
         select: { name: true },
       },
@@ -66,10 +65,7 @@ export async function listMySentQuotes(
   })
 
   const customerNames = new Map(
-    customers.map((customer) => [
-      customer.userId,
-      customer.nickname ?? customer.user.name ?? null,
-    ]),
+    customers.map((customer) => [customer.userId, customer.user.name ?? null]),
   )
 
   const items = page.map((quote) => {

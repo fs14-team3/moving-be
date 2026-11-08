@@ -48,6 +48,7 @@ type FavoritePage = {
   items: { id: string; isFavorite: boolean }[]
   nextCursor: string | null
   hasNext: boolean
+  totalCount: number
 }
 type Query = Record<string, string | number>
 
@@ -122,7 +123,11 @@ describe('GET /api/customers/me/favorites', () => {
       isFavorite: true,
     })
     expect(page.items.every((item) => item.isFavorite)).toBe(true)
-    expect(page).toMatchObject({ nextCursor: null, hasNext: false })
+    expect(page).toMatchObject({
+      nextCursor: null,
+      hasNext: false,
+      totalCount: 4,
+    })
   })
 
   it('다른 유저는 자신의 찜 목록만 조회한다', async () => {
@@ -130,16 +135,22 @@ describe('GET /api/customers/me/favorites', () => {
 
     expect(res.status).toBe(200)
     expect(ids(res.body as FavoritePage)).toEqual([userId('a'), userId('e')])
+    expect(res.body.totalCount).toBe(2)
   })
 
   it('조회 개수를 지정하면 그만큼만 보여주고 다음 목록을 이어서 조회한다', async () => {
     const page = await favoritePage({ limit: 3 })
     expect(ids(page)).toEqual(recentFirst.slice(0, 3))
+    expect(page.totalCount).toBe(4)
 
     const next = await favoritePage({ limit: 3, cursor: cursorOf(page) })
 
     expect(ids(next)).toEqual([userId('a')])
-    expect(next).toMatchObject({ nextCursor: null, hasNext: false })
+    expect(next).toMatchObject({
+      nextCursor: null,
+      hasNext: false,
+      totalCount: 4,
+    })
   })
 
   it.each([1, 2, 3])(
@@ -175,6 +186,7 @@ describe('GET /api/customers/me/favorites', () => {
     const page = await favoritePage()
 
     expect(ids(page)).toEqual([userId('c'), userId('b'), userId('a')])
+    expect(page.totalCount).toBe(3)
   })
 
   it('다음 목록을 조회하기 전에 찜을 취소하거나 추가해도 이어서 조회한다', async () => {
@@ -218,7 +230,12 @@ describe('GET /api/customers/me/favorites', () => {
     const res = await listFavorites({ id, role: 'CUSTOMER' })
 
     expect(res.status).toBe(200)
-    expect(res.body).toEqual({ items: [], nextCursor: null, hasNext: false })
+    expect(res.body).toEqual({
+      items: [],
+      nextCursor: null,
+      hasNext: false,
+      totalCount: 0,
+    })
   })
 
   it('비회원은 찜 목록을 조회할 수 없다', async () => {
