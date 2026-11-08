@@ -42,4 +42,9 @@ moverRouter.get(
   moverInboxController.listReceivedRequests,
 )
 
-moverRouter.get('/me/quotes', listMySentQuotes)
+moverRouter.get(
+  '/me/quotes',
+  requireAuth,
+  requireRole('MOVER'),
+  listMySentQuotes,
+)
