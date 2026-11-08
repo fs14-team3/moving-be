@@ -12,6 +12,12 @@ export const moverRouter = Router()
 
 // 공개 API: 비로그인 사용자도 접근 가능
 moverRouter.get('/', optionalAuth, moverController.listMovers)
+moverRouter.get(
+  '/me',
+  requireAuth,
+  requireRole('MOVER'),
+  moverController.getMyMoverPage,
+)
 moverRouter.get('/:moverId', optionalAuth, moverController.getMover)
 moverRouter.get('/:moverId/reviews', reviewController.listMoverReviews)
 
