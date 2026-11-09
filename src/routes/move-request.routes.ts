@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import * as moveRequestController from '../controllers/move-request.controller'
 import * as receivedQuoteController from '../controllers/received-quote.controller'
+import * as moveRequestHistoryController from '../controllers/move-request-history.controller'
 import { requireAuth } from '../middlewares/require-auth'
 import { requireRole } from '../middlewares/require-role'
 
@@ -16,6 +17,14 @@ moveRequestRouter.get(
   requireAuth,
   moveRequestController.getActiveMoveRequest,
 )
+
+moveRequestRouter.get(
+  '/history',
+  requireAuth,
+  requireRole('CUSTOMER'),
+  moveRequestHistoryController.listMoveRequestHistory,
+)
+
 moveRequestRouter.get(
   '/:requestId',
   requireAuth,
