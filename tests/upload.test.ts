@@ -1,14 +1,24 @@
 import type { PutObjectCommand } from '@aws-sdk/client-s3'
+import sharp from 'sharp'
 import type { Test } from 'supertest'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest'
 import { s3 } from '../src/lib/s3'
-import { api, userId } from './helpers'
+import { api, pngWithoutPixels, userId } from './helpers'
 
 const user: Express.User = { id: userId('1'), role: 'CUSTOMER' }
 
-const JPEG = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10])
-const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00])
-const WEBP = Buffer.from('RIFF\x24\x00\x00\x00WEBPVP8 ', 'latin1')
+const JPEG_HEADER_ONLY = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10])
+const PNG_HEADER_ONLY = Buffer.from([
+  0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00,
+])
 
 const TYPE_REASON = 'JPG, PNG, WEBP 이미지만 올릴 수 있습니다'
 const SHAPE_REASON = '이미지 한 장을 file 필드로 보내 주세요'
@@ -33,42 +43,47 @@ describe('POST /api/uploads/images', () => {
     vi.restoreAllMocks()
   })
 
-  it.each([
-    ['image/jpeg', JPEG],
-    ['image/png', PNG],
-    ['image/webp', WEBP],
-  ])('%s 이미지를 S3에 저장하고 URL을 반환한다', async (contentType, body) => {
-    const response = await attach(
-      api(user).post('/api/uploads/images'),
-      body,
-      contentType,
-    )
+  const images: Record<string, Buffer> = {}
 
-    expect(response.status).toBe(201)
-    const { input } = send.mock.calls[0][0] as PutObjectCommand
-    expect(input).toMatchObject({
-      Bucket: 'test-bucket',
-      Key: expect.stringMatching(`^profile-images/${user.id}/[0-9a-f-]{36}$`),
-      Body: body,
-      ContentType: contentType,
-    })
-    expect(response.body).toEqual({ url: `https://images.test/${input.Key}` })
+  beforeAll(async () => {
+    const photo = () =>
+      sharp({
+        create: { width: 64, height: 48, channels: 3, background: '#f9502e' },
+      })
+    images.jpeg = await photo().jpeg().toBuffer()
+    images.png = await photo().png().toBuffer()
+    images.webp = await photo().webp().toBuffer()
   })
 
-  it('저장 형식은 보낸 형식이 아니라 파일 내용으로 정한다', async () => {
-    const response = await attach(
-      api(user).post('/api/uploads/images'),
-      JPEG,
-      'image/png',
-    )
+  it.each(['jpeg', 'png', 'webp'])(
+    '%s 이미지를 같은 형식으로 S3에 저장하고 URL을 반환한다',
+    async (format) => {
+      const response = await attach(
+        api(user).post('/api/uploads/images'),
+        images[format],
+        `image/${format}`,
+      )
 
-    expect(response.status).toBe(201)
-    const { input } = send.mock.calls[0][0] as PutObjectCommand
-    expect(input.ContentType).toBe('image/jpeg')
-  })
+      expect(response.status).toBe(201)
+      const { input } = send.mock.calls[0][0] as PutObjectCommand
+      expect(input).toMatchObject({
+        Bucket: 'test-bucket',
+        Key: expect.stringMatching(`^profile-images/${user.id}/[0-9a-f-]{36}$`),
+        ContentType: `image/${format}`,
+      })
+      expect(await sharp(input.Body as Buffer).metadata()).toMatchObject({
+        format,
+        width: 64,
+        height: 48,
+      })
+      expect(response.body).toEqual({
+        url: `https://images.test/${input.Key}`,
+      })
+    },
+  )
 
   it('로그인하지 않으면 401을 반환한다', async () => {
-    const response = await attach(api().post('/api/uploads/images'), PNG)
+    const response = await attach(api().post('/api/uploads/images'), images.png)
 
     expect(response.status).toBe(401)
     expect(send).not.toHaveBeenCalled()
@@ -97,24 +112,34 @@ describe('POST /api/uploads/images', () => {
       reason: TYPE_REASON,
     },
     {
+      name: '1,300만 화소를 넘으면',
+      send: (request) => attach(request, pngWithoutPixels(4_000, 3_251)),
+      reason: '1,300만 화소 이하 이미지만 올릴 수 있습니다',
+    },
+    {
+      name: '형식은 맞지만 읽을 수 없는 이미지면',
+      send: (request) => attach(request, JPEG_HEADER_ONLY, 'image/jpeg'),
+      reason: '이미지를 읽을 수 없습니다',
+    },
+    {
       name: '5MB를 넘으면',
       send: (request) =>
         attach(
           request,
-          Buffer.concat([JPEG, Buffer.alloc(5 * 1024 * 1024)]),
+          Buffer.concat([JPEG_HEADER_ONLY, Buffer.alloc(5 * 1024 * 1024)]),
           'image/jpeg',
         ),
       reason: '5MB 이하의 이미지만 올릴 수 있습니다',
     },
     {
       name: 'file 필드가 아니면',
-      send: (request) => attach(request, PNG, 'image/png', 'image'),
+      send: (request) => attach(request, PNG_HEADER_ONLY, 'image/png', 'image'),
       reason: SHAPE_REASON,
     },
     {
       name: '텍스트 필드를 함께 보내면',
       send: (request) =>
-        attach(request.field('note', 'x'.repeat(1024 * 1024)), PNG),
+        attach(request.field('note', 'x'.repeat(1024 * 1024)), PNG_HEADER_ONLY),
       reason: SHAPE_REASON,
     },
     {
