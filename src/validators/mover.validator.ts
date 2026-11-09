@@ -18,26 +18,26 @@ export const moverIdParams = z.object({
 
 export const createMoverProfileInput = z.object({
   imageUrl: z.string().trim().url().nullable().optional(),
-  nickname: z.string().trim().optional(),
-  careerYears: z.number().int().optional(),
-  intro: z.string().trim().optional(),
-  description: z.string().trim().optional(),
+  nickname: z.string().trim().min(1),
+  careerYears: z.number().int().min(0),
+  intro: z.string().trim().min(1),
+  description: z.string().trim().min(1),
   serviceTypes: z.array(z.enum(ServiceType)).optional(),
-  regions: z.array(z.string().trim()).optional(),
+  regions: z.array(z.string().trim().min(1)).optional(),
 })
 
 export const updateMoverProfileInput = z
   .object({
     imageUrl: z.string().trim().url().nullable().optional(),
-    nickname: z.string().trim().optional(),
-    careerYears: z.number().int().optional(),
-    intro: z.string().trim().optional(),
-    description: z.string().trim().optional(),
+    nickname: z.string().trim().min(1).optional(),
+    careerYears: z.number().int().min(0).optional(),
+    intro: z.string().trim().min(1).optional(),
+    description: z.string().trim().min(1).optional(),
     serviceTypes: z.array(z.enum(ServiceType)).optional(),
-    regions: z.array(z.string().trim()).optional(),
+    regions: z.array(z.string().trim().min(1)).optional(),
   })
   .refine((data) => Object.keys(data).length > 0, {
-    message: '수정할 항목을 하나 이상 입력해 주세요',
+    message: '수정할 항목을 하나 이상 입력해 주세요.',
   })
 
 export type ListMoversQuery = z.infer<typeof listMoversQuery>
