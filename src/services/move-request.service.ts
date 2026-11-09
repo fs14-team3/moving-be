@@ -212,11 +212,11 @@ async function customerNameOf(
   tx: Prisma.TransactionClient,
   customerId: string,
 ) {
-  const customer = await tx.customerProfile.findUniqueOrThrow({
-    where: { userId: customerId },
-    select: { nickname: true, user: { select: { name: true } } },
+  const user = await tx.user.findUniqueOrThrow({
+    where: { id: customerId },
+    select: { name: true },
   })
-  return customer.nickname?.trim() || customer.user.name?.trim() || '고객'
+  return user.name?.trim() || '고객'
 }
 
 function activeRequestWhere(

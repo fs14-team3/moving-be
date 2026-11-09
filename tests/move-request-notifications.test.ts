@@ -113,23 +113,19 @@ describe('견적 요청 생성 알림', () => {
   })
 
   it.each([
-    ['별명', '이사왕', '김고객', '이사왕'],
-    ['이름', null, '김고객', '김고객'],
-    ['기본값', null, null, '고객'],
-  ])(
-    '알림의 고객 이름은 %s을 사용한다',
-    async (_label, nickname, name, customerName) => {
-      await prisma.user.update({
-        where: { id: customer.id },
-        data: { name, customerProfile: { update: { nickname } } },
-      })
+    ['이름', '김고객', '김고객'],
+    ['기본값', null, '고객'],
+  ])('알림의 고객 이름은 %s을 사용한다', async (_label, name, customerName) => {
+    await prisma.user.update({
+      where: { id: customer.id },
+      data: { name },
+    })
 
-      await createRequest()
+    await createRequest()
 
-      const [notification] = await notifications('NEW_REQUEST')
-      expect(notification.payload).toEqual({ customerName, moveType: 'HOME' })
-    },
-  )
+    const [notification] = await notifications('NEW_REQUEST')
+    expect(notification.payload).toEqual({ customerName, moveType: 'HOME' })
+  })
 
   it('요청 생성이 실패하면 알림을 저장하지 않는다', async () => {
     await createRequest()
