@@ -182,6 +182,13 @@ export async function designateMover(
       data: { moveRequestId: requestId, moverId: mover.userId },
       select: { moveRequestId: true, moverId: true, createdAt: true },
     })
+    await tx.notification.deleteMany({
+      where: {
+        userId: mover.userId,
+        moveRequestId: requestId,
+        type: 'NEW_REQUEST',
+      },
+    })
     await createNotification(
       {
         type: 'NEW_DESIGNATED_REQUEST',

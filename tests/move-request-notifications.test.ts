@@ -165,6 +165,40 @@ describe('지정 견적 요청 알림', () => {
     ])
   })
 
+  it('서비스 지역 기사님을 지정하면 NEW_REQUEST 알림을 NEW_DESIGNATED_REQUEST 알림으로 바꾼다', async () => {
+    const { body: request } = await createRequest()
+
+    await designate(request.id, seoulMover)
+
+    expect(await notifications('NEW_DESIGNATED_REQUEST')).toEqual([
+      { userId: seoulMover, moveRequestId: request.id, payload },
+    ])
+    expect(await notifications('NEW_REQUEST')).toEqual(
+      [gyeonggiMover, bothRegionsMover].map((moverId) => ({
+        userId: moverId,
+        moveRequestId: request.id,
+        payload,
+      })),
+    )
+  })
+
+  it('NEW_REQUEST 알림을 이미 읽었어도 지정 알림은 읽지 않은 상태로 저장한다', async () => {
+    const { body: request } = await createRequest()
+    await prisma.notification.updateMany({
+      where: { userId: seoulMover },
+      data: { readAt: new Date() },
+    })
+
+    await designate(request.id, seoulMover)
+
+    expect(
+      await prisma.notification.findMany({
+        where: { userId: seoulMover },
+        select: { type: true, readAt: true },
+      }),
+    ).toEqual([{ type: 'NEW_DESIGNATED_REQUEST', readAt: null }])
+  })
+
   it('지정에 실패하면 알림을 저장하지 않는다', async () => {
     const { body: request } = await createRequest()
     await designate(request.id, busanMover)
