@@ -131,11 +131,19 @@ export async function changePassword(
   // 새 비밀번호 암호화
   const newPasswordHash = await hashPassword(input.newPassword)
 
-  await prisma.user.update({
-    where: { id: user.id },
-    data: {
-      passwordHash: newPasswordHash,
-    },
+  // 비밀번호 변경과 해당 사용자의 전체 세션 삭제를 원자적으로 처리
+  await prisma.$transaction(async (tx) => {
+    await tx.user.update({
+      where: { id: user.id },
+      data: {
+        passwordHash: newPasswordHash,
+      },
+    })
+
+    await tx.$executeRaw`
+      DELETE FROM "session"
+      WHERE sess #>> '{user,userId}' = ${user.id}
+    `
   })
 
   return {
