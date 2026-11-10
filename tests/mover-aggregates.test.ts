@@ -59,7 +59,8 @@ it('기존 리뷰와 확정 견적을 집계해 목록의 평점과 정렬을 �
     status: QuoteStatus
     ratings: number[]
   }[] = [
-    { moverId: reviewedMoverId, status: 'CONFIRMED', ratings: [4, 5] },
+    { moverId: reviewedMoverId, status: 'CONFIRMED', ratings: [4] },
+    { moverId: reviewedMoverId, status: 'CONFIRMED', ratings: [5] },
     { moverId: reviewedMoverId, status: 'CONFIRMED', ratings: [4] },
     { moverId: reviewedMoverId, status: 'SUBMITTED', ratings: [] },
     { moverId: reviewedMoverId, status: 'NOT_SELECTED', ratings: [] },
@@ -102,7 +103,7 @@ it('기존 리뷰와 확정 견적을 집계해 목록의 평점과 정렬을 �
       id: reviewedMoverId,
       reviewCount: 3,
       averageRating: 4.33,
-      confirmedCount: 2,
+      confirmedCount: 3,
     }),
     expect.objectContaining({
       id: confirmedMoverId,
