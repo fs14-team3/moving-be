@@ -51,6 +51,14 @@ const ERROR_CATALOG = {
     status: 409,
     message: '견적을 받을 수 없는 요청입니다',
   },
+  REVIEW_NOT_ALLOWED: {
+    status: 403,
+    message: '리뷰를 작성할 수 없는 견적입니다',
+  },
+  REVIEW_ALREADY_EXISTS: {
+    status: 409,
+    message: '이미 작성한 리뷰가 있습니다',
+  },
 } as const
 
 export type ErrorCode = keyof typeof ERROR_CATALOG

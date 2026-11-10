@@ -13,6 +13,7 @@ import { moveRequestRouter } from './move-request.routes'
 import { confirmQuoteRouter } from './confirm-quote.routes'
 import { receivedQuoteRouter } from './received-quote.routes'
 import { userRouter } from './user.routes'
+import { reviewRouter } from './review.routes'
 import { uploadRouter } from './upload.routes'
 
 export const apiRouter = Router()
@@ -54,4 +55,5 @@ apiRouter.use('/move-requests', moveRequestRouter)
 apiRouter.use('/quotes', confirmQuoteRouter)
 apiRouter.use('/quotes', receivedQuoteRouter)
 apiRouter.use('/users', userRouter)
+apiRouter.use('/reviews', reviewRouter)
 apiRouter.use('/uploads', uploadRouter)
