@@ -143,27 +143,31 @@ export async function confirmQuote(
       )
     }
 
-    // 최초 확정 또는 동일 견적 재시도 모두
-    // 현재 DB에 저장된 확정 결과를 조회
-    return tx.quote.findUniqueOrThrow({
+    // 최초 확정 및 동일 견적 재시도 모두 현재 확정 결과 조회
+    const updatedQuote = await tx.quote.findUniqueOrThrow({
       where: { id: quote.id },
     })
+
+    // 응답에 필요한 상세 정보도 트랜잭션 내부에서 조회
+    const mover = await getMover(updatedQuote.moverId, viewer, tx)
+
+    const moveRequest = await getMoveRequest(
+      viewer,
+      updatedQuote.moveRequestId,
+      tx,
+    )
+
+    return {
+      id: updatedQuote.id,
+      price: updatedQuote.price,
+      status: updatedQuote.status,
+      isDesignated: updatedQuote.isDesignated,
+      createdAt: updatedQuote.createdAt,
+      confirmedAt: updatedQuote.confirmedAt,
+      mover,
+      moveRequest,
+    }
   })
 
-  // 기존 QuoteDetail 응답 구조 유지
-  const [mover, moveRequest] = await Promise.all([
-    getMover(confirmedQuote.moverId, viewer),
-    getMoveRequest(viewer, confirmedQuote.moveRequestId),
-  ])
-
-  return {
-    id: confirmedQuote.id,
-    price: confirmedQuote.price,
-    status: confirmedQuote.status,
-    isDesignated: confirmedQuote.isDesignated,
-    createdAt: confirmedQuote.createdAt,
-    confirmedAt: confirmedQuote.confirmedAt,
-    mover,
-    moveRequest,
-  }
+  return confirmedQuote
 }
