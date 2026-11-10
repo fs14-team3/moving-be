@@ -30,7 +30,7 @@ npm run dev              # http://localhost:4000/api/health
 | `NODE_ENV`          | `development`                                           | `development` / `production`                                                                                   |
 | `SENTRY_DSN`        | `https://…@o0.ingest.sentry.io/0`                       | Sentry 에러 수집 DSN. 생략하면 Sentry를 사용하지 않습니다 (로컬은 생략)                                        |
 | `TRUST_PROXY`       | `0`                                                     | 신뢰할 프록시 홉 수. 로컬 `0`, Nginx 뒤 `1`, Cloudflare·로드밸런서 + Nginx는 `2`                               |
-| `AWS_REGION`        | `ap-southeast-2`                                        | 이미지 업로드 S3 버킷의 리전                                                                                   |
+| `AWS_REGION`        | `ap-southeast-2`                                        | 이미지 업로드 S3 버킷의 리전. 아래 두 값과 함께 생략하면 업로드 API만 503을 반환합니다 (로컬은 생략 가능)      |
 | `S3_BUCKET`         | `moving-images`                                         | 이미지 업로드 S3 버킷 이름. 자격 증명은 로컬 `aws login`, EC2 인스턴스 역할에서 가져옵니다                     |
 | `IMAGE_BASE_URL`    | `https://moving-images.s3.ap-southeast-2.amazonaws.com` | 업로드한 이미지의 공개 주소 (버킷 또는 CloudFront 도메인, 끝 `/` 제외). moving-fe의 `IMAGE_BASE_URL`과 같은 값 |
 

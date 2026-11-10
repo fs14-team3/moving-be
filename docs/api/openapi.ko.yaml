@@ -393,6 +393,11 @@ paths:
               schema: { '$ref': '#/components/schemas/UploadResponse' }
         '400': { '$ref': '#/components/responses/ValidationError' }
         '401': { '$ref': '#/components/responses/Unauthorized' }
+        '503':
+          description: '`UPLOAD_NOT_CONFIGURED`. 서버에 `AWS_REGION`·`S3_BUCKET`·`IMAGE_BASE_URL` 중 하나라도 없는 경우 (로컬 개발 환경 등)'
+          content:
+            application/json:
+              schema: { '$ref': '#/components/schemas/ErrorResponse' }
   '/movers':
     get:
       tags: [Movers]
@@ -1325,6 +1330,7 @@ components:
         - RATE_LIMITED
         - INTERNAL_ERROR
         - SERVICE_UNAVAILABLE
+        - UPLOAD_NOT_CONFIGURED
         - SOCIAL_LOGIN_FAILED
     ErrorResponse:
       type: object

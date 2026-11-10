@@ -10,6 +10,9 @@ export async function uploadImage(
   image: Buffer,
 ) {
   if (!viewer) throw new AppError('UNAUTHORIZED')
+  if (!env.AWS_REGION || !env.S3_BUCKET || !env.IMAGE_BASE_URL) {
+    throw new AppError('UPLOAD_NOT_CONFIGURED')
+  }
 
   const { body, contentType } = await toProfileImage(image)
   const key = `profile-images/${viewer.id}/${randomUUID()}`

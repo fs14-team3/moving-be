@@ -5,6 +5,7 @@ export default defineConfig({
   test: {
     env: {
       DATABASE_URL: process.env.TEST_DATABASE_URL ?? '',
+      AWS_REGION: 'ap-southeast-2',
       S3_BUCKET: 'test-bucket',
       IMAGE_BASE_URL: 'https://images.test',
     },

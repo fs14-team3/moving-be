@@ -10,6 +10,7 @@ import {
   it,
   vi,
 } from 'vitest'
+import { env } from '../src/config/env'
 import { s3 } from '../src/lib/s3'
 import { api, pngWithoutPixels, userId } from './helpers'
 
@@ -88,6 +89,28 @@ describe('POST /api/uploads/images', () => {
     expect(response.status).toBe(401)
     expect(send).not.toHaveBeenCalled()
   })
+
+  it.each(['AWS_REGION', 'S3_BUCKET', 'IMAGE_BASE_URL'] as const)(
+    '%s 환경 변수가 없으면 저장하지 않고 503을 반환한다',
+    async (name) => {
+      const original = env[name]
+      env[name] = undefined
+      vi.spyOn(console, 'error').mockImplementation(() => {})
+
+      try {
+        const response = await attach(
+          api(user).post('/api/uploads/images'),
+          images.png,
+        )
+
+        expect(response.status).toBe(503)
+        expect(response.body.error.code).toBe('UPLOAD_NOT_CONFIGURED')
+        expect(send).not.toHaveBeenCalled()
+      } finally {
+        env[name] = original
+      }
+    },
+  )
 
   it.each<{ name: string; send: (request: Test) => Test; reason: string }>([
     {
