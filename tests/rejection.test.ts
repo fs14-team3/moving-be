@@ -39,8 +39,14 @@ describe('POST /api/move-requests/:requestId/rejections', () => {
     })
   }
 
-  function rejectRequest(requestId: string, user?: Express.User) {
-    return api(user).post(`/api/move-requests/${requestId}/rejections`)
+  function rejectRequest(
+    requestId: string,
+    user?: Express.User,
+    body?: { reason?: string | null },
+  ) {
+    const request = api(user).post(`/api/move-requests/${requestId}/rejections`)
+
+    return body === undefined ? request : request.send(body)
   }
 
   beforeEach(async () => {
@@ -70,6 +76,7 @@ describe('POST /api/move-requests/:requestId/rejections', () => {
         isDesignated: false,
       },
       rejectedAt: expect.any(String),
+      reason: null,
     })
 
     const saved = await prisma.requestRejection.findUnique({
@@ -256,4 +263,113 @@ describe('POST /api/move-requests/:requestId/rejections', () => {
       expect(res.body.error.code).toBe('VALIDATION_ERROR')
     },
   )
+
+  it('반려 사유를 입력하면 저장하고 응답에 반환한다', async () => {
+    const request = await createMoveRequest()
+    const reason = '해당 날짜에는 이사 진행이 어렵습니다.'
+
+    const res = await rejectRequest(request.id, mover, { reason })
+
+    expect(res.status).toBe(201)
+    expect(res.body.reason).toBe(reason)
+
+    const saved = await prisma.requestRejection.findUniqueOrThrow({
+      where: {
+        moveRequestId_moverId: {
+          moveRequestId: request.id,
+          moverId,
+        },
+      },
+    })
+
+    expect(saved.reason).toBe(reason)
+  })
+
+  it.each([
+    ['빈 문자열', ''],
+    ['공백 문자열', '   '],
+  ])('%s을 입력하면 null로 저장한다', async (_, reason) => {
+    const request = await createMoveRequest()
+
+    const res = await rejectRequest(request.id, mover, { reason })
+
+    expect(res.status).toBe(201)
+    expect(res.body.reason).toBeNull()
+  })
+
+  it('반려 사유를 생략하면 null로 저장한다', async () => {
+    const request = await createMoveRequest()
+
+    const res = await rejectRequest(request.id, mover)
+
+    const saved = await prisma.requestRejection.findUniqueOrThrow({
+      where: {
+        moveRequestId_moverId: {
+          moveRequestId: request.id,
+          moverId,
+        },
+      },
+    })
+
+    expect(res.status).toBe(201)
+    expect(res.body.reason).toBeNull()
+    expect(saved.reason).toBeNull()
+  })
+
+  it('중복 반려 시 최초 반려 사유를 유지한다', async () => {
+    const request = await createMoveRequest()
+
+    const first = await rejectRequest(request.id, mover, {
+      reason: '첫 번째 사유',
+    })
+    const second = await rejectRequest(request.id, mover, {
+      reason: '변경하려는 사유',
+    })
+
+    expect(first.status).toBe(201)
+    expect(second.status).toBe(201)
+    expect(second.body.reason).toBe('첫 번째 사유')
+
+    const saved = await prisma.requestRejection.findUniqueOrThrow({
+      where: {
+        moveRequestId_moverId: {
+          moveRequestId: request.id,
+          moverId,
+        },
+      },
+    })
+
+    expect(saved.reason).toBe('첫 번째 사유')
+  })
+
+  it('반려 사유가 문자열이 아니면 400을 반환한다', async () => {
+    const request = await createMoveRequest()
+
+    const res = await api(mover)
+      .post(`/api/move-requests/${request.id}/rejections`)
+      .send({ reason: 123 })
+
+    expect(res.status).toBe(400)
+    expect(res.body.error.code).toBe('VALIDATION_ERROR')
+
+    const count = await prisma.requestRejection.count({
+      where: {
+        moveRequestId: request.id,
+        moverId,
+      },
+    })
+
+    expect(count).toBe(0)
+  })
+
+  it('반려 사유의 앞뒤 공백을 제거하여 저장한다', async () => {
+    const request = await createMoveRequest()
+
+    const res = await rejectRequest(request.id, mover, {
+      reason: ' 일정이 어렵습니다. ',
+    })
+
+    expect(res.status).toBe(201)
+    expect(res.body.reason).toBe('일정이 어렵습니다.')
+  })
 })

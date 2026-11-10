@@ -185,6 +185,7 @@ model Quote {
 model RequestRejection {
   moveRequestId String       @map("move_request_id") @db.Uuid
   moverId       String       @map("mover_id") @db.Uuid
+  reason        String?      @db.Text
   createdAt     DateTime     @default(now()) @map("created_at") @db.Timestamptz
   moveRequest   MoveRequest  @relation(fields: [moveRequestId], references: [id], onDelete: Cascade)
   mover         MoverProfile @relation(fields: [moverId], references: [userId], onDelete: Cascade)
