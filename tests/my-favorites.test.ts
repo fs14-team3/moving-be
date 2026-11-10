@@ -15,6 +15,7 @@ const movers: ({ id: string } & Prisma.MoverProfileCreateWithoutUserInput)[] = [
   {
     id: userId('a'),
     nickname: '든든이사',
+    description: '포장부터 정리까지 책임집니다.',
     careerYears: 10,
     serviceTypes: ['SMALL', 'HOME'],
     averageRating: 4.5,
@@ -115,11 +116,13 @@ describe('GET /api/customers/me/favorites', () => {
       nickname: '든든이사',
       imageUrl: null,
       intro: null,
+      description: '포장부터 정리까지 책임집니다.',
       careerYears: 10,
       serviceTypes: ['SMALL', 'HOME'],
       averageRating: 4.5,
       reviewCount: 5,
       confirmedCount: 2,
+      favoriteCount: 2,
       isFavorite: true,
     })
     expect(page.items.every((item) => item.isFavorite)).toBe(true)

@@ -28,6 +28,7 @@ const profile = {
   averageRating: 3.6,
   reviewCount: 5,
   confirmedCount: 12,
+  favoriteCount: 7,
 } satisfies Prisma.MoverProfileCreateWithoutUserInput
 
 async function createMoveRequest(
@@ -125,6 +126,7 @@ describe('GET /api/movers/me', () => {
       averageRating: 3.6,
       reviewCount: 5,
       confirmedCount: 12,
+      favoriteCount: 7,
       isFavorite: null,
       description: '포장부터 정리까지 책임집니다.',
       regions: ['서울', '경기'],

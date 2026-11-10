@@ -39,6 +39,10 @@ const ERROR_CATALOG = {
     status: 503,
     message: '일시적으로 서비스를 이용할 수 없습니다',
   },
+  UPLOAD_NOT_CONFIGURED: {
+    status: 503,
+    message: '이미지 업로드 설정이 되어 있지 않습니다',
+  },
   QUOTE_LIMIT_REACHED: {
     status: 409,
     message: '견적 접수 한도에 도달했습니다',
