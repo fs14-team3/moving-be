@@ -127,3 +127,30 @@ export async function createNotification(
     where,
   })
 }
+
+type NewRequestNotificationsInput = {
+  moveRequestId: string
+  regions: string[]
+  payload: { customerName: string; moveType: string }
+}
+
+export async function createNewRequestNotifications(
+  input: NewRequestNotificationsInput,
+  tx: Prisma.TransactionClient,
+) {
+  notificationPayloadSchemas.NEW_REQUEST.parse(input.payload)
+
+  const movers = await tx.moverProfile.findMany({
+    where: { regions: { hasSome: input.regions } },
+    select: { userId: true },
+  })
+  await tx.notification.createMany({
+    data: movers.map(({ userId }) => ({
+      userId,
+      type: 'NEW_REQUEST',
+      payload: input.payload,
+      moveRequestId: input.moveRequestId,
+    })),
+    skipDuplicates: true,
+  })
+}
