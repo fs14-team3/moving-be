@@ -10,6 +10,7 @@ import { quoteRouter } from './quote.routes'
 import { rejectionRouter } from './rejection.routes'
 import { notificationRouter } from './notification.routes'
 import { moveRequestRouter } from './move-request.routes'
+import { confirmQuoteRouter } from './confirm-quote.routes'
 import { receivedQuoteRouter } from './received-quote.routes'
 import { userRouter } from './user.routes'
 import { uploadRouter } from './upload.routes'
@@ -50,6 +51,7 @@ apiRouter.use('/move-requests', quoteRouter)
 apiRouter.use('/move-requests', rejectionRouter)
 apiRouter.use('/notifications', notificationRouter)
 apiRouter.use('/move-requests', moveRequestRouter)
+apiRouter.use('/quotes', confirmQuoteRouter)
 apiRouter.use('/quotes', receivedQuoteRouter)
 apiRouter.use('/users', userRouter)
 apiRouter.use('/uploads', uploadRouter)
