@@ -1024,9 +1024,10 @@ paths:
     post:
       tags: [Reviews]
       summary: 리뷰 작성
-      description:
-        호출자 본인의 완료된 이사에서 확정된 견적의 기사님에게 리뷰를 작성합니다(§11.1). 완료 판정 방식과 리뷰 중복 정책은
-        추후 결정하며, 다음 날까지 기다려야 한다는 별도 제한은 두지 않습니다.
+      description: >-
+        호출자 본인의 확정된 견적에 대해 리뷰를 작성합니다(§11.1).
+        한국 시간(Asia/Seoul) 기준 이사일 다음 날부터 작성할 수 있습니다.
+        동일 견적에 대해서는 리뷰를 한 번만 작성할 수 있습니다.
       operationId: createReview
       security:
         - sessionCookie: []
