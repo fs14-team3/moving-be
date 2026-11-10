@@ -372,7 +372,7 @@ paths:
     post:
       tags: [Uploads]
       summary: 프로필 이미지 업로드
-      description: 프로필 등록·수정에 사용할 이미지 URL을 반환합니다. 저장소, 허용 형식 및 용량 제한은 추후 결정합니다.
+      description: JPG·PNG·WEBP 이미지 한 장(5MB 이하, 1,300만 화소 이하)을 받아 방향을 바로잡고 EXIF(위치 정보 포함) 등 메타데이터를 지운 뒤, 같은 형식으로 S3에 저장하고 프로필 등록·수정의 imageUrl에 넣을 URL을 반환합니다. 형식은 보낸 Content-Type이 아니라 파일 내용으로 확인하며, `file` 외 다른 필드는 받지 않습니다. 형식·용량·화소 초과, 파일 누락, 손상된 이미지 오류는 400 `details`의 `file` 필드로 알려 줍니다.
       operationId: uploadImage
       security:
         - sessionCookie: []
@@ -393,6 +393,11 @@ paths:
               schema: { '$ref': '#/components/schemas/UploadResponse' }
         '400': { '$ref': '#/components/responses/ValidationError' }
         '401': { '$ref': '#/components/responses/Unauthorized' }
+        '503':
+          description: '`UPLOAD_NOT_CONFIGURED`. 서버에 `AWS_REGION`·`S3_BUCKET`·`IMAGE_BASE_URL` 중 하나라도 없는 경우 (로컬 개발 환경 등)'
+          content:
+            application/json:
+              schema: { '$ref': '#/components/schemas/ErrorResponse' }
   '/movers':
     get:
       tags: [Movers]
@@ -1325,6 +1330,7 @@ components:
         - RATE_LIMITED
         - INTERNAL_ERROR
         - SERVICE_UNAVAILABLE
+        - UPLOAD_NOT_CONFIGURED
         - SOCIAL_LOGIN_FAILED
     ErrorResponse:
       type: object
