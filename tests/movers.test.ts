@@ -17,6 +17,7 @@ const movers: ({ id: string } & Prisma.MoverProfileCreateWithoutUserInput)[] = [
     averageRating: 4.5,
     careerYears: 10,
     confirmedCount: 2,
+    favoriteCount: 3,
     regions: ['서울', '경기'],
     serviceTypes: ['SMALL', 'HOME'],
   },
@@ -135,6 +136,7 @@ describe('GET /api/movers', () => {
       averageRating: 4.5,
       reviewCount: 5,
       confirmedCount: 2,
+      favoriteCount: 3,
       isFavorite: null,
     })
     expect(items.every((item) => item.isFavorite === null)).toBe(true)

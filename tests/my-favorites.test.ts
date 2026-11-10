@@ -120,6 +120,7 @@ describe('GET /api/customers/me/favorites', () => {
       averageRating: 4.5,
       reviewCount: 5,
       confirmedCount: 2,
+      favoriteCount: 2,
       isFavorite: true,
     })
     expect(page.items.every((item) => item.isFavorite)).toBe(true)

@@ -40,6 +40,7 @@ export const moverSummarySelect = {
   averageRating: true,
   reviewCount: true,
   confirmedCount: true,
+  favoriteCount: true,
 } satisfies Prisma.MoverProfileSelect
 
 type MoverSummaryRow = Prisma.MoverProfileGetPayload<{
