@@ -1,6 +1,11 @@
 import type { Request, Response } from 'express'
 import * as moverService from '../services/mover.service'
-import { listMoversQuery, moverIdParams } from '../validators/mover.validator'
+import {
+  listMoversQuery,
+  moverIdParams,
+  createMoverProfileInput,
+  updateMoverProfileInput,
+} from '../validators/mover.validator'
 import { validate } from '../validators/validate'
 
 export async function listMovers(req: Request, res: Response) {
@@ -15,4 +20,20 @@ export async function getMover(req: Request, res: Response) {
 
 export async function getMyMoverPage(req: Request, res: Response) {
   res.json(await moverService.getMyMoverPage(req.user!.id))
+}
+
+export async function createMyProfile(req: Request, res: Response) {
+  const input = validate(createMoverProfileInput, req.body)
+
+  const profile = await moverService.createMyProfile(req.user, input)
+
+  res.status(201).json(profile)
+}
+
+export async function updateMyProfile(req: Request, res: Response) {
+  const input = validate(updateMoverProfileInput, req.body)
+
+  const profile = await moverService.updateMyProfile(req.user, input)
+
+  res.json(profile)
 }
