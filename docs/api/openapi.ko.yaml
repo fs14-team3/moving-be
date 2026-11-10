@@ -202,7 +202,7 @@ paths:
     patch:
       tags: [Me]
       summary: 기본 정보 수정
-      description: 일반 유저 정보 수정과 기사님 기본정보 수정에서 사용합니다. 변경 가능 항목과 인증 확인 방식은 추후 결정합니다.
+      description: 일반 유저와 기사님의 기본 정보를 수정합니다. 이름과 전화번호만 변경할 수 있으며 이메일은 변경할 수 없습니다.
       operationId: updateMe
       security:
         - sessionCookie: []
@@ -1448,10 +1448,12 @@ components:
     BasicInfoUpdate:
       type: object
       minProperties: 1
+      additionalProperties: false
       properties:
-        name: { type: string }
-        email: { type: string, format: email }
-        phone: { type: string, description: 지역에 맞는 전화번호 형식 }
+        name: { type: string, minLength: 2, maxLength: 20 }
+        phone:
+          type: string
+          description: 01012345678 또는 010-1234-5678 형식
     CustomerProfile:
       type: object
       description: '§3.4의 프로필 항목. 필수 입력 여부는 추후 결정합니다.'

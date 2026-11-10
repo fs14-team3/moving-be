@@ -67,19 +67,6 @@ export async function updateMe(
     })
     return getMe(viewer)
   } catch (error) {
-    // 같은 역할의 사용자에게 이미 등록된 이메일
-    if (
-      error instanceof Prisma.PrismaClientKnownRequestError &&
-      error.code === 'P2002'
-    ) {
-      throw new AppError('VALIDATION_ERROR', [
-        {
-          field: 'email',
-          reason: '이미 사용 중인 이메일입니다',
-        },
-      ])
-    }
-
     // 존재하지 않는 사용자
     if (
       error instanceof Prisma.PrismaClientKnownRequestError &&
