@@ -717,6 +717,7 @@ paths:
         한 요청에 기사님을 최대 3명까지 지정할 수 있으며, 동시에 요청해도 인원과 중복 제한을 지킵니다(§7.1.1).
         이 요청에 이미 견적을 보냈거나 요청을 반려한 기사님은 지정할 수 없습니다.
         지정 요청은 기사님에게 라벨로 강조 표시하며, 기사님의 서비스 가능 지역과 관계없이 요청할 수 있습니다.
+        지정된 기사님에게 지정 견적 요청 알림을 보내고, 같은 요청의 새 견적 요청 알림이 있으면 지정 알림으로 바꿉니다.
       operationId: designateMover
       security:
         - sessionCookie: []
@@ -1557,6 +1558,7 @@ components:
           nickname,
           imageUrl,
           intro,
+          description,
           careerYears,
           serviceTypes,
           averageRating,
@@ -1570,6 +1572,7 @@ components:
         nickname: { type: string, nullable: true }
         imageUrl: { type: string, format: uri, nullable: true }
         intro: { type: string, nullable: true }
+        description: { type: string, nullable: true }
         careerYears: { type: integer, nullable: true }
         serviceTypes:
           type: array
@@ -1591,9 +1594,8 @@ components:
       allOf:
         - { '$ref': '#/components/schemas/MoverSummary' }
         - type: object
-          required: [description, regions, ratingCounts, isDesignated]
+          required: [regions, ratingCounts, isDesignated]
           properties:
-            description: { type: string, nullable: true }
             regions:
               type: array
               items: { '$ref': '#/components/schemas/Region' }

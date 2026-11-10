@@ -40,6 +40,7 @@ export const moverSummarySelect = {
   nickname: true,
   imageUrl: true,
   intro: true,
+  description: true,
   careerYears: true,
   serviceTypes: true,
   averageRating: true,
@@ -119,11 +120,22 @@ export async function updateMyProfile(
 
   const existingProfile = await prisma.moverProfile.findUnique({
     where: { userId: moverId },
-    select: { userId: true },
+    select: { ...moverSummarySelect, regions: true },
   })
+  if (!mover) throw new AppError('NOT_FOUND')
 
-  if (!existingProfile) {
-    throw new AppError('PROFILE_REQUIRED')
+  const { regions, ...summary } = mover
+  const [favoriteIds, ratingCounts, isDesignated] = await Promise.all([
+    findFavoriteMoverIds(viewer, [moverId]),
+    countReviewsByRating(moverId),
+    viewer?.role === 'CUSTOMER' ? isMoverDesignated(viewer.id, moverId) : null,
+  ])
+
+  return {
+    ...toMoverSummary(summary, favoriteIds?.has(moverId) ?? null),
+    regions,
+    ratingCounts,
+    isDesignated,
   }
 
   return prisma.moverProfile.update({
@@ -140,7 +152,6 @@ export async function getMyMoverPage(moverId: string) {
     where: { userId: moverId },
     select: {
       ...moverSummarySelect,
-      description: true,
       regions: true,
     },
   })
@@ -170,11 +181,10 @@ export async function getMyMoverPage(moverId: string) {
     }),
   ])
 
-  const { description, regions, ...summary } = mover
+  const { regions, ...summary } = mover
 
   return {
     ...toMoverSummary(summary, null),
-    description,
     regions,
     ratingCounts,
     isDesignated: null,
