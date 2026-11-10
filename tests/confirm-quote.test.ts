@@ -226,7 +226,7 @@ describe('POST /api/quotes/:quoteId/confirm', () => {
     }
   })
 
-  it('이미 확정한 요청에 다시 확정하면 409이며 상태와 알림 수가 유지된다', async () => {
+  it('동일 견적을 다시 확정하면 200이며 상태와 알림 수가 유지된다', async () => {
     const request = await createMoveRequest()
     const quote = await createQuote(request.id)
 
@@ -250,8 +250,10 @@ describe('POST /api/quotes/:quoteId/confirm', () => {
     })
 
     expect(first.status).toBe(200)
-    expect(second.status).toBe(409)
-    expect(second.body.error.code).toBe('REQUEST_NOT_PENDING')
+    expect(second.status).toBe(200)
+    expect(second.body.id).toBe(first.body.id)
+    expect(second.body.status).toBe('CONFIRMED')
+    expect(second.body.confirmedAt).toBe(first.body.confirmedAt)
     expect(saved.status).toBe('CONFIRMED')
     expect(notificationsAfter).toBe(notificationsBefore)
 
