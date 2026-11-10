@@ -11,7 +11,21 @@ import { optionalAuth } from '../middlewares/optional-auth'
 
 export const moverRouter = Router()
 
-// 공개 API: 비로그인 사용자도 접근 가능
+moverRouter.post(
+  '/me/profile',
+  requireAuth,
+  requireRole('MOVER'),
+  moverController.createMyProfile,
+)
+
+moverRouter.patch(
+  '/me/profile',
+  requireAuth,
+  requireRole('MOVER'),
+  moverController.updateMyProfile,
+)
+
+// 공개 API
 moverRouter.get('/', optionalAuth, moverController.listMovers)
 moverRouter.get(
   '/me',
@@ -22,7 +36,7 @@ moverRouter.get(
 moverRouter.get('/:moverId', optionalAuth, moverController.getMover)
 moverRouter.get('/:moverId/reviews', reviewController.listMoverReviews)
 
-// 로그인한 사용자만 접근 가능
+// 로그인 사용자 API
 moverRouter.put(
   '/:moverId/favorite',
   requireAuth,
@@ -35,7 +49,7 @@ moverRouter.delete(
   favoriteController.removeFavorite,
 )
 
-// MOVER만 받은 이사 요청 조회 가능
+// MOVER 전용 API
 moverRouter.get(
   '/me/received-requests',
   requireAuth,
