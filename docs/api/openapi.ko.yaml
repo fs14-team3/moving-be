@@ -1558,6 +1558,7 @@ components:
           nickname,
           imageUrl,
           intro,
+          description,
           careerYears,
           serviceTypes,
           averageRating,
@@ -1571,6 +1572,7 @@ components:
         nickname: { type: string, nullable: true }
         imageUrl: { type: string, format: uri, nullable: true }
         intro: { type: string, nullable: true }
+        description: { type: string, nullable: true }
         careerYears: { type: integer, nullable: true }
         serviceTypes:
           type: array
@@ -1592,9 +1594,8 @@ components:
       allOf:
         - { '$ref': '#/components/schemas/MoverSummary' }
         - type: object
-          required: [description, regions, ratingCounts, isDesignated]
+          required: [regions, ratingCounts, isDesignated]
           properties:
-            description: { type: string, nullable: true }
             regions:
               type: array
               items: { '$ref': '#/components/schemas/Region' }

@@ -35,6 +35,7 @@ export const moverSummarySelect = {
   nickname: true,
   imageUrl: true,
   intro: true,
+  description: true,
   careerYears: true,
   serviceTypes: true,
   averageRating: true,
@@ -101,11 +102,11 @@ export async function listMovers(
 export async function getMover(moverId: string, viewer?: Express.User) {
   const mover = await prisma.moverProfile.findUnique({
     where: { userId: moverId },
-    select: { ...moverSummarySelect, description: true, regions: true },
+    select: { ...moverSummarySelect, regions: true },
   })
   if (!mover) throw new AppError('NOT_FOUND')
 
-  const { description, regions, ...summary } = mover
+  const { regions, ...summary } = mover
   const [favoriteIds, ratingCounts, isDesignated] = await Promise.all([
     findFavoriteMoverIds(viewer, [moverId]),
     countReviewsByRating(moverId),
@@ -114,7 +115,6 @@ export async function getMover(moverId: string, viewer?: Express.User) {
 
   return {
     ...toMoverSummary(summary, favoriteIds?.has(moverId) ?? null),
-    description,
     regions,
     ratingCounts,
     isDesignated,
@@ -129,7 +129,6 @@ export async function getMyMoverPage(moverId: string) {
     where: { userId: moverId },
     select: {
       ...moverSummarySelect,
-      description: true,
       regions: true,
     },
   })
@@ -159,11 +158,10 @@ export async function getMyMoverPage(moverId: string) {
     }),
   ])
 
-  const { description, regions, ...summary } = mover
+  const { regions, ...summary } = mover
 
   return {
     ...toMoverSummary(summary, null),
-    description,
     regions,
     ratingCounts,
     isDesignated: null,
