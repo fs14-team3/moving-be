@@ -120,22 +120,11 @@ export async function updateMyProfile(
 
   const existingProfile = await prisma.moverProfile.findUnique({
     where: { userId: moverId },
-    select: { ...moverSummarySelect, regions: true },
+    select: { userId: true },
   })
-  if (!mover) throw new AppError('NOT_FOUND')
 
-  const { regions, ...summary } = mover
-  const [favoriteIds, ratingCounts, isDesignated] = await Promise.all([
-    findFavoriteMoverIds(viewer, [moverId]),
-    countReviewsByRating(moverId),
-    viewer?.role === 'CUSTOMER' ? isMoverDesignated(viewer.id, moverId) : null,
-  ])
-
-  return {
-    ...toMoverSummary(summary, favoriteIds?.has(moverId) ?? null),
-    regions,
-    ratingCounts,
-    isDesignated,
+  if (!existingProfile) {
+    throw new AppError('PROFILE_REQUIRED')
   }
 
   return prisma.moverProfile.update({
@@ -239,7 +228,6 @@ export async function getMover(moverId: string, viewer?: Express.User) {
 
   if (!mover) throw new AppError('NOT_FOUND')
 
-  const { description, regions, ...summary } = mover
   const [favoriteIds, ratingCounts, isDesignated] = await Promise.all([
     findFavoriteMoverIds(viewer, [moverId]),
     countReviewsByRating(moverId),
@@ -247,9 +235,8 @@ export async function getMover(moverId: string, viewer?: Express.User) {
   ])
 
   return {
-    ...toMoverSummary(summary, favoriteIds?.has(moverId) ?? null),
-    description,
-    regions,
+    ...toMoverSummary(mover, favoriteIds?.has(moverId) ?? null),
+    regions: mover.regions,
     ratingCounts,
     isDesignated,
   }
