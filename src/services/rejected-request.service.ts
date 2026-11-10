@@ -22,17 +22,29 @@ export async function listMyRejectedRequests(
   const moverId = assertMover(viewer)
 
   // 본인이 반려한 요청에 속하는 커서인지 확인
+  let cursorRejection: {
+    moveRequestId: string
+    createdAt: Date
+  } | null = null
+
   if (cursor) {
-    const cursorRejection = await prisma.requestRejection.findFirst({
+    cursorRejection = await prisma.requestRejection.findUnique({
       where: {
-        moverId,
-        moveRequestId: cursor.moveRequestId,
-        createdAt: cursor.createdAt,
+        moveRequestId_moverId: {
+          moveRequestId: cursor.moveRequestId,
+          moverId,
+        },
       },
-      select: { moveRequestId: true },
+      select: {
+        moveRequestId: true,
+        createdAt: true,
+      },
     })
 
-    if (!cursorRejection) {
+    if (
+      !cursorRejection ||
+      cursorRejection.createdAt.getTime() !== cursor.createdAt.getTime()
+    ) {
       throw new AppError('VALIDATION_ERROR', [
         {
           field: 'cursor',
@@ -45,13 +57,13 @@ export async function listMyRejectedRequests(
   const rejections = await prisma.requestRejection.findMany({
     where: {
       moverId,
-      ...(cursor
+      ...(cursorRejection
         ? {
             OR: [
-              { createdAt: { lt: cursor.createdAt } },
+              { createdAt: { lt: cursorRejection.createdAt } },
               {
-                createdAt: cursor.createdAt,
-                moveRequestId: { lt: cursor.moveRequestId },
+                createdAt: cursorRejection.createdAt,
+                moveRequestId: { lt: cursorRejection.moveRequestId },
               },
             ],
           }
