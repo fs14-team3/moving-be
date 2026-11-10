@@ -13,10 +13,12 @@ const movers: ({ id: string } & Prisma.MoverProfileCreateWithoutUserInput)[] = [
   {
     id: userId('a'),
     nickname: '든든이사',
+    description: '포장부터 정리까지 책임집니다.',
     reviewCount: 5,
     averageRating: 4.5,
     careerYears: 10,
     confirmedCount: 2,
+    favoriteCount: 3,
     regions: ['서울', '경기'],
     serviceTypes: ['SMALL', 'HOME'],
   },
@@ -130,11 +132,13 @@ describe('GET /api/movers', () => {
       nickname: '든든이사',
       imageUrl: null,
       intro: null,
+      description: '포장부터 정리까지 책임집니다.',
       careerYears: 10,
       serviceTypes: ['SMALL', 'HOME'],
       averageRating: 4.5,
       reviewCount: 5,
       confirmedCount: 2,
+      favoriteCount: 3,
       isFavorite: null,
     })
     expect(items.every((item) => item.isFavorite === null)).toBe(true)
