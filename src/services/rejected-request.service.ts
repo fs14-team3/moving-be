@@ -117,6 +117,7 @@ export async function listMyRejectedRequests(
         createdAt: request.createdAt,
       },
       rejectedAt: rejection.createdAt,
+      reason: rejection.reason,
     }
   })
 

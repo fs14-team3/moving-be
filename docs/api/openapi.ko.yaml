@@ -847,7 +847,20 @@ paths:
         - { '$ref': '#/components/parameters/RequestIdPath' }
       description: |-
         로그인 세션으로 인증된 기사님만 요청할 수 있습니다. 비로그인은 401, 고객은 403을 반환합니다.
-        지역에 관계없이 받은 요청을 반려합니다(§8.3). 반려 사유 입력은 요구하지 않습니다.
+        지역에 관계없이 받은 요청을 반려합니다(§8.3).
+        반려 사유는 선택 입력이며, 생략하거나 빈 문자열로 전달하면 사유 없이 반려합니다.
+        이미 반려한 요청은 최초 반려 기록과 사유를 유지합니다.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+                  nullable: true
+                  description: 선택적 반려 사유. 빈 문자열과 공백만 입력한 경우 null로 저장됩니다.
       responses:
         '201':
           description: 반려 완료. 해당 요청은 받은 요청 목록에서 사라집니다.
@@ -1884,10 +1897,14 @@ components:
               items: { '$ref': '#/components/schemas/SentQuote' }
     RejectedRequest:
       type: object
-      required: [moveRequest, rejectedAt]
+      required: [moveRequest, rejectedAt, reason]
       properties:
         moveRequest: { '$ref': '#/components/schemas/RequestForMover' }
         rejectedAt: { type: string, format: date-time }
+        reason:
+          type: string
+          nullable: true
+          description: 반려 사유. 입력하지 않은 경우 null을 반환합니다.
     RejectedRequestListResponse:
       allOf:
         - { '$ref': '#/components/schemas/CursorMeta' }
