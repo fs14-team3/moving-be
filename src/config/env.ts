@@ -21,5 +21,9 @@ export const env = {
   DATABASE_URL: process.env.DATABASE_URL,
   SENTRY_DSN: process.env.SENTRY_DSN,
 
+  AWS_REGION: process.env.AWS_REGION,
+  S3_BUCKET: process.env.S3_BUCKET,
+  IMAGE_BASE_URL: process.env.IMAGE_BASE_URL,
+
   SESSION_SECRET: sessionSecret,
 }

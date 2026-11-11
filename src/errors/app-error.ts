@@ -39,6 +39,10 @@ const ERROR_CATALOG = {
     status: 503,
     message: '일시적으로 서비스를 이용할 수 없습니다',
   },
+  UPLOAD_NOT_CONFIGURED: {
+    status: 503,
+    message: '이미지 업로드 설정이 되어 있지 않습니다',
+  },
   QUOTE_LIMIT_REACHED: {
     status: 409,
     message: '견적 접수 한도에 도달했습니다',
@@ -46,6 +50,14 @@ const ERROR_CATALOG = {
   REQUEST_NOT_PENDING: {
     status: 409,
     message: '견적을 받을 수 없는 요청입니다',
+  },
+  REVIEW_NOT_ALLOWED: {
+    status: 403,
+    message: '리뷰를 작성할 수 없는 견적입니다',
+  },
+  REVIEW_ALREADY_EXISTS: {
+    status: 409,
+    message: '이미 작성한 리뷰가 있습니다',
   },
 } as const
 

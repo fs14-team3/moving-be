@@ -185,7 +185,7 @@ model Quote {
 model RequestRejection {
   moveRequestId String       @map("move_request_id") @db.Uuid
   moverId       String       @map("mover_id") @db.Uuid
-  createdAt     DateTime     @default(now()) @map("created_at") @db.Timestamptz
+  createdAt     DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
   moveRequest   MoveRequest  @relation(fields: [moveRequestId], references: [id], onDelete: Cascade)
   mover         MoverProfile @relation(fields: [moverId], references: [userId], onDelete: Cascade)
 
@@ -195,7 +195,7 @@ model RequestRejection {
 
 model Review {
   id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  quoteId   String   @map("quote_id") @db.Uuid
+  quoteId   String   @unique @map("quote_id") @db.Uuid
   rating    Int
   content   String
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
