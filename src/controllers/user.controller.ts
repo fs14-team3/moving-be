@@ -1,3 +1,4 @@
+import { env } from '../config/env'
 import type { Request, Response } from 'express'
 import * as userService from '../services/user.service'
 import {
@@ -22,5 +23,27 @@ export async function updateMe(req: Request, res: Response) {
 export async function changePassword(req: Request, res: Response) {
   const input = validate(changePasswordInput, req.body)
 
-  res.json(await userService.changePassword(req.user, input))
+  const result = await userService.changePassword(req.user, input)
+
+  // 현재 브라우저의 세션도 종료
+  await new Promise<void>((resolve, reject) => {
+    req.session.destroy((error) => {
+      if (error) {
+        reject(error)
+        return
+      }
+
+      resolve()
+    })
+  })
+
+  // 세션 쿠키 만료
+  res.clearCookie('moving.sid', {
+    httpOnly: true,
+    secure: env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    path: '/',
+  })
+
+  res.json(result)
 }

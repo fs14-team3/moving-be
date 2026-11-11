@@ -4,6 +4,7 @@ import * as moverController from '../controllers/mover.controller'
 import * as reviewController from '../controllers/review.controller'
 import * as moverInboxController from '../controllers/mover-inbox.controller'
 import { listMySentQuotes } from '../controllers/sent-quote.controller'
+import { listMyRejectedRequests } from '../controllers/rejected-request.controller'
 import { requireAuth } from '../middlewares/require-auth'
 import { requireRole } from '../middlewares/require-role'
 import { optionalAuth } from '../middlewares/optional-auth'
@@ -61,4 +62,11 @@ moverRouter.get(
   requireAuth,
   requireRole('MOVER'),
   listMySentQuotes,
+)
+
+moverRouter.get(
+  '/me/rejections',
+  requireAuth,
+  requireRole('MOVER'),
+  listMyRejectedRequests,
 )

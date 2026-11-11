@@ -690,6 +690,7 @@ paths:
             application/json:
               schema:
                 { '$ref': '#/components/schemas/MoveRequestHistoryResponse' }
+        '400': { '$ref': '#/components/responses/ValidationError' }
         '401': { '$ref': '#/components/responses/Unauthorized' }
         '403': { '$ref': '#/components/responses/Forbidden' }
   '/move-requests/{requestId}':
@@ -921,7 +922,7 @@ paths:
         로그인한 기사님이 본인이 보낸 견적을 최신순으로 조회합니다.
         로그인 세션으로 인증하며, 비로그인은 401, 고객은 403을 반환합니다.
         견적 상태별 필터링과 커서 기반 페이지네이션을 지원합니다.
-        고객명은 닉네임을 우선 사용하며, 닉네임이 없으면 사용자 이름을 반환합니다.
+        고객명은 User.name을 사용하며, 이름이 없으면 null을 반환합니다.
       operationId: listMySentQuotes
       security:
         - sessionCookie: []
@@ -952,17 +953,29 @@ paths:
         '400': { '$ref': '#/components/responses/ValidationError' }
         '401': { '$ref': '#/components/responses/Unauthorized' }
         '403': { '$ref': '#/components/responses/Forbidden' }
-  '/movers/me/rejected-requests':
+  '/movers/me/rejections':
     get:
       tags: [MoverInbox]
       summary: 반려한 요청 목록
+      description: |-
+        로그인한 기사님이 본인이 반려한 이사 요청 목록을 조회합니다.
+        반려 시각 최신순으로 정렬합니다.
+        이사 요청의 상태가 변경되더라도 반려 이력은 목록에 유지됩니다.
+        요청 상태에 따른 별도 필터링은 적용하지 않습니다.
       operationId: listMyRejectedRequests
       security:
         - sessionCookie: []
       x-roles: [MOVER]
       parameters:
         - { '$ref': '#/components/parameters/Cursor' }
-        - { '$ref': '#/components/parameters/Limit' }
+        - name: limit
+          in: query
+          description: 페이지 크기
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 10
       responses:
         '200':
           description: 반려한 요청 목록 페이지
@@ -970,6 +983,7 @@ paths:
             application/json:
               schema:
                 { '$ref': '#/components/schemas/RejectedRequestListResponse' }
+        '400': { '$ref': '#/components/responses/ValidationError' }
         '401': { '$ref': '#/components/responses/Unauthorized' }
         '403': { '$ref': '#/components/responses/Forbidden' }
   '/quotes/{quoteId}':
@@ -1841,7 +1855,10 @@ components:
         ]
       properties:
         id: { type: string, format: uuid }
-        customerName: { type: string, nullable: true }
+        customerName:
+          type: string
+          nullable: true
+          description: 고객의 User.name을 반환하며, 이름이 없으면 null을 반환합니다.
         moveType: { '$ref': '#/components/schemas/ServiceType' }
         moveDate: { type: string, format: date }
         from: { '$ref': '#/components/schemas/Address' }
