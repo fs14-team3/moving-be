@@ -713,6 +713,31 @@ paths:
         '401': { '$ref': '#/components/responses/Unauthorized' }
         '403': { '$ref': '#/components/responses/Forbidden' }
         '404': { '$ref': '#/components/responses/NotFound' }
+    delete:
+      tags: [MoveRequests]
+      summary: 견적 요청 삭제
+      description: |
+        요청자 본인의 이사 요청만 삭제할 수 있습니다.
+        견적이 한 건도 없는 요청만 삭제할 수 있으며,
+        지정 요청, 반려 기록, 연결된 알림은 함께 삭제됩니다.
+      operationId: deleteMoveRequest
+      security:
+        - sessionCookie: []
+      x-roles: [CUSTOMER]
+      parameters:
+        - { '$ref': '#/components/parameters/RequestIdPath' }
+      responses:
+        '204':
+          description: 삭제 완료. 응답 본문 없음.
+        '400': { '$ref': '#/components/responses/ValidationError' }
+        '401': { '$ref': '#/components/responses/Unauthorized' }
+        '403': { '$ref': '#/components/responses/Forbidden' }
+        '404': { '$ref': '#/components/responses/NotFound' }
+        '409':
+          description: '`REQUEST_HAS_QUOTES`. 이미 견적이 제출된 요청은 삭제할 수 없습니다.'
+          content:
+            application/json:
+              schema: { '$ref': '#/components/schemas/ErrorResponse' }
   '/move-requests/{requestId}/designations':
     post:
       tags: [MoveRequests]
@@ -1327,6 +1352,7 @@ components:
         - MOVER_ALREADY_RESPONDED
         - DESIGNATION_LIMIT_REACHED
         - REQUEST_NOT_PENDING
+        - REQUEST_HAS_QUOTES
         - QUOTE_LIMIT_REACHED
         - RATE_LIMITED
         - INTERNAL_ERROR

@@ -21,6 +21,12 @@ moveRequestRouter.get(
   requireAuth,
   moveRequestController.getMoveRequest,
 )
+moveRequestRouter.delete(
+  '/:requestId',
+  requireAuth,
+  requireRole('CUSTOMER'),
+  moveRequestController.deleteMoveRequest,
+)
 moveRequestRouter.post(
   '/:requestId/designations',
   requireAuth,
