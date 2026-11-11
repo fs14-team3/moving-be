@@ -9,11 +9,12 @@ import { validate } from '../validators/validate'
 
 export async function sendQuote(req: Request, res: Response) {
   const { requestId } = validate(sendQuoteParamsSchema, req.params)
-  const { price } = validate(sendQuoteBodySchema, req.body)
+  const { price, comment } = validate(sendQuoteBodySchema, req.body)
 
   const result = await quoteService.sendQuote(req.user, {
     requestId,
     price,
+    comment,
   })
 
   res.status(201).json(result)

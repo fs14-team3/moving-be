@@ -168,6 +168,7 @@ model Quote {
   moveRequestId String         @map("move_request_id") @db.Uuid
   moverId       String         @map("mover_id") @db.Uuid
   price         Int
+  comment       String?        @db.Text
   isDesignated  Boolean        @default(false) @map("is_designated")
   status        QuoteStatus    @default(SUBMITTED)
   confirmedAt   DateTime?      @map("confirmed_at") @db.Timestamptz

@@ -66,6 +66,7 @@ async function createQuote(
     status?: QuoteStatus
     isDesignated?: boolean
     price?: number
+    comment?: string | null
   } = {},
 ) {
   return prisma.quote.create({
@@ -75,6 +76,7 @@ async function createQuote(
       price: options.price ?? 350000,
       status: options.status ?? 'SUBMITTED',
       isDesignated: options.isDesignated ?? false,
+      comment: options.comment ?? null,
     },
   })
 }
@@ -468,5 +470,23 @@ describe('POST /api/quotes/:quoteId/confirm', () => {
     })
 
     expect(moverProfile.confirmedCount).toBe(0)
+  })
+
+  it('견적 확정 후에도 기존 코멘트를 유지하여 반환한다', async () => {
+    const request = await createMoveRequest()
+    const quote = await createQuote(request.id, moverId, {
+      comment: '포장 서비스 포함 견적입니다.',
+    })
+
+    const res = await confirmQuote(quote.id, customer)
+
+    expect(res.status).toBe(200)
+    expect(res.body.comment).toBe('포장 서비스 포함 견적입니다.')
+
+    const saved = await prisma.quote.findUniqueOrThrow({
+      where: { id: quote.id },
+    })
+
+    expect(saved.comment).toBe('포장 서비스 포함 견적입니다.')
   })
 })

@@ -1784,10 +1784,14 @@ components:
     CustomerQuote:
       description: 견적을 요청한 일반 유저에게 보이는 견적
       type: object
-      required: [id, price, status, isDesignated, createdAt, mover]
+      required: [id, price, comment, status, isDesignated, createdAt, mover]
       properties:
         id: { type: string, format: uuid }
         price: { type: integer, description: 원(KRW), example: 350000 }
+        comment:
+          type: string
+          nullable: true
+          description: 기사님이 견적 제출 시 입력한 코멘트. 미입력 시 null.
         status: { '$ref': '#/components/schemas/QuoteStatus' }
         isDesignated: { type: boolean, description: 지정 견적 라벨 표시용 }
         createdAt: { type: string, format: date-time }
@@ -1811,6 +1815,10 @@ components:
       required: [price]
       properties:
         price: { type: integer, description: 견적가 (원) }
+        comment:
+          type: string
+          nullable: true
+          description: 견적 코멘트. 선택 입력이며 빈 문자열은 null로 저장됩니다.
     RequestForMover:
       description: 기사님에게 보이는 견적 요청
       type: object
@@ -1848,10 +1856,12 @@ components:
     SentQuote:
       description: 견적을 보낸 기사님에게 보이는 견적
       type: object
-      required: [id, price, status, isDesignated, createdAt, moveRequest]
+      required:
+        [id, price, comment, status, isDesignated, createdAt, moveRequest]
       properties:
         id: { type: string, format: uuid }
         price: { type: integer }
+        comment: { type: string, nullable: true }
         status: { '$ref': '#/components/schemas/QuoteStatus' }
         isDesignated: { type: boolean }
         createdAt: { type: string, format: date-time }

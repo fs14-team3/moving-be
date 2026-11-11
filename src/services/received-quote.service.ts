@@ -30,6 +30,7 @@ export async function listReceivedQuotes(
     select: {
       id: true,
       price: true,
+      comment: true,
       status: true,
       isDesignated: true,
       createdAt: true,
@@ -57,6 +58,7 @@ export async function listReceivedQuotes(
     items: quotes.map((quote) => ({
       id: quote.id,
       price: quote.price,
+      comment: quote.comment,
       status: quote.status,
       isDesignated: quote.isDesignated,
       createdAt: quote.createdAt,
@@ -81,6 +83,7 @@ export async function getReceivedQuote(
     select: {
       id: true,
       price: true,
+      comment: true,
       status: true,
       isDesignated: true,
       createdAt: true,
@@ -100,6 +103,7 @@ export async function getReceivedQuote(
   return {
     id: quote.id,
     price: quote.price,
+    comment: quote.comment,
     status: quote.status,
     isDesignated: quote.isDesignated,
     createdAt: quote.createdAt,
