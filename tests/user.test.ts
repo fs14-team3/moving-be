@@ -131,11 +131,13 @@ describe('User API', () => {
   })
 
   describe('PATCH /api/users/me/password', () => {
-    it('현재 비밀번호가 맞으면 비밀번호를 변경한다', async () => {
+    it('비밀번호 변경 성공 시 모든 기존 세션을 만료시킨다', async () => {
       const id = userId('8')
       await createMover(id)
 
+      // 서로 다른 브라우저 세션 생성
       const agent = await signIn({ id, role: 'MOVER' })
+      const otherAgent = await signIn({ id, role: 'MOVER' })
 
       const response = await agent.patch('/api/users/me/password').send({
         currentPassword: 'Test1234!',
@@ -146,6 +148,21 @@ describe('User API', () => {
       expect(response.status).toBe(200)
       expect(response.body.message).toBe('비밀번호가 변경되었습니다')
 
+      // 기존 브라우저 세션은 모두 만료되어야 함
+      await agent.get('/api/users/me').expect(401)
+      await otherAgent.get('/api/users/me').expect(401)
+
+      // 이전 비밀번호는 더 이상 사용할 수 없음
+      await api()
+        .post('/api/auth/login')
+        .send({
+          role: 'MOVER',
+          email: `${id}@example.com`,
+          password: 'Test1234!',
+        })
+        .expect(401)
+
+      // 새 비밀번호로는 로그인 가능
       await api()
         .post('/api/auth/login')
         .send({
