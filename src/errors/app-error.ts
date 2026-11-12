@@ -51,6 +51,10 @@ const ERROR_CATALOG = {
     status: 409,
     message: '견적을 받을 수 없는 요청입니다',
   },
+  REQUEST_HAS_QUOTES: {
+    status: 409,
+    message: '이미 견적이 제출된 요청은 삭제할 수 없습니다',
+  },
   REVIEW_NOT_ALLOWED: {
     status: 403,
     message: '리뷰를 작성할 수 없는 견적입니다',
