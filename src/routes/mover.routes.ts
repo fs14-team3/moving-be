@@ -3,7 +3,10 @@ import * as favoriteController from '../controllers/favorite.controller'
 import * as moverController from '../controllers/mover.controller'
 import * as reviewController from '../controllers/review.controller'
 import * as moverInboxController from '../controllers/mover-inbox.controller'
-import { listMySentQuotes } from '../controllers/sent-quote.controller'
+import {
+  getMySentQuote,
+  listMySentQuotes,
+} from '../controllers/sent-quote.controller'
 import { listMyRejectedRequests } from '../controllers/rejected-request.controller'
 import { requireAuth } from '../middlewares/require-auth'
 import { requireRole } from '../middlewares/require-role'
@@ -62,6 +65,13 @@ moverRouter.get(
   requireAuth,
   requireRole('MOVER'),
   listMySentQuotes,
+)
+
+moverRouter.get(
+  '/me/quotes/:quoteId',
+  requireAuth,
+  requireRole('MOVER'),
+  getMySentQuote,
 )
 
 moverRouter.get(

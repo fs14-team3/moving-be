@@ -1,6 +1,7 @@
 import { AppError } from '../errors/app-error'
 import { prisma } from '../lib/prisma'
 import { createNotification } from './notification-creation.service'
+import { toSentQuote } from './sent-quote.service'
 import type { SendQuoteBody } from '../validators/quote.validator'
 
 type SendQuoteInput = SendQuoteBody & {
@@ -163,32 +164,9 @@ export async function sendQuote(
       tx,
     )
 
-    // OpenAPI SentQuote 응답 구조
-    return {
-      id: quote.id,
-      price: quote.price,
-      status: quote.status,
-      isDesignated: quote.isDesignated,
-      createdAt: quote.createdAt,
-      moveRequest: {
-        id: request.id,
-        customerName: request.customer.user.name ?? null,
-        moveType: request.moveType,
-        moveDate: request.moveDate.toISOString().slice(0, 10),
-        from: {
-          address: request.fromAddress,
-          zonecode: request.fromZonecode,
-          region: request.fromRegion,
-        },
-        to: {
-          address: request.toAddress,
-          zonecode: request.toZonecode,
-          region: request.toRegion,
-        },
-        status: request.status,
-        isDesignated,
-        createdAt: request.createdAt,
-      },
-    }
+    return toSentQuote(
+      { ...quote, moveRequest: request },
+      request.customer.user.name ?? null,
+    )
   })
 }
