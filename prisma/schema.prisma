@@ -59,14 +59,14 @@ enum NotificationType {
 }
 
 model User {
-  id              String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  role            UserRole
-  email           String?
-  passwordHash    String?          @map("password_hash")
-  name            String?
-  phone           String?
-  createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt       DateTime         @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  role         UserRole
+  email        String?
+  passwordHash String?  @map("password_hash")
+  name         String?
+  phone        String?
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
   socialAccounts  SocialAccount[]
   customerProfile CustomerProfile?
@@ -122,6 +122,7 @@ model MoverProfile {
   quotes             Quote[]
   requestRejections  RequestRejection[]
   favorites          Favorite[]
+  reviewSummary      ReviewSummary?
 
   @@map("mover_profiles")
 }
@@ -238,6 +239,20 @@ model Session {
   sid    String   @id @db.VarChar
   sess   Json
   expire DateTime @db.Timestamp(6)
+
   @@index([expire])
   @@map("session")
+}
+
+model ReviewSummary {
+  id          String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  moverId     String       @unique @map("mover_id") @db.Uuid
+  reviewCount Int          @map("review_count")
+  summary     String
+  aspects     Json
+  createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  mover       MoverProfile @relation(fields: [moverId], references: [userId], onDelete: Cascade)
+
+  @@map("review_summaries")
 }
