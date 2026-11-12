@@ -23,7 +23,6 @@ describe('User API', () => {
 
       const response = await agent.patch('/api/users/me').send({
         name: '수정된 기사',
-        email: 'updated-mover@example.com',
         phone: '010-2222-3333',
       })
 
@@ -33,7 +32,7 @@ describe('User API', () => {
           id,
           role: 'MOVER',
           name: '수정된 기사',
-          email: 'updated-mover@example.com',
+          email: `${id}@example.com`,
           phone: '01022223333',
         }),
       )
@@ -72,14 +71,14 @@ describe('User API', () => {
       expect(response.status).toBe(400)
     })
 
-    it('잘못된 이메일 형식이면 400을 반환한다', async () => {
+    it('이메일 변경 요청이면 400을 반환한다', async () => {
       const id = userId('4')
       await createMover(id)
 
       const agent = await signIn({ id, role: 'MOVER' })
 
       const response = await agent.patch('/api/users/me').send({
-        email: 'invalid-email',
+        email: 'updated@example.com',
       })
 
       expect(response.status).toBe(400)
@@ -98,26 +97,18 @@ describe('User API', () => {
       expect(response.status).toBe(400)
     })
 
-    it('같은 역할에 이미 등록된 이메일이면 400을 반환한다', async () => {
+    it('이름과 이메일을 함께 수정 요청해도 400을 반환한다', async () => {
       const id = userId('6')
-      const duplicateId = userId('7')
-
       await createMover(id)
-      await createMover(duplicateId)
 
       const agent = await signIn({ id, role: 'MOVER' })
 
-      await prisma.user.update({
-        where: { id: duplicateId },
-        data: { email: 'duplicate@example.com' },
-      })
-
       const response = await agent.patch('/api/users/me').send({
-        email: 'duplicate@example.com',
+        name: '수정된 기사',
+        email: 'updated@example.com',
       })
 
       expect(response.status).toBe(400)
-      expect(response.body.error.code).toBe('VALIDATION_ERROR')
     })
 
     it('로그인하지 않은 사용자는 401을 반환한다', async () => {
