@@ -23,6 +23,7 @@ describe('GET /api/movers/me/quotes', () => {
     ownerId = moverId,
     status: 'SUBMITTED' | 'CONFIRMED' | 'NOT_SELECTED' = 'SUBMITTED',
     isDesignated = false,
+    comment: string | null = null,
   ) {
     const date = new Date()
     date.setUTCDate(date.getUTCDate() + 14)
@@ -49,6 +50,7 @@ describe('GET /api/movers/me/quotes', () => {
         moveRequestId: moveRequest.id,
         moverId: ownerId,
         price: 300000,
+        comment,
         status,
         isDesignated,
       },
@@ -115,6 +117,24 @@ describe('GET /api/movers/me/quotes', () => {
           region: '경기',
         },
       },
+    })
+  })
+
+  it('보낸 견적 목록에서 코멘트를 반환한다', async () => {
+    const quote = await createQuote(
+      moverId,
+      'SUBMITTED',
+      false,
+      '추가 운반 비용은 없습니다.',
+    )
+
+    const res = await api(mover).get('/api/movers/me/quotes')
+
+    expect(res.status).toBe(200)
+    expect(res.body.items).toHaveLength(1)
+    expect(res.body.items[0]).toMatchObject({
+      id: quote.id,
+      comment: '추가 운반 비용은 없습니다.',
     })
   })
 

@@ -159,6 +159,7 @@ export async function confirmQuote(
   return {
     id: confirmedQuote.id,
     price: confirmedQuote.price,
+    comment: confirmedQuote.comment,
     status: confirmedQuote.status,
     isDesignated: confirmedQuote.isDesignated,
     createdAt: confirmedQuote.createdAt,

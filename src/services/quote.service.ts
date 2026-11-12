@@ -32,7 +32,7 @@ function assertMover(viewer: Express.User | undefined): string {
 
 export async function sendQuote(
   viewer: Express.User | undefined,
-  { requestId, price }: SendQuoteInput,
+  { requestId, price, comment }: SendQuoteInput,
 ) {
   const moverId = assertMover(viewer)
 
@@ -143,6 +143,7 @@ export async function sendQuote(
         moveRequestId: requestId,
         moverId,
         price,
+        comment,
         isDesignated,
         status: 'SUBMITTED',
       },
@@ -167,6 +168,7 @@ export async function sendQuote(
     return {
       id: quote.id,
       price: quote.price,
+      comment: quote.comment,
       status: quote.status,
       isDesignated: quote.isDesignated,
       createdAt: quote.createdAt,
