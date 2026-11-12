@@ -33,6 +33,7 @@ npm run dev              # http://localhost:4000/api/health
 | `AWS_REGION`        | `ap-southeast-2`                                        | 이미지 업로드 S3 버킷의 리전. 아래 두 값과 함께 생략하면 업로드 API만 503을 반환합니다 (로컬은 생략 가능)      |
 | `S3_BUCKET`         | `moving-images`                                         | 이미지 업로드 S3 버킷 이름. 자격 증명은 로컬 `aws login`, EC2 인스턴스 역할에서 가져옵니다                     |
 | `IMAGE_BASE_URL`    | `https://moving-images.s3.ap-southeast-2.amazonaws.com` | 업로드한 이미지의 공개 주소 (버킷 또는 CloudFront 도메인, 끝 `/` 제외). moving-fe의 `IMAGE_BASE_URL`과 같은 값 |
+| `GEMINI_API_KEY`    | `your-gemini-api-key`                                   | 리뷰 요약 생성에 사용하는 Google Gemini API 키                                                                 |
 
 새 환경 변수를 추가하면 `.env.example`과 이 표를 같은 PR에서 수정합니다.
 
