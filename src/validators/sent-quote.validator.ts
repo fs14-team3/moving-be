@@ -13,4 +13,8 @@ export const sentQuoteQuerySchema = z.object({
   status: z.enum(['SUBMITTED', 'CONFIRMED', 'NOT_SELECTED']).optional(),
 })
 
+export const sentQuoteParamsSchema = z.object({
+  quoteId: z.uuid(),
+})
+
 export type SentQuoteQuery = z.infer<typeof sentQuoteQuerySchema>

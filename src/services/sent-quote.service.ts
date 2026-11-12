@@ -1,4 +1,5 @@
 import { AppError } from '../errors/app-error'
+import type { MoveRequest, Quote } from '../generated/prisma/client'
 import { prisma } from '../lib/prisma'
 import { encodeCursor } from '../utils/cursor'
 import type { SentQuoteQuery } from '../validators/sent-quote.validator'
@@ -13,6 +14,40 @@ function assertMover(viewer: Express.User | undefined): string {
   }
 
   return viewer.id
+}
+
+export function toSentQuote(
+  quote: Quote & { moveRequest: MoveRequest },
+  customerName: string | null,
+) {
+  const request = quote.moveRequest
+
+  return {
+    id: quote.id,
+    price: quote.price,
+    status: quote.status,
+    isDesignated: quote.isDesignated,
+    createdAt: quote.createdAt,
+    moveRequest: {
+      id: request.id,
+      customerName,
+      moveType: request.moveType,
+      moveDate: request.moveDate.toISOString().slice(0, 10),
+      from: {
+        address: request.fromAddress,
+        zonecode: request.fromZonecode,
+        region: request.fromRegion,
+      },
+      to: {
+        address: request.toAddress,
+        zonecode: request.toZonecode,
+        region: request.toRegion,
+      },
+      status: request.status,
+      isDesignated: quote.isDesignated,
+      createdAt: request.createdAt,
+    },
+  }
 }
 
 export async function listMySentQuotes(
@@ -68,36 +103,9 @@ export async function listMySentQuotes(
     customers.map((customer) => [customer.userId, customer.user.name ?? null]),
   )
 
-  const items = page.map((quote) => {
-    const request = quote.moveRequest
-
-    return {
-      id: quote.id,
-      price: quote.price,
-      status: quote.status,
-      isDesignated: quote.isDesignated,
-      createdAt: quote.createdAt,
-      moveRequest: {
-        id: request.id,
-        customerName: customerNames.get(request.customerId) ?? null,
-        moveType: request.moveType,
-        moveDate: request.moveDate.toISOString().slice(0, 10),
-        from: {
-          address: request.fromAddress,
-          zonecode: request.fromZonecode,
-          region: request.fromRegion,
-        },
-        to: {
-          address: request.toAddress,
-          zonecode: request.toZonecode,
-          region: request.toRegion,
-        },
-        status: request.status,
-        isDesignated: quote.isDesignated,
-        createdAt: request.createdAt,
-      },
-    }
-  })
+  const items = page.map((quote) =>
+    toSentQuote(quote, customerNames.get(quote.moveRequest.customerId) ?? null),
+  )
 
   const last = page.at(-1)
 
@@ -112,4 +120,26 @@ export async function listMySentQuotes(
         : null,
     hasNext,
   }
+}
+
+export async function getMySentQuote(
+  viewer: Express.User | undefined,
+  quoteId: string,
+) {
+  const moverId = assertMover(viewer)
+
+  const quote = await prisma.quote.findFirst({
+    where: { id: quoteId, moverId },
+    include: {
+      moveRequest: {
+        include: {
+          customer: { select: { user: { select: { name: true } } } },
+        },
+      },
+    },
+  })
+
+  if (!quote) throw new AppError('NOT_FOUND')
+
+  return toSentQuote(quote, quote.moveRequest.customer.user.name ?? null)
 }

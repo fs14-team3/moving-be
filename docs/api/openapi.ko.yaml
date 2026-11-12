@@ -965,6 +965,29 @@ paths:
         '400': { '$ref': '#/components/responses/ValidationError' }
         '401': { '$ref': '#/components/responses/Unauthorized' }
         '403': { '$ref': '#/components/responses/Forbidden' }
+  '/movers/me/quotes/{quoteId}':
+    get:
+      tags: [MoverInbox]
+      summary: 보낸 견적 상세 조회 (기사님)
+      description: |-
+        로그인한 기사님이 본인이 보낸 견적 하나를 조회합니다.
+        다른 기사님이 보낸 견적이거나 없는 견적이면 404를 반환합니다.
+      operationId: getMySentQuote
+      security:
+        - sessionCookie: []
+      x-roles: [MOVER]
+      parameters:
+        - { '$ref': '#/components/parameters/QuoteIdPath' }
+      responses:
+        '200':
+          description: 보낸 견적 상세
+          content:
+            application/json:
+              schema: { '$ref': '#/components/schemas/SentQuote' }
+        '400': { '$ref': '#/components/responses/ValidationError' }
+        '401': { '$ref': '#/components/responses/Unauthorized' }
+        '403': { '$ref': '#/components/responses/Forbidden' }
+        '404': { '$ref': '#/components/responses/NotFound' }
   '/movers/me/rejections':
     get:
       tags: [MoverInbox]
