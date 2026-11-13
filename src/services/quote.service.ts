@@ -148,6 +148,29 @@ export async function sendQuote(
       },
     })
 
+    // 견적별 채팅방 및 참여자 생성
+    await tx.chatRoom.create({
+      data: {
+        quote: {
+          connect: { id: quote.id },
+        },
+        participants: {
+          create: [
+            {
+              user: {
+                connect: { id: request.customerId },
+              },
+            },
+            {
+              user: {
+                connect: { id: moverId },
+              },
+            },
+          ],
+        },
+      },
+    })
+
     // 고객에게 새 견적 알림 생성
     await createNotification(
       {
