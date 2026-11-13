@@ -487,6 +487,26 @@ paths:
               schema: { '$ref': '#/components/schemas/MoverReviewListResponse' }
         '400': { '$ref': '#/components/responses/ValidationError' }
         '404': { '$ref': '#/components/responses/NotFound' }
+  '/movers/{moverId}/review-summary':
+    get:
+      tags: [Movers, Reviews]
+      summary: 기사님 리뷰 AI 요약
+      description: |
+        공개 API. 리뷰가 10건 미만이거나 요약을 만들 수 없으면 `null`입니다.
+        리뷰 수가 바뀌면 다시 생성하고, 생성에 실패했을 때 이전 저장본이 있으면 이를 반환합니다.
+      operationId: getMoverReviewSummary
+      security: []
+      parameters:
+        - { '$ref': '#/components/parameters/MoverIdPath' }
+      responses:
+        '200':
+          description: 리뷰 요약. 없으면 null
+          content:
+            application/json:
+              schema:
+                '$ref': '#/components/schemas/MoverReviewSummary'
+        '400': { '$ref': '#/components/responses/ValidationError' }
+        '404': { '$ref': '#/components/responses/NotFound' }
   '/movers/{moverId}/favorite':
     put:
       tags: [Favorites]
@@ -1954,6 +1974,26 @@ components:
             items:
               type: array
               items: { '$ref': '#/components/schemas/Review' }
+    MoverReviewSummary:
+      type: object
+      nullable: true
+      required: [reviewCount, summary, aspects]
+      properties:
+        reviewCount: { type: integer }
+        summary: { type: string }
+        aspects:
+          type: array
+          items: { '$ref': '#/components/schemas/ReviewSummaryAspect' }
+    ReviewSummaryAspect:
+      type: object
+      required: [key, mentionCount, positiveCount, negativeCount]
+      properties:
+        key:
+          type: string
+          enum: [PUNCTUALITY, HANDLING, SPEED, COMMUNICATION, PRICE]
+        mentionCount: { type: integer }
+        positiveCount: { type: integer }
+        negativeCount: { type: integer }
     ReviewTarget:
       description: 리뷰 대상인(또는 리뷰할 수 있는) 완료된 이사
       type: object
