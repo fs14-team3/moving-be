@@ -35,6 +35,10 @@ moverRouter.get(
 )
 moverRouter.get('/:moverId', optionalAuth, moverController.getMover)
 moverRouter.get('/:moverId/reviews', reviewController.listMoverReviews)
+moverRouter.get(
+  '/:moverId/review-summary',
+  reviewController.getMoverReviewSummary,
+)
 
 // 로그인 사용자 API
 moverRouter.put(
