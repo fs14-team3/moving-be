@@ -63,6 +63,18 @@ const ERROR_CATALOG = {
     status: 409,
     message: '이미 작성한 리뷰가 있습니다',
   },
+  PROOF_PHOTO_NOT_ALLOWED: {
+    status: 403,
+    message: '작업 사진을 올릴 수 없는 견적입니다',
+  },
+  PROOF_PHOTO_LIMIT_REACHED: {
+    status: 409,
+    message: '작업 사진은 최대 100장까지 올릴 수 있습니다',
+  },
+  PROOF_PHOTO_NOT_UPLOADED: {
+    status: 409,
+    message: '업로드된 작업 사진을 찾을 수 없습니다',
+  },
 } as const
 
 export type ErrorCode = keyof typeof ERROR_CATALOG

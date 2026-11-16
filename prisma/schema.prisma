@@ -177,6 +177,7 @@ model Quote {
   moveRequest   MoveRequest    @relation(fields: [moveRequestId], references: [id], onDelete: Cascade)
   mover         MoverProfile   @relation(fields: [moverId], references: [userId], onDelete: Cascade)
   reviews       Review[]
+  proofPhotos   ProofPhoto[]
   notifications Notification[]
 
   // Partial unique index on confirmed quotes is defined in the migration SQL.
@@ -204,6 +205,18 @@ model Review {
   quote     Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
 
   @@map("reviews")
+}
+
+model ProofPhoto {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  quoteId      String   @map("quote_id") @db.Uuid
+  imageKey     String   @unique @map("image_key")
+  thumbnailKey String   @map("thumbnail_key")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
+  quote        Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+
+  @@index([quoteId, createdAt, id])
+  @@map("proof_photos")
 }
 
 model Favorite {
