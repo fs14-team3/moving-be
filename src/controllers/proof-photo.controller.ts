@@ -9,12 +9,12 @@ import { validate } from '../validators/validate'
 
 export async function createProofPhotoUploads(req: Request, res: Response) {
   const { quoteId } = validate(proofPhotoParamsSchema, req.params)
-  const { count } = validate(createProofPhotoUploadsSchema, req.body)
+  const body = validate(createProofPhotoUploadsSchema, req.body)
 
   res
     .status(201)
     .json(
-      await proofPhotoService.createProofPhotoUploads(req.user, quoteId, count),
+      await proofPhotoService.createProofPhotoUploads(req.user, quoteId, body),
     )
 }
 

@@ -5,6 +5,7 @@ import { AppError } from '../errors/app-error'
 import { prisma } from '../lib/prisma'
 import { s3 } from '../lib/s3'
 import { todayInSeoul } from '../utils/date'
+import type { CreateProofPhotoUploadsBody } from '../validators/proof-photo.validator'
 import { IMAGE_CACHE_CONTROL, imageUrl, uploadBucket } from './upload.service'
 
 const MAX_PROOF_PHOTOS = 100
@@ -71,14 +72,19 @@ async function countUploadablePhotos(
   return quote._count.proofPhotos
 }
 
-function presignJpeg(bucket: string, key: string, maxBytes: number) {
+function presignImage(
+  bucket: string,
+  key: string,
+  contentType: CreateProofPhotoUploadsBody['contentType'],
+  maxBytes: number,
+) {
   return createPresignedPost(s3, {
     Bucket: bucket,
     Key: `${PENDING_PREFIX}${key}`,
     Expires: UPLOAD_EXPIRES_SECONDS,
     Conditions: [['content-length-range', 1, maxBytes]],
     Fields: {
-      'Content-Type': 'image/jpeg',
+      'Content-Type': contentType,
       'Cache-Control': IMAGE_CACHE_CONTROL,
     },
   })
@@ -106,7 +112,7 @@ async function copyFromPending(bucket: string, key: string) {
 export async function createProofPhotoUploads(
   viewer: Express.User | undefined,
   quoteId: string,
-  count: number,
+  { count, contentType }: CreateProofPhotoUploadsBody,
 ) {
   const photoCount = await countUploadablePhotos(viewer, quoteId)
   if (photoCount + count > MAX_PROOF_PHOTOS) {
@@ -119,8 +125,8 @@ export async function createProofPhotoUploads(
       const uploadId = randomUUID()
       const { imageKey, thumbnailKey } = proofPhotoKeys(quoteId, uploadId)
       const [image, thumbnail] = await Promise.all([
-        presignJpeg(bucket, imageKey, MAX_IMAGE_BYTES),
-        presignJpeg(bucket, thumbnailKey, MAX_THUMBNAIL_BYTES),
+        presignImage(bucket, imageKey, contentType, MAX_IMAGE_BYTES),
+        presignImage(bucket, thumbnailKey, contentType, MAX_THUMBNAIL_BYTES),
       ])
       return { uploadId, image, thumbnail }
     }),

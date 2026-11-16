@@ -48,10 +48,14 @@ async function createQuote(
   return quote.id
 }
 
-function presign(quoteId: string, viewer?: Express.User, count: unknown = 1) {
+function presign(
+  quoteId: string,
+  viewer?: Express.User,
+  body: Record<string, unknown> = {},
+) {
   return api(viewer)
     .post(`/api/quotes/${quoteId}/proof-photos/uploads`)
-    .send({ count })
+    .send({ count: 1, contentType: 'image/jpeg', ...body })
 }
 
 function confirm(
@@ -108,7 +112,7 @@ describe('POST /api/quotes/:quoteId/proof-photos/uploads', () => {
   it('확정된 견적의 기사님이 요청하면 사진과 썸네일 업로드 정보를 장수만큼 반환한다', async () => {
     const quoteId = await createQuote()
 
-    const response = await presign(quoteId, mover, 2)
+    const response = await presign(quoteId, mover, { count: 2 })
 
     expect(response.status).toBe(201)
     expect(response.body.items).toHaveLength(2)
@@ -140,6 +144,23 @@ describe('POST /api/quotes/:quoteId/proof-photos/uploads', () => {
     expect(send).not.toHaveBeenCalled()
   })
 
+  it('WebP로 요청하면 사진과 썸네일 모두 image/webp로만 올리도록 서명한다', async () => {
+    const response = await presign(await createQuote(), mover, {
+      contentType: 'image/webp',
+    })
+
+    expect(response.status).toBe(201)
+    const [{ image, thumbnail }] = response.body.items
+    expect(image.fields['Content-Type']).toBe('image/webp')
+    expect(thumbnail.fields['Content-Type']).toBe('image/webp')
+    expect(policyConditions(image.fields)).toContainEqual({
+      'Content-Type': 'image/webp',
+    })
+    expect(policyConditions(thumbnail.fields)).toContainEqual({
+      'Content-Type': 'image/webp',
+    })
+  })
+
   it('로그인하지 않으면 401을 반환한다', async () => {
     const response = await presign(await createQuote())
 
@@ -169,10 +190,22 @@ describe('POST /api/quotes/:quoteId/proof-photos/uploads', () => {
   it.each([0, 1.5, '1', null])(
     '장수가 %s이면 400을 반환한다',
     async (count) => {
-      const response = await presign(await createQuote(), mover, count)
+      const response = await presign(await createQuote(), mover, { count })
 
       expect(response.status).toBe(400)
       expect(response.body.error.details[0].field).toBe('count')
+    },
+  )
+
+  it.each(['image/png', 'image/jpg', 'image/svg+xml', null])(
+    '형식이 %s이면 400을 반환한다',
+    async (contentType) => {
+      const response = await presign(await createQuote(), mover, {
+        contentType,
+      })
+
+      expect(response.status).toBe(400)
+      expect(response.body.error.details[0].field).toBe('contentType')
     },
   )
 
@@ -194,8 +227,8 @@ describe('POST /api/quotes/:quoteId/proof-photos/uploads', () => {
     const quoteId = await createQuote()
     await fillPhotos(quoteId, 98)
 
-    const over = await presign(quoteId, mover, 3)
-    const fits = await presign(quoteId, mover, 2)
+    const over = await presign(quoteId, mover, { count: 3 })
+    const fits = await presign(quoteId, mover, { count: 2 })
 
     expect(over.status).toBe(409)
     expect(over.body.error.code).toBe('PROOF_PHOTO_LIMIT_REACHED')
