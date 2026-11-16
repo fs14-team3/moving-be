@@ -7,6 +7,7 @@ import {
 import { createPresignedPost } from '@aws-sdk/s3-presigned-post'
 import * as Sentry from '@sentry/node'
 import { AppError } from '../errors/app-error'
+import type { Prisma } from '../generated/prisma/client'
 import { prisma } from '../lib/prisma'
 import { s3 } from '../lib/s3'
 import { todayInSeoul } from '../utils/date'
@@ -26,12 +27,9 @@ const proofPhotoSelect = {
   createdAt: true,
 } as const
 
-type ProofPhotoRow = {
-  id: string
-  imageKey: string
-  thumbnailKey: string
-  createdAt: Date
-}
+type ProofPhotoRow = Prisma.ProofPhotoGetPayload<{
+  select: typeof proofPhotoSelect
+}>
 
 function toProofPhoto({
   id,
@@ -97,37 +95,30 @@ function presignImage(
   })
 }
 
-async function copyFromPending(bucket: string, source: string, key: string) {
-  try {
-    await s3.send(
-      new CopyObjectCommand({
-        Bucket: bucket,
-        Key: key,
-        CopySource: `${bucket}/${PENDING_PREFIX}${source}`,
-      }),
-    )
-  } catch (error) {
-    if (error instanceof NoSuchKey) {
-      throw new AppError('PROOF_PHOTO_NOT_UPLOADED', undefined, {
-        cause: error,
-      })
-    }
-    throw error
-  }
-}
-
 async function copyPhotoFromPending(
   bucket: string,
   uploaded: ProofPhotoKeys,
   photo: ProofPhotoKeys,
 ) {
-  const copies = await Promise.allSettled([
-    copyFromPending(bucket, uploaded.imageKey, photo.imageKey),
-    copyFromPending(bucket, uploaded.thumbnailKey, photo.thumbnailKey),
-  ])
+  const copies = await Promise.allSettled(
+    (['imageKey', 'thumbnailKey'] as const).map((key) =>
+      s3.send(
+        new CopyObjectCommand({
+          Bucket: bucket,
+          Key: photo[key],
+          CopySource: `${bucket}/${PENDING_PREFIX}${uploaded[key]}`,
+        }),
+      ),
+    ),
+  )
   const failed = copies.find(
     (copy): copy is PromiseRejectedResult => copy.status === 'rejected',
   )
+  if (failed?.reason instanceof NoSuchKey) {
+    throw new AppError('PROOF_PHOTO_NOT_UPLOADED', undefined, {
+      cause: failed.reason,
+    })
+  }
   if (failed) throw failed.reason
 }
 
