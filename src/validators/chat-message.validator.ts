@@ -20,5 +20,3 @@ export const sendChatMessageBody = z.object({
 })
 
 export type ListChatMessagesQuery = z.infer<typeof listChatMessagesQuery>
-
-export type SendChatMessageBody = z.infer<typeof sendChatMessageBody>
