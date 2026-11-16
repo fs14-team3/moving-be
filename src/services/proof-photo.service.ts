@@ -1,6 +1,11 @@
 import { randomUUID } from 'node:crypto'
-import { CopyObjectCommand, NoSuchKey } from '@aws-sdk/client-s3'
+import {
+  CopyObjectCommand,
+  DeleteObjectCommand,
+  NoSuchKey,
+} from '@aws-sdk/client-s3'
 import { createPresignedPost } from '@aws-sdk/s3-presigned-post'
+import * as Sentry from '@sentry/node'
 import { AppError } from '../errors/app-error'
 import { prisma } from '../lib/prisma'
 import { s3 } from '../lib/s3'
@@ -42,8 +47,10 @@ function toProofPhoto({
   }
 }
 
-function proofPhotoKeys(quoteId: string, uploadId: string) {
-  const imageKey = `proof-photos/${quoteId}/${uploadId}`
+type ProofPhotoKeys = Pick<ProofPhotoRow, 'imageKey' | 'thumbnailKey'>
+
+function proofPhotoKeys(quoteId: string, id: string): ProofPhotoKeys {
+  const imageKey = `proof-photos/${quoteId}/${id}`
   return { imageKey, thumbnailKey: `${imageKey}-thumbnail` }
 }
 
@@ -90,13 +97,13 @@ function presignImage(
   })
 }
 
-async function copyFromPending(bucket: string, key: string) {
+async function copyFromPending(bucket: string, source: string, key: string) {
   try {
     await s3.send(
       new CopyObjectCommand({
         Bucket: bucket,
         Key: key,
-        CopySource: `${bucket}/${PENDING_PREFIX}${key}`,
+        CopySource: `${bucket}/${PENDING_PREFIX}${source}`,
       }),
     )
   } catch (error) {
@@ -107,6 +114,66 @@ async function copyFromPending(bucket: string, key: string) {
     }
     throw error
   }
+}
+
+async function copyPhotoFromPending(
+  bucket: string,
+  uploaded: ProofPhotoKeys,
+  photo: ProofPhotoKeys,
+) {
+  const copies = await Promise.allSettled([
+    copyFromPending(bucket, uploaded.imageKey, photo.imageKey),
+    copyFromPending(bucket, uploaded.thumbnailKey, photo.thumbnailKey),
+  ])
+  const failed = copies.find(
+    (copy): copy is PromiseRejectedResult => copy.status === 'rejected',
+  )
+  if (failed) throw failed.reason
+}
+
+async function deletePhotoObjects(
+  bucket: string,
+  { imageKey, thumbnailKey }: ProofPhotoKeys,
+) {
+  const deletes = await Promise.allSettled(
+    [imageKey, thumbnailKey].map((key) =>
+      s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: key })),
+    ),
+  )
+  for (const result of deletes) {
+    if (result.status === 'rejected') Sentry.captureException(result.reason)
+  }
+}
+
+function saveProofPhoto(
+  quoteId: string,
+  uploadId: string,
+  keys: ProofPhotoKeys,
+) {
+  return prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`
+      SELECT id
+      FROM quotes
+      WHERE id = ${quoteId}::uuid
+      FOR UPDATE
+    `
+
+    const saved = await tx.proofPhoto.findUnique({
+      where: { quoteId_uploadId: { quoteId, uploadId } },
+      select: proofPhotoSelect,
+    })
+    if (saved) return saved
+
+    const count = await tx.proofPhoto.count({ where: { quoteId } })
+    if (count >= MAX_PROOF_PHOTOS) {
+      throw new AppError('PROOF_PHOTO_LIMIT_REACHED')
+    }
+
+    return tx.proofPhoto.create({
+      data: { quoteId, uploadId, ...keys },
+      select: proofPhotoSelect,
+    })
+  })
 }
 
 export async function createProofPhotoUploads(
@@ -141,10 +208,9 @@ export async function confirmProofPhoto(
   uploadId: string,
 ) {
   const photoCount = await countUploadablePhotos(viewer, quoteId)
-  const { imageKey, thumbnailKey } = proofPhotoKeys(quoteId, uploadId)
 
   const saved = await prisma.proofPhoto.findUnique({
-    where: { imageKey },
+    where: { quoteId_uploadId: { quoteId, uploadId } },
     select: proofPhotoSelect,
   })
   if (saved) return toProofPhoto(saved)
@@ -153,37 +219,17 @@ export async function confirmProofPhoto(
   }
 
   const bucket = uploadBucket()
-  await Promise.all([
-    copyFromPending(bucket, imageKey),
-    copyFromPending(bucket, thumbnailKey),
-  ])
-
-  const photo = await prisma.$transaction(async (tx) => {
-    await tx.$queryRaw`
-      SELECT id
-      FROM quotes
-      WHERE id = ${quoteId}::uuid
-      FOR UPDATE
-    `
-
-    const saved = await tx.proofPhoto.findUnique({
-      where: { imageKey },
-      select: proofPhotoSelect,
-    })
-    if (saved) return saved
-
-    const count = await tx.proofPhoto.count({ where: { quoteId } })
-    if (count >= MAX_PROOF_PHOTOS) {
-      throw new AppError('PROOF_PHOTO_LIMIT_REACHED')
+  const keys = proofPhotoKeys(quoteId, randomUUID())
+  let photo: ProofPhotoRow | undefined
+  try {
+    await copyPhotoFromPending(bucket, proofPhotoKeys(quoteId, uploadId), keys)
+    photo = await saveProofPhoto(quoteId, uploadId, keys)
+    return toProofPhoto(photo)
+  } finally {
+    if (photo?.imageKey !== keys.imageKey) {
+      await deletePhotoObjects(bucket, keys)
     }
-
-    return tx.proofPhoto.create({
-      data: { quoteId, imageKey, thumbnailKey },
-      select: proofPhotoSelect,
-    })
-  })
-
-  return toProofPhoto(photo)
+  }
 }
 
 export async function listProofPhotos(

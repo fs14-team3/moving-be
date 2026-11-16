@@ -1,5 +1,9 @@
 import { randomUUID } from 'node:crypto'
-import { NoSuchKey, type CopyObjectCommand } from '@aws-sdk/client-s3'
+import {
+  CopyObjectCommand,
+  DeleteObjectCommand,
+  NoSuchKey,
+} from '@aws-sdk/client-s3'
 import {
   afterAll,
   afterEach,
@@ -76,6 +80,7 @@ function fillPhotos(quoteId: string, count: number) {
   return prisma.proofPhoto.createMany({
     data: Array.from({ length: count }, (_, index) => ({
       quoteId,
+      uploadId: randomUUID(),
       imageKey: `proof-photos/${quoteId}/${index}`,
       thumbnailKey: `proof-photos/${quoteId}/${index}-thumbnail`,
     })),
@@ -87,8 +92,48 @@ function policyConditions(fields: Record<string, string>) {
     .conditions
 }
 
+function sentCommands(): unknown[] {
+  return send.mock.calls.map(([command]: [unknown]) => command)
+}
+
 function copies() {
-  return send.mock.calls.map(([command]: [CopyObjectCommand]) => command.input)
+  return sentCommands()
+    .filter((command) => command instanceof CopyObjectCommand)
+    .map((command) => command.input)
+}
+
+function deletedKeys() {
+  return sentCommands()
+    .filter((command) => command instanceof DeleteObjectCommand)
+    .map((command) => command.input.Key)
+}
+
+function missingThumbnail(command: unknown) {
+  if (
+    command instanceof CopyObjectCommand &&
+    command.input.CopySource?.endsWith('-thumbnail')
+  ) {
+    return Promise.reject(
+      new NoSuchKey({
+        message: 'The specified key does not exist.',
+        $metadata: { httpStatusCode: 404 },
+      }),
+    )
+  }
+  return Promise.resolve()
+}
+
+async function expectCopiesSavedOrDeleted() {
+  const rows = await prisma.proofPhoto.findMany({
+    select: { imageKey: true, thumbnailKey: true },
+  })
+  const saved = new Set<string | undefined>(
+    rows.flatMap((row) => [row.imageKey, row.thumbnailKey]),
+  )
+  const copied = copies().map((input) => input.Key)
+  expect(deletedKeys().sort()).toEqual(
+    copied.filter((key) => !saved.has(key)).sort(),
+  )
 }
 
 beforeEach(async () => {
@@ -251,40 +296,48 @@ describe('POST /api/quotes/:quoteId/proof-photos/uploads', () => {
 })
 
 describe('POST /api/quotes/:quoteId/proof-photos', () => {
-  it('업로드한 사진과 썸네일을 pending 밖으로 복사하고 사진을 반환한다', async () => {
+  it('올린 사진과 썸네일을 이번 확정만의 키로 복사해 저장하고 사진을 반환한다', async () => {
     const quoteId = await createQuote()
     const uploadId = randomUUID()
-    const imageKey = `proof-photos/${quoteId}/${uploadId}`
-    const thumbnailKey = `${imageKey}-thumbnail`
+    const uploadedKey = `proof-photos/${quoteId}/${uploadId}`
 
     const response = await confirm(quoteId, mover, uploadId)
 
     expect(response.status).toBe(201)
-    expect(copies()).toEqual(
-      expect.arrayContaining([
-        {
-          Bucket: 'test-bucket',
-          Key: imageKey,
-          CopySource: `test-bucket/pending/${imageKey}`,
-        },
-        {
-          Bucket: 'test-bucket',
-          Key: thumbnailKey,
-          CopySource: `test-bucket/pending/${thumbnailKey}`,
-        },
-      ]),
-    )
+    const [photo] = await prisma.proofPhoto.findMany({
+      select: {
+        quoteId: true,
+        uploadId: true,
+        imageKey: true,
+        thumbnailKey: true,
+      },
+    })
+    expect(photo).toEqual({
+      quoteId,
+      uploadId,
+      imageKey: expect.stringMatching(`^proof-photos/${quoteId}/`),
+      thumbnailKey: `${photo.imageKey}-thumbnail`,
+    })
+    expect(photo.imageKey).not.toBe(uploadedKey)
+    expect(copies()).toEqual([
+      {
+        Bucket: 'test-bucket',
+        Key: photo.imageKey,
+        CopySource: `test-bucket/pending/${uploadedKey}`,
+      },
+      {
+        Bucket: 'test-bucket',
+        Key: photo.thumbnailKey,
+        CopySource: `test-bucket/pending/${uploadedKey}-thumbnail`,
+      },
+    ])
+    expect(deletedKeys()).toEqual([])
     expect(response.body).toEqual({
       id: expect.any(String),
-      url: `https://images.test/${imageKey}`,
-      thumbnailUrl: `https://images.test/${thumbnailKey}`,
+      url: `https://images.test/${photo.imageKey}`,
+      thumbnailUrl: `https://images.test/${photo.thumbnailKey}`,
       createdAt: expect.any(String),
     })
-    expect(
-      await prisma.proofPhoto.findMany({
-        select: { quoteId: true, imageKey: true, thumbnailKey: true },
-      }),
-    ).toEqual([{ quoteId, imageKey, thumbnailKey }])
   })
 
   it('같은 uploadId로 다시 보내면 100장이 찼어도 저장된 사진을 반환한다', async () => {
@@ -315,22 +368,32 @@ describe('POST /api/quotes/:quoteId/proof-photos', () => {
     expect(second.status).toBe(201)
     expect(second.body).toEqual(first.body)
     expect(await prisma.proofPhoto.count({ where: { quoteId } })).toBe(1)
+    await expectCopiesSavedOrDeleted()
   })
 
-  it('S3에 올라온 파일이 없으면 저장하지 않고 409를 반환한다', async () => {
-    const quoteId = await createQuote()
-    send.mockRejectedValue(
-      new NoSuchKey({
-        message: 'The specified key does not exist.',
-        $metadata: { httpStatusCode: 404 },
-      }),
-    )
+  it('썸네일이 S3에 없으면 저장하지 않고 복사한 파일을 지운 뒤 409를 반환한다', async () => {
+    send.mockImplementation(missingThumbnail)
 
-    const response = await confirm(quoteId, mover)
+    const response = await confirm(await createQuote(), mover)
 
     expect(response.status).toBe(409)
     expect(response.body.error.code).toBe('PROOF_PHOTO_NOT_UPLOADED')
     expect(await prisma.proofPhoto.count()).toBe(0)
+    expect(deletedKeys()).toHaveLength(2)
+    await expectCopiesSavedOrDeleted()
+  })
+
+  it('복사한 파일을 지우지 못해도 원래 오류를 반환한다', async () => {
+    send.mockImplementation((command: unknown) =>
+      command instanceof DeleteObjectCommand
+        ? Promise.reject(new Error('Access Denied'))
+        : missingThumbnail(command),
+    )
+
+    const response = await confirm(await createQuote(), mover)
+
+    expect(response.status).toBe(409)
+    expect(response.body.error.code).toBe('PROOF_PHOTO_NOT_UPLOADED')
   })
 
   it('로그인하지 않으면 401을 반환한다', async () => {
@@ -402,6 +465,28 @@ describe('POST /api/quotes/:quoteId/proof-photos', () => {
     const statuses = responses.map((response) => response.status).sort()
     expect(statuses).toEqual([201, 201, 409, 409, 409])
     expect(await prisma.proofPhoto.count({ where: { quoteId } })).toBe(100)
+    await expectCopiesSavedOrDeleted()
+  })
+
+  it('복사하는 사이 100장이 차면 저장하지 않고 복사한 파일을 지운 뒤 409를 반환한다', async () => {
+    const quoteId = await createQuote()
+    await fillPhotos(quoteId, 99)
+    send.mockImplementation(async (command: unknown) => {
+      if (
+        command instanceof CopyObjectCommand &&
+        !command.input.Key?.endsWith('-thumbnail')
+      ) {
+        await fillPhotos(quoteId, 1)
+      }
+    })
+
+    const response = await confirm(quoteId, mover)
+
+    expect(response.status).toBe(409)
+    expect(response.body.error.code).toBe('PROOF_PHOTO_LIMIT_REACHED')
+    expect(await prisma.proofPhoto.count({ where: { quoteId } })).toBe(100)
+    expect(deletedKeys()).toHaveLength(2)
+    await expectCopiesSavedOrDeleted()
   })
 })
 

@@ -210,11 +210,13 @@ model Review {
 model ProofPhoto {
   id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   quoteId      String   @map("quote_id") @db.Uuid
-  imageKey     String   @unique @map("image_key")
+  uploadId     String   @map("upload_id") @db.Uuid
+  imageKey     String   @map("image_key")
   thumbnailKey String   @map("thumbnail_key")
   createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
   quote        Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
 
+  @@unique([quoteId, uploadId])
   @@index([quoteId, createdAt, id])
   @@map("proof_photos")
 }
