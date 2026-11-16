@@ -20,6 +20,7 @@ tags:
   - { name: Quotes }
   - { name: Reviews }
   - { name: Notifications }
+  - { name: Chat }
 paths:
   '/auth/signup':
     post:
@@ -1211,6 +1212,35 @@ paths:
           '$ref': '#/components/responses/ValidationError'
         '401':
           '$ref': '#/components/responses/Unauthorized'
+  '/chats':
+    get:
+      tags: [Chat]
+      summary: 채팅방 목록 조회
+      description: 로그인한 사용자의 채팅방 목록을 최근 메시지 순으로 조회합니다.
+      operationId: listChats
+      security:
+        - sessionCookie: []
+      parameters:
+        - { '$ref': '#/components/parameters/Cursor' }
+        - name: limit
+          in: query
+          required: false
+          description: 한 페이지에 조회할 채팅방 수
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 10
+      responses:
+        '200':
+          description: 채팅방 목록
+          content:
+            application/json:
+              schema: { '$ref': '#/components/schemas/ChatListResponse' }
+        '400':
+          '$ref': '#/components/responses/ValidationError'
+        '401':
+          '$ref': '#/components/responses/Unauthorized'
 components:
   securitySchemes:
     sessionCookie:
@@ -2015,3 +2045,125 @@ components:
             items:
               type: array
               items: { '$ref': '#/components/schemas/Notification' }
+    ChatOtherParticipant:
+      type: object
+      required: [id, role, name, imageUrl]
+      properties:
+        id:
+          type: string
+          format: uuid
+        role:
+          $ref: '#/components/schemas/Role'
+        name:
+          type: string
+          description: 상대방 이름 또는 기사님 닉네임
+        imageUrl:
+          type: string
+          nullable: true
+    ChatMoveRequestCustomer:
+      type: object
+      required: [imageUrl, user]
+      properties:
+        imageUrl:
+          type: string
+          nullable: true
+        user:
+          type: object
+          required: [id, name]
+          properties:
+            id:
+              type: string
+              format: uuid
+            name:
+              type: string
+    ChatMoveRequestSummary:
+      type: object
+      required: [id, moveType, moveDate, fromRegion, toRegion, customer]
+      properties:
+        id:
+          type: string
+          format: uuid
+        moveType:
+          $ref: '#/components/schemas/ServiceType'
+        moveDate:
+          type: string
+          format: date
+        fromRegion:
+          $ref: '#/components/schemas/Region'
+        toRegion:
+          $ref: '#/components/schemas/Region'
+        customer:
+          $ref: '#/components/schemas/ChatMoveRequestCustomer'
+    ChatLastMessage:
+      type: object
+      required: [id, content, senderId, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        content:
+          type: string
+        senderId:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+    ChatRoomListItem:
+      type: object
+      required:
+        - id
+        - createdAt
+        - lastMessageAt
+        - otherParticipant
+        - quote
+        - lastMessage
+        - unreadCount
+      properties:
+        id:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+        lastMessageAt:
+          type: string
+          format: date-time
+          nullable: true
+        otherParticipant:
+          $ref: '#/components/schemas/ChatOtherParticipant'
+        quote:
+          type: object
+          required: [id, price, status, isDesignated, moveRequest]
+          properties:
+            id:
+              type: string
+              format: uuid
+            price:
+              type: number
+              description: 견적 금액
+            status:
+              $ref: '#/components/schemas/QuoteStatus'
+            isDesignated:
+              type: boolean
+            moveRequest:
+              $ref: '#/components/schemas/ChatMoveRequestSummary'
+        lastMessage:
+          type: object
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/ChatLastMessage'
+        unreadCount:
+          type: integer
+          minimum: 0
+          description: 읽지 않은 메시지 수
+    ChatListResponse:
+      allOf:
+        - $ref: '#/components/schemas/CursorMeta'
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/ChatRoomListItem'
