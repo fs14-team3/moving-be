@@ -166,6 +166,12 @@ export async function confirmProofPhoto(
       FOR UPDATE
     `
 
+    const saved = await tx.proofPhoto.findUnique({
+      where: { imageKey },
+      select: proofPhotoSelect,
+    })
+    if (saved) return saved
+
     const count = await tx.proofPhoto.count({ where: { quoteId } })
     if (count >= MAX_PROOF_PHOTOS) {
       throw new AppError('PROOF_PHOTO_LIMIT_REACHED')

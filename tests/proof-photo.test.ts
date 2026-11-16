@@ -302,6 +302,21 @@ describe('POST /api/quotes/:quoteId/proof-photos', () => {
     expect(await prisma.proofPhoto.count({ where: { quoteId } })).toBe(100)
   })
 
+  it('같은 uploadId로 동시에 보내도 한 장만 저장하고 둘 다 같은 사진을 반환한다', async () => {
+    const quoteId = await createQuote()
+    const uploadId = randomUUID()
+
+    const [first, second] = await Promise.all([
+      confirm(quoteId, mover, uploadId),
+      confirm(quoteId, mover, uploadId),
+    ])
+
+    expect(first.status).toBe(201)
+    expect(second.status).toBe(201)
+    expect(second.body).toEqual(first.body)
+    expect(await prisma.proofPhoto.count({ where: { quoteId } })).toBe(1)
+  })
+
   it('S3에 올라온 파일이 없으면 저장하지 않고 409를 반환한다', async () => {
     const quoteId = await createQuote()
     send.mockRejectedValue(
