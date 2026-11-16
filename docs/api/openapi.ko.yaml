@@ -1957,7 +1957,8 @@ components:
     ReviewTarget:
       description: 리뷰 대상인(또는 리뷰할 수 있는) 완료된 이사
       type: object
-      required: [quoteId, price, isDesignated, moveType, moveDate, mover]
+      required:
+        [quoteId, price, isDesignated, moveType, moveDate, from, to, mover]
       properties:
         quoteId: { type: string, format: uuid }
         price: { type: integer }
@@ -1965,6 +1966,20 @@ components:
         moveType: { '$ref': '#/components/schemas/ServiceType' }
         moveDate: { type: string, format: date }
         mover: { '$ref': '#/components/schemas/MoverSummary' }
+        from:
+          type: object
+          required: [address, zonecode, region]
+          properties:
+            address: { type: string }
+            zonecode: { type: string, nullable: true }
+            region: { type: string }
+        to:
+          type: object
+          required: [address, zonecode, region]
+          properties:
+            address: { type: string }
+            zonecode: { type: string, nullable: true }
+            region: { type: string }
     MyReview:
       allOf:
         - { '$ref': '#/components/schemas/ReviewTarget' }
