@@ -68,12 +68,14 @@ model User {
   createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt    DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
+
   socialAccounts     SocialAccount[]
   customerProfile    CustomerProfile?
   moverProfile       MoverProfile?
   notifications      Notification[]
   chatParticipations ChatParticipant[]
   sentMessages       Message[]
+  
 
   @@unique([email, role], name: "email_role")
   @@map("users")
@@ -124,6 +126,7 @@ model MoverProfile {
   quotes             Quote[]
   requestRejections  RequestRejection[]
   favorites          Favorite[]
+  reviewSummary      ReviewSummary?
 
   @@map("mover_profiles")
 }
@@ -284,4 +287,17 @@ model Message {
 
   @@index([chatRoomId, createdAt, id])
   @@map("messages")
+}
+
+model ReviewSummary {
+  id          String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  moverId     String       @unique @map("mover_id") @db.Uuid
+  reviewCount Int          @map("review_count")
+  summary     String
+  aspects     Json
+  createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  mover       MoverProfile @relation(fields: [moverId], references: [userId], onDelete: Cascade)
+
+  @@map("review_summaries")
 }
