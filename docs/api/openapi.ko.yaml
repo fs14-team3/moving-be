@@ -1122,7 +1122,7 @@ paths:
         '409':
           description: >-
             `PROOF_PHOTO_LIMIT_REACHED` (이미 100장을 올림),
-            `PROOF_PHOTO_NOT_UPLOADED` (사진이나 썸네일이 S3에 없음. 업로드 정보를 다시 받아 올린 뒤 확정) 또는
+            `PROOF_PHOTO_NOT_UPLOADED` (사진이나 썸네일이 S3에 없음. 삭제한 사진의 `uploadId`도 해당. 업로드 정보를 다시 받아 올린 뒤 확정) 또는
             `PROOF_PHOTO_REVIEWED` (업로드 정보를 받은 뒤 리뷰가 작성됨)
           content:
             application/json:
@@ -1138,7 +1138,7 @@ paths:
       summary: 작업 사진 삭제
       description: >-
         기사님이 본인 견적의 작업 사진을 삭제합니다. 일반 유저가 리뷰를 작성한 뒤에는 올리기와 마찬가지로 삭제할 수 없습니다.
-        사진과 썸네일 파일도 S3에서 함께 지웁니다.
+        사진과 썸네일, 확정할 때 쓴 업로드 파일도 S3에서 함께 지우므로 같은 `uploadId`로 다시 확정해도 사진이 되살아나지 않습니다.
         S3에서 파일을 지우지 못하면 사진을 남겨 두고 `INTERNAL_ERROR`(500)를 반환하므로 다시 시도하면 됩니다.
       operationId: deleteProofPhoto
       security:

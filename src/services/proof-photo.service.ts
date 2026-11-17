@@ -296,11 +296,17 @@ export async function deleteProofPhoto(
 
     const photo = await tx.proofPhoto.findFirst({
       where: { id: photoId, quoteId },
-      select: { imageKey: true, thumbnailKey: true },
+      select: { uploadId: true, imageKey: true, thumbnailKey: true },
     })
     if (!photo) throw new AppError('NOT_FOUND')
 
-    await deleteObjects(bucket, [photo.imageKey, photo.thumbnailKey])
+    const uploaded = proofPhotoKeys(quoteId, photo.uploadId)
+    await deleteObjects(bucket, [
+      photo.imageKey,
+      photo.thumbnailKey,
+      `${PENDING_PREFIX}${uploaded.imageKey}`,
+      `${PENDING_PREFIX}${uploaded.thumbnailKey}`,
+    ])
     await tx.proofPhoto.delete({ where: { id: photoId } })
   })
 }

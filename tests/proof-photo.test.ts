@@ -89,7 +89,7 @@ function createPhoto(quoteId: string) {
       imageKey: `proof-photos/${quoteId}/photo`,
       thumbnailKey: `proof-photos/${quoteId}/photo-thumbnail`,
     },
-    select: { id: true, imageKey: true, thumbnailKey: true },
+    select: { id: true, uploadId: true, imageKey: true, thumbnailKey: true },
   })
 }
 
@@ -156,17 +156,21 @@ function deletedKeys() {
     .map((command) => command.input.Key)
 }
 
+function noSuchKey() {
+  return Promise.reject(
+    new NoSuchKey({
+      message: 'The specified key does not exist.',
+      $metadata: { httpStatusCode: 404 },
+    }),
+  )
+}
+
 function missingThumbnail(command: unknown) {
   if (
     command instanceof CopyObjectCommand &&
     command.input.CopySource?.endsWith('-thumbnail')
   ) {
-    return Promise.reject(
-      new NoSuchKey({
-        message: 'The specified key does not exist.',
-        $metadata: { httpStatusCode: 404 },
-      }),
-    )
+    return noSuchKey()
   }
   return Promise.resolve()
 }
@@ -630,17 +634,50 @@ describe('GET /api/quotes/:quoteId/proof-photos', () => {
 })
 
 describe('DELETE /api/quotes/:quoteId/proof-photos/:photoId', () => {
-  it('기사님이 삭제하면 사진과 S3 파일을 지우고 204를 반환한다', async () => {
+  it('기사님이 삭제하면 사진과 남아 있는 업로드 파일까지 S3에서 지우고 204를 반환한다', async () => {
     const quoteId = await createQuote()
     const photo = await createPhoto(quoteId)
+    const uploadedKey = `pending/proof-photos/${quoteId}/${photo.uploadId}`
 
     const response = await deletePhoto(quoteId, mover, photo.id)
 
     expect(response.status).toBe(204)
     expect(await prisma.proofPhoto.count()).toBe(0)
     expect(deletedKeys().sort()).toEqual(
-      [photo.imageKey, photo.thumbnailKey].sort(),
+      [
+        photo.imageKey,
+        photo.thumbnailKey,
+        uploadedKey,
+        `${uploadedKey}-thumbnail`,
+      ].sort(),
     )
+  })
+
+  it('삭제한 사진의 uploadId로 다시 확정해도 되살리지 않고 409를 반환한다', async () => {
+    const removed = new Set<string>()
+    send.mockImplementation((command: unknown) => {
+      if (command instanceof DeleteObjectCommand) {
+        removed.add(`test-bucket/${command.input.Key}`)
+      }
+      if (
+        command instanceof CopyObjectCommand &&
+        removed.has(command.input.CopySource ?? '')
+      ) {
+        return noSuchKey()
+      }
+      return Promise.resolve()
+    })
+    const quoteId = await createQuote()
+    const uploadId = randomUUID()
+    const { body: photo } = await confirm(quoteId, mover, uploadId)
+
+    const deleted = await deletePhoto(quoteId, mover, photo.id)
+    const retry = await confirm(quoteId, mover, uploadId)
+
+    expect(deleted.status).toBe(204)
+    expect(retry.status).toBe(409)
+    expect(retry.body.error.code).toBe('PROOF_PHOTO_NOT_UPLOADED')
+    expect(await prisma.proofPhoto.count()).toBe(0)
   })
 
   it('리뷰가 작성된 견적이면 지우지 않고 409를 반환한다', async () => {
@@ -712,7 +749,7 @@ describe('DELETE /api/quotes/:quoteId/proof-photos/:photoId', () => {
     ])
 
     expect(responses.map(({ status }) => status).sort()).toEqual([204, 404])
-    expect(deletedKeys()).toHaveLength(2)
+    expect(deletedKeys()).toHaveLength(4)
   })
 
   it('로그인하지 않으면 401을 반환한다', async () => {
