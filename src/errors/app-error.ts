@@ -63,6 +63,10 @@ const ERROR_CATALOG = {
     status: 409,
     message: '이미 작성한 리뷰가 있습니다',
   },
+  ADDRESS_NOT_FOUND: {
+    status: 422,
+    message: '주소를 찾을 수 없습니다',
+  },
 } as const
 
 export type ErrorCode = keyof typeof ERROR_CATALOG

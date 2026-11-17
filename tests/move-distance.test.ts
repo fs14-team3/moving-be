@@ -108,6 +108,25 @@ describe('getMoveDistanceKm', () => {
     ).rejects.toMatchObject({ code: 'SERVICE_UNAVAILABLE', status: 503 })
   })
 
+  it.each([
+    ['숫자가 아닌 값', { x: 'abc', y: '37.5666805' }],
+    ['빈 문자열', { x: '126.9784147', y: '' }],
+    ['범위를 벗어난 위도', { x: '126.9784147', y: '91' }],
+    ['값이 없음', { y: '37.5666805' }],
+  ])(
+    '카카오 API 좌표가 올바르지 않으면 503으로 실패한다 (%s)',
+    async (_, document) => {
+      vi.spyOn(console, 'error').mockImplementation(() => {})
+      fetchMock.mockImplementation(async () =>
+        jsonResponse({ documents: [document] }),
+      )
+
+      await expect(
+        getMoveDistanceKm(SEOUL_CITY_HALL, BUSAN_CITY_HALL),
+      ).rejects.toMatchObject({ code: 'SERVICE_UNAVAILABLE', status: 503 })
+    },
+  )
+
   it('카카오 API에 연결하지 못하면 503으로 실패한다', async () => {
     fetchMock.mockRejectedValue(new TypeError('fetch failed'))
 
