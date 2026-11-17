@@ -3,6 +3,7 @@ import * as proofPhotoService from '../services/proof-photo.service'
 import {
   confirmProofPhotoSchema,
   createProofPhotoUploadsSchema,
+  proofPhotoItemParamsSchema,
   proofPhotoParamsSchema,
 } from '../validators/proof-photo.validator'
 import { validate } from '../validators/validate'
@@ -33,4 +34,12 @@ export async function listProofPhotos(req: Request, res: Response) {
   const { quoteId } = validate(proofPhotoParamsSchema, req.params)
 
   res.json(await proofPhotoService.listProofPhotos(req.user, quoteId))
+}
+
+export async function deleteProofPhoto(req: Request, res: Response) {
+  const { quoteId, photoId } = validate(proofPhotoItemParamsSchema, req.params)
+
+  await proofPhotoService.deleteProofPhoto(req.user, quoteId, photoId)
+
+  res.status(204).send()
 }

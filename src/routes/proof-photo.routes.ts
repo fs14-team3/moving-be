@@ -24,3 +24,10 @@ proofPhotoRouter.get(
   requireAuth,
   proofPhotoController.listProofPhotos,
 )
+
+proofPhotoRouter.delete(
+  '/:quoteId/proof-photos/:photoId',
+  requireAuth,
+  requireRole('MOVER'),
+  proofPhotoController.deleteProofPhoto,
+)

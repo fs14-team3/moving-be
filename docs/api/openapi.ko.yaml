@@ -1070,7 +1070,9 @@ paths:
     get:
       tags: [Quotes]
       summary: 작업 사진 목록
-      description: 견적을 보낸 기사님과 해당 견적 요청의 일반 유저만 조회할 수 있습니다. 올린 순서대로 반환하며, `maxCount`는 견적 하나에 올릴 수 있는 최대 장수입니다.
+      description: >-
+        견적을 보낸 기사님과 해당 견적 요청의 일반 유저만 조회할 수 있습니다. 올린 순서대로 반환하며, `maxCount`는 견적 하나에 올릴 수 있는 최대 장수입니다.
+        `canDelete`가 `true`일 때만 사진 삭제 버튼을 보여 줍니다.
       operationId: listProofPhotos
       security:
         - sessionCookie: []
@@ -1121,6 +1123,41 @@ paths:
           description: >-
             `PROOF_PHOTO_LIMIT_REACHED` (이미 100장을 올림) 또는
             `PROOF_PHOTO_NOT_UPLOADED` (사진이나 썸네일이 S3에 없음. 업로드 정보를 다시 받아 올린 뒤 확정)
+          content:
+            application/json:
+              schema: { '$ref': '#/components/schemas/ErrorResponse' }
+        '503':
+          description: '`UPLOAD_NOT_CONFIGURED`. 서버에 `AWS_REGION`·`S3_BUCKET`·`IMAGE_BASE_URL` 중 하나라도 없는 경우 (로컬 개발 환경 등)'
+          content:
+            application/json:
+              schema: { '$ref': '#/components/schemas/ErrorResponse' }
+  '/quotes/{quoteId}/proof-photos/{photoId}':
+    delete:
+      tags: [Quotes]
+      summary: 작업 사진 삭제
+      description: >-
+        기사님이 본인 견적의 작업 사진을 삭제합니다. 일반 유저가 리뷰를 작성한 뒤에는 삭제할 수 없습니다.
+        사진과 썸네일 파일도 S3에서 함께 지웁니다.
+      operationId: deleteProofPhoto
+      security:
+        - sessionCookie: []
+      x-roles: [MOVER]
+      parameters:
+        - { '$ref': '#/components/parameters/QuoteIdPath' }
+        - { '$ref': '#/components/parameters/PhotoIdPath' }
+      responses:
+        '204':
+          description: 삭제 완료. 응답 본문 없음.
+        '400': { '$ref': '#/components/responses/ValidationError' }
+        '401': { '$ref': '#/components/responses/Unauthorized' }
+        '403': { '$ref': '#/components/responses/Forbidden' }
+        '404':
+          description: '`NOT_FOUND`. 본인 견적의 사진이 아니거나 이미 삭제됨'
+          content:
+            application/json:
+              schema: { '$ref': '#/components/schemas/ErrorResponse' }
+        '409':
+          description: '`PROOF_PHOTO_REVIEWED`. 리뷰가 작성된 견적의 사진은 삭제할 수 없습니다.'
           content:
             application/json:
               schema: { '$ref': '#/components/schemas/ErrorResponse' }
@@ -1376,6 +1413,11 @@ components:
       in: path
       required: true
       schema: { type: string, format: uuid }
+    PhotoIdPath:
+      name: photoId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
     Cursor:
       name: cursor
       in: query
@@ -1600,12 +1642,16 @@ components:
         uploadId: { type: string, format: uuid }
     ProofPhotoList:
       type: object
-      required: [items, maxCount]
+      required: [items, maxCount, canDelete]
       properties:
         items:
           type: array
           items: { '$ref': '#/components/schemas/ProofPhoto' }
         maxCount: { type: integer, example: 100 }
+        canDelete:
+          type: boolean
+          description: 호출자가 견적을 보낸 기사님이고 리뷰가 아직 없으면 `true`
+          example: true
     SignupRequest:
       type: object
       required: [role, name, email, phone, password]

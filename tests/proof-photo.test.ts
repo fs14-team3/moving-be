@@ -76,6 +76,28 @@ function list(quoteId: string, viewer?: Express.User) {
   return api(viewer).get(`/api/quotes/${quoteId}/proof-photos`)
 }
 
+function deletePhoto(quoteId: string, viewer?: Express.User, photoId = '') {
+  return api(viewer).delete(`/api/quotes/${quoteId}/proof-photos/${photoId}`)
+}
+
+function createPhoto(quoteId: string) {
+  return prisma.proofPhoto.create({
+    data: {
+      quoteId,
+      uploadId: randomUUID(),
+      imageKey: `proof-photos/${quoteId}/photo`,
+      thumbnailKey: `proof-photos/${quoteId}/photo-thumbnail`,
+    },
+    select: { id: true, imageKey: true, thumbnailKey: true },
+  })
+}
+
+function createReview(quoteId: string) {
+  return prisma.review.create({
+    data: { quoteId, rating: 5, content: '꼼꼼하게 옮겨 주셨어요.' },
+  })
+}
+
 function fillPhotos(quoteId: string, count: number) {
   return prisma.proofPhoto.createMany({
     data: Array.from({ length: count }, (_, index) => ({
@@ -492,9 +514,9 @@ describe('POST /api/quotes/:quoteId/proof-photos', () => {
 
 describe('GET /api/quotes/:quoteId/proof-photos', () => {
   it.each([
-    { name: '견적을 보낸 기사님', viewer: mover },
-    { name: '요청한 일반 유저', viewer: customer },
-  ])('$name 조회 시 올린 순서대로 반환한다', async ({ viewer }) => {
+    { name: '견적을 보낸 기사님', viewer: mover, canDelete: true },
+    { name: '요청한 일반 유저', viewer: customer, canDelete: false },
+  ])('$name 조회 시 올린 순서대로 반환한다', async ({ viewer, canDelete }) => {
     const quoteId = await createQuote()
     const first = await confirm(quoteId, mover)
     const second = await confirm(quoteId, mover)
@@ -505,7 +527,17 @@ describe('GET /api/quotes/:quoteId/proof-photos', () => {
     expect(response.body).toEqual({
       items: [first.body, second.body],
       maxCount: 100,
+      canDelete,
     })
+  })
+
+  it('리뷰가 작성된 견적이면 기사님도 canDelete가 false다', async () => {
+    const quoteId = await createQuote()
+    await createReview(quoteId)
+
+    const response = await list(quoteId, mover)
+
+    expect(response.body.canDelete).toBe(false)
   })
 
   it('로그인하지 않으면 401을 반환한다', async () => {
@@ -521,5 +553,118 @@ describe('GET /api/quotes/:quoteId/proof-photos', () => {
     const response = await list(await createQuote(), viewer)
 
     expect(response.status).toBe(404)
+  })
+})
+
+describe('DELETE /api/quotes/:quoteId/proof-photos/:photoId', () => {
+  it('기사님이 삭제하면 사진과 S3 파일을 지우고 204를 반환한다', async () => {
+    const quoteId = await createQuote()
+    const photo = await createPhoto(quoteId)
+
+    const response = await deletePhoto(quoteId, mover, photo.id)
+
+    expect(response.status).toBe(204)
+    expect(await prisma.proofPhoto.count()).toBe(0)
+    expect(deletedKeys().sort()).toEqual(
+      [photo.imageKey, photo.thumbnailKey].sort(),
+    )
+  })
+
+  it('리뷰가 작성된 견적이면 지우지 않고 409를 반환한다', async () => {
+    const quoteId = await createQuote()
+    const photo = await createPhoto(quoteId)
+    await createReview(quoteId)
+
+    const response = await deletePhoto(quoteId, mover, photo.id)
+
+    expect(response.status).toBe(409)
+    expect(response.body.error.code).toBe('PROOF_PHOTO_REVIEWED')
+    expect(await prisma.proofPhoto.count()).toBe(1)
+    expect(deletedKeys()).toEqual([])
+  })
+
+  it('S3 파일을 지우지 못해도 사진은 삭제하고 204를 반환한다', async () => {
+    send.mockRejectedValue(new Error('Access Denied'))
+    const quoteId = await createQuote()
+    const photo = await createPhoto(quoteId)
+
+    const response = await deletePhoto(quoteId, mover, photo.id)
+
+    expect(response.status).toBe(204)
+    expect(await prisma.proofPhoto.count()).toBe(0)
+  })
+
+  it('동시에 삭제하면 한 번만 지우고 나머지는 404를 반환한다', async () => {
+    const quoteId = await createQuote()
+    const photo = await createPhoto(quoteId)
+
+    const responses = await Promise.all([
+      deletePhoto(quoteId, mover, photo.id),
+      deletePhoto(quoteId, mover, photo.id),
+    ])
+
+    expect(responses.map(({ status }) => status).sort()).toEqual([204, 404])
+    expect(deletedKeys()).toHaveLength(2)
+  })
+
+  it('로그인하지 않으면 401을 반환한다', async () => {
+    const quoteId = await createQuote()
+    const photo = await createPhoto(quoteId)
+
+    const response = await deletePhoto(quoteId, undefined, photo.id)
+
+    expect(response.status).toBe(401)
+  })
+
+  it('일반 유저가 보내면 지우지 않고 403을 반환한다', async () => {
+    const quoteId = await createQuote()
+    const photo = await createPhoto(quoteId)
+
+    const response = await deletePhoto(quoteId, customer, photo.id)
+
+    expect(response.status).toBe(403)
+    expect(await prisma.proofPhoto.count()).toBe(1)
+  })
+
+  it('다른 기사님의 견적이면 지우지 않고 404를 반환한다', async () => {
+    const quoteId = await createQuote()
+    const photo = await createPhoto(quoteId)
+
+    const response = await deletePhoto(quoteId, otherMover, photo.id)
+
+    expect(response.status).toBe(404)
+    expect(await prisma.proofPhoto.count()).toBe(1)
+  })
+
+  it('다른 견적의 사진이면 지우지 않고 404를 반환한다', async () => {
+    const photo = await createPhoto(await createQuote())
+
+    const response = await deletePhoto(await createQuote(), mover, photo.id)
+
+    expect(response.status).toBe(404)
+    expect(await prisma.proofPhoto.count()).toBe(1)
+  })
+
+  it('사진 ID 형식이 잘못되면 400을 반환한다', async () => {
+    const response = await deletePhoto(await createQuote(), mover, 'not-a-uuid')
+
+    expect(response.status).toBe(400)
+    expect(response.body.error.code).toBe('VALIDATION_ERROR')
+  })
+
+  it('S3 설정이 없으면 지우지 않고 503을 반환한다', async () => {
+    const quoteId = await createQuote()
+    const photo = await createPhoto(quoteId)
+    const original = env.S3_BUCKET
+    env.S3_BUCKET = undefined
+
+    try {
+      const response = await deletePhoto(quoteId, mover, photo.id)
+
+      expect(response.status).toBe(503)
+      expect(await prisma.proofPhoto.count()).toBe(1)
+    } finally {
+      env.S3_BUCKET = original
+    }
   })
 })

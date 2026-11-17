@@ -52,15 +52,20 @@ function proofPhotoKeys(quoteId: string, id: string): ProofPhotoKeys {
   return { imageKey, thumbnailKey: `${imageKey}-thumbnail` }
 }
 
+function assertMover(viewer: Express.User | undefined) {
+  if (!viewer) throw new AppError('UNAUTHORIZED')
+  if (viewer.role !== 'MOVER') throw new AppError('FORBIDDEN')
+  return viewer.id
+}
+
 async function countUploadablePhotos(
   viewer: Express.User | undefined,
   quoteId: string,
 ) {
-  if (!viewer) throw new AppError('UNAUTHORIZED')
-  if (viewer.role !== 'MOVER') throw new AppError('FORBIDDEN')
+  const moverId = assertMover(viewer)
 
   const quote = await prisma.quote.findFirst({
-    where: { id: quoteId, moverId: viewer.id },
+    where: { id: quoteId, moverId },
     select: {
       status: true,
       moveRequest: { select: { moveDate: true } },
@@ -235,6 +240,8 @@ export async function listProofPhotos(
       OR: [{ moverId: viewer.id }, { moveRequest: { customerId: viewer.id } }],
     },
     select: {
+      moverId: true,
+      _count: { select: { reviews: true } },
       proofPhotos: {
         select: proofPhotoSelect,
         orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
@@ -246,5 +253,35 @@ export async function listProofPhotos(
   return {
     items: quote.proofPhotos.map(toProofPhoto),
     maxCount: MAX_PROOF_PHOTOS,
+    canDelete: quote.moverId === viewer.id && quote._count.reviews === 0,
   }
+}
+
+export async function deleteProofPhoto(
+  viewer: Express.User | undefined,
+  quoteId: string,
+  photoId: string,
+) {
+  const moverId = assertMover(viewer)
+
+  const photo = await prisma.proofPhoto.findFirst({
+    where: { id: photoId, quoteId, quote: { moverId } },
+    select: {
+      imageKey: true,
+      thumbnailKey: true,
+      quote: { select: { _count: { select: { reviews: true } } } },
+    },
+  })
+  if (!photo) throw new AppError('NOT_FOUND')
+  if (photo.quote._count.reviews > 0) {
+    throw new AppError('PROOF_PHOTO_REVIEWED')
+  }
+
+  const bucket = uploadBucket()
+  const { count } = await prisma.proofPhoto.deleteMany({
+    where: { id: photoId },
+  })
+  if (count === 0) throw new AppError('NOT_FOUND')
+
+  await deletePhotoObjects(bucket, photo)
 }

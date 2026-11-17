@@ -4,6 +4,10 @@ export const proofPhotoParamsSchema = z.object({
   quoteId: z.uuid(),
 })
 
+export const proofPhotoItemParamsSchema = proofPhotoParamsSchema.extend({
+  photoId: z.uuid(),
+})
+
 export const createProofPhotoUploadsSchema = z.object({
   count: z.int().min(1),
   contentType: z.enum(['image/jpeg', 'image/webp']),
