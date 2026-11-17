@@ -487,6 +487,26 @@ paths:
               schema: { '$ref': '#/components/schemas/MoverReviewListResponse' }
         '400': { '$ref': '#/components/responses/ValidationError' }
         '404': { '$ref': '#/components/responses/NotFound' }
+  '/movers/{moverId}/review-summary':
+    get:
+      tags: [Movers, Reviews]
+      summary: 기사님 리뷰 AI 요약
+      description: |
+        공개 API. 리뷰가 10건 미만이거나 요약을 만들 수 없으면 `null`입니다.
+        리뷰 수가 바뀌면 다시 생성하고, 생성에 실패했을 때 이전 저장본이 있으면 이를 반환합니다.
+      operationId: getMoverReviewSummary
+      security: []
+      parameters:
+        - { '$ref': '#/components/parameters/MoverIdPath' }
+      responses:
+        '200':
+          description: 리뷰 요약. 없으면 null
+          content:
+            application/json:
+              schema:
+                '$ref': '#/components/schemas/MoverReviewSummary'
+        '400': { '$ref': '#/components/responses/ValidationError' }
+        '404': { '$ref': '#/components/responses/NotFound' }
   '/movers/{moverId}/favorite':
     put:
       tags: [Favorites]
@@ -690,6 +710,7 @@ paths:
             application/json:
               schema:
                 { '$ref': '#/components/schemas/MoveRequestHistoryResponse' }
+        '400': { '$ref': '#/components/responses/ValidationError' }
         '401': { '$ref': '#/components/responses/Unauthorized' }
         '403': { '$ref': '#/components/responses/Forbidden' }
   '/move-requests/{requestId}':
@@ -713,6 +734,31 @@ paths:
         '401': { '$ref': '#/components/responses/Unauthorized' }
         '403': { '$ref': '#/components/responses/Forbidden' }
         '404': { '$ref': '#/components/responses/NotFound' }
+    delete:
+      tags: [MoveRequests]
+      summary: 견적 요청 삭제
+      description: |
+        요청자 본인의 이사 요청만 삭제할 수 있습니다.
+        견적이 한 건도 없는 요청만 삭제할 수 있으며,
+        지정 요청, 반려 기록, 연결된 알림은 함께 삭제됩니다.
+      operationId: deleteMoveRequest
+      security:
+        - sessionCookie: []
+      x-roles: [CUSTOMER]
+      parameters:
+        - { '$ref': '#/components/parameters/RequestIdPath' }
+      responses:
+        '204':
+          description: 삭제 완료. 응답 본문 없음.
+        '400': { '$ref': '#/components/responses/ValidationError' }
+        '401': { '$ref': '#/components/responses/Unauthorized' }
+        '403': { '$ref': '#/components/responses/Forbidden' }
+        '404': { '$ref': '#/components/responses/NotFound' }
+        '409':
+          description: '`REQUEST_HAS_QUOTES`. 이미 견적이 제출된 요청은 삭제할 수 없습니다.'
+          content:
+            application/json:
+              schema: { '$ref': '#/components/schemas/ErrorResponse' }
   '/move-requests/{requestId}/designations':
     post:
       tags: [MoveRequests]
@@ -908,7 +954,7 @@ paths:
         로그인한 기사님이 본인이 보낸 견적을 최신순으로 조회합니다.
         로그인 세션으로 인증하며, 비로그인은 401, 고객은 403을 반환합니다.
         견적 상태별 필터링과 커서 기반 페이지네이션을 지원합니다.
-        고객명은 닉네임을 우선 사용하며, 닉네임이 없으면 사용자 이름을 반환합니다.
+        고객명은 User.name을 사용하며, 이름이 없으면 null을 반환합니다.
       operationId: listMySentQuotes
       security:
         - sessionCookie: []
@@ -939,17 +985,29 @@ paths:
         '400': { '$ref': '#/components/responses/ValidationError' }
         '401': { '$ref': '#/components/responses/Unauthorized' }
         '403': { '$ref': '#/components/responses/Forbidden' }
-  '/movers/me/rejected-requests':
+  '/movers/me/rejections':
     get:
       tags: [MoverInbox]
       summary: 반려한 요청 목록
+      description: |-
+        로그인한 기사님이 본인이 반려한 이사 요청 목록을 조회합니다.
+        반려 시각 최신순으로 정렬합니다.
+        이사 요청의 상태가 변경되더라도 반려 이력은 목록에 유지됩니다.
+        요청 상태에 따른 별도 필터링은 적용하지 않습니다.
       operationId: listMyRejectedRequests
       security:
         - sessionCookie: []
       x-roles: [MOVER]
       parameters:
         - { '$ref': '#/components/parameters/Cursor' }
-        - { '$ref': '#/components/parameters/Limit' }
+        - name: limit
+          in: query
+          description: 페이지 크기
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 10
       responses:
         '200':
           description: 반려한 요청 목록 페이지
@@ -957,6 +1015,7 @@ paths:
             application/json:
               schema:
                 { '$ref': '#/components/schemas/RejectedRequestListResponse' }
+        '400': { '$ref': '#/components/responses/ValidationError' }
         '401': { '$ref': '#/components/responses/Unauthorized' }
         '403': { '$ref': '#/components/responses/Forbidden' }
   '/quotes/{quoteId}':
@@ -1327,6 +1386,7 @@ components:
         - MOVER_ALREADY_RESPONDED
         - DESIGNATION_LIMIT_REACHED
         - REQUEST_NOT_PENDING
+        - REQUEST_HAS_QUOTES
         - QUOTE_LIMIT_REACHED
         - RATE_LIMITED
         - INTERNAL_ERROR
@@ -1836,7 +1896,10 @@ components:
         ]
       properties:
         id: { type: string, format: uuid }
-        customerName: { type: string, nullable: true }
+        customerName:
+          type: string
+          nullable: true
+          description: 고객의 User.name을 반환하며, 이름이 없으면 null을 반환합니다.
         moveType: { '$ref': '#/components/schemas/ServiceType' }
         moveDate: { type: string, format: date }
         from: { '$ref': '#/components/schemas/Address' }
@@ -1921,6 +1984,26 @@ components:
             items:
               type: array
               items: { '$ref': '#/components/schemas/Review' }
+    MoverReviewSummary:
+      type: object
+      nullable: true
+      required: [reviewCount, summary, aspects]
+      properties:
+        reviewCount: { type: integer }
+        summary: { type: string }
+        aspects:
+          type: array
+          items: { '$ref': '#/components/schemas/ReviewSummaryAspect' }
+    ReviewSummaryAspect:
+      type: object
+      required: [key, mentionCount, positiveCount, negativeCount]
+      properties:
+        key:
+          type: string
+          enum: [PUNCTUALITY, HANDLING, SPEED, COMMUNICATION, PRICE]
+        mentionCount: { type: integer }
+        positiveCount: { type: integer }
+        negativeCount: { type: integer }
     ReviewTarget:
       description: 리뷰 대상인(또는 리뷰할 수 있는) 완료된 이사
       type: object

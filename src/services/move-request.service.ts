@@ -11,7 +11,7 @@ import {
 
 const MAX_DESIGNATED_MOVERS = 3
 
-const moveRequestSelect = {
+export const moveRequestSelect = {
   id: true,
   moveType: true,
   moveDate: true,
@@ -237,7 +237,7 @@ function activeRequestWhere(
   }
 }
 
-function toMoveRequest(row: MoveRequestRow) {
+export function toMoveRequest(row: MoveRequestRow) {
   return {
     id: row.id,
     moveType: row.moveType,

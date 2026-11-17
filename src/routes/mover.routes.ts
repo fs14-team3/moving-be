@@ -4,6 +4,7 @@ import * as moverController from '../controllers/mover.controller'
 import * as reviewController from '../controllers/review.controller'
 import * as moverInboxController from '../controllers/mover-inbox.controller'
 import { listMySentQuotes } from '../controllers/sent-quote.controller'
+import { listMyRejectedRequests } from '../controllers/rejected-request.controller'
 import { requireAuth } from '../middlewares/require-auth'
 import { requireRole } from '../middlewares/require-role'
 import { optionalAuth } from '../middlewares/optional-auth'
@@ -34,6 +35,10 @@ moverRouter.get(
 )
 moverRouter.get('/:moverId', optionalAuth, moverController.getMover)
 moverRouter.get('/:moverId/reviews', reviewController.listMoverReviews)
+moverRouter.get(
+  '/:moverId/review-summary',
+  reviewController.getMoverReviewSummary,
+)
 
 // 로그인 사용자 API
 moverRouter.put(
@@ -61,4 +66,11 @@ moverRouter.get(
   requireAuth,
   requireRole('MOVER'),
   listMySentQuotes,
+)
+
+moverRouter.get(
+  '/me/rejections',
+  requireAuth,
+  requireRole('MOVER'),
+  listMyRejectedRequests,
 )
