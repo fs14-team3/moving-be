@@ -88,7 +88,7 @@ function editRestriction({
   return null
 }
 
-async function assertEditable(
+async function findMoverQuote(
   viewer: Express.User | undefined,
   quoteId: string,
 ) {
@@ -99,7 +99,10 @@ async function assertEditable(
     select: editableQuoteSelect,
   })
   if (!quote) throw new AppError('NOT_FOUND')
+  return quote
+}
 
+function assertEditable(quote: EditableQuote) {
   const restriction = editRestriction(quote)
   if (restriction) throw new AppError(restriction)
 
@@ -220,7 +223,7 @@ export async function createProofPhotoUploads(
   quoteId: string,
   { count, contentType }: CreateProofPhotoUploadsBody,
 ) {
-  const photoCount = await assertEditable(viewer, quoteId)
+  const photoCount = assertEditable(await findMoverQuote(viewer, quoteId))
   if (photoCount + count > MAX_PROOF_PHOTOS) {
     throw new AppError('PROOF_PHOTO_LIMIT_REACHED')
   }
@@ -246,10 +249,11 @@ export async function confirmProofPhoto(
   quoteId: string,
   uploadId: string,
 ) {
-  const photoCount = await assertEditable(viewer, quoteId)
+  const quote = await findMoverQuote(viewer, quoteId)
 
   const saved = await findProofPhoto(prisma, quoteId, uploadId)
   if (saved) return toProofPhoto(saved)
+  const photoCount = assertEditable(quote)
   if (photoCount >= MAX_PROOF_PHOTOS) {
     throw new AppError('PROOF_PHOTO_LIMIT_REACHED')
   }
@@ -315,7 +319,7 @@ export async function deleteProofPhoto(
   quoteId: string,
   photoId: string,
 ) {
-  await assertEditable(viewer, quoteId)
+  assertEditable(await findMoverQuote(viewer, quoteId))
   const bucket = uploadBucket()
 
   await prisma.$transaction(async (tx) => {

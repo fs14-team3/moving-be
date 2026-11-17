@@ -421,6 +421,19 @@ describe('POST /api/quotes/:quoteId/proof-photos', () => {
     expect(await prisma.proofPhoto.count({ where: { quoteId } })).toBe(100)
   })
 
+  it('저장된 뒤 리뷰가 작성돼도 같은 uploadId로 다시 보내면 저장된 사진을 반환한다', async () => {
+    const quoteId = await createQuote()
+    const uploadId = randomUUID()
+
+    const first = await confirm(quoteId, mover, uploadId)
+    await createReview(quoteId)
+    const retry = await confirm(quoteId, mover, uploadId)
+
+    expect(retry.status).toBe(201)
+    expect(retry.body).toEqual(first.body)
+    expect(send).toHaveBeenCalledTimes(2)
+  })
+
   it('같은 uploadId로 동시에 보내도 한 장만 저장하고 둘 다 같은 사진을 반환한다', async () => {
     const quoteId = await createQuote()
     const uploadId = randomUUID()
@@ -477,8 +490,13 @@ describe('POST /api/quotes/:quoteId/proof-photos', () => {
     expect(send).not.toHaveBeenCalled()
   })
 
-  it('다른 기사님의 견적이면 404를 반환한다', async () => {
-    const response = await confirm(await createQuote(), otherMover)
+  it('다른 기사님의 견적이면 저장된 uploadId여도 404를 반환한다', async () => {
+    const quoteId = await createQuote()
+    const uploadId = randomUUID()
+    await confirm(quoteId, mover, uploadId)
+    send.mockClear()
+
+    const response = await confirm(quoteId, otherMover, uploadId)
 
     expect(response.status).toBe(404)
     expect(send).not.toHaveBeenCalled()
