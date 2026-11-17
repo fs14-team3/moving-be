@@ -6,6 +6,7 @@ import {
   requestIdParams,
 } from '../validators/move-request.validator'
 import { validate } from '../validators/validate'
+import * as deleteMoveRequestService from '../services/delete-move-request.service'
 
 export async function createMoveRequest(req: Request, res: Response) {
   const body = validate(createMoveRequestBody, req.body)
@@ -29,4 +30,12 @@ export async function designateMover(req: Request, res: Response) {
   res
     .status(201)
     .json(await moveRequestService.designateMover(req.user, requestId, moverId))
+}
+
+export async function deleteMoveRequest(req: Request, res: Response) {
+  const { requestId } = validate(requestIdParams, req.params)
+
+  await deleteMoveRequestService.deleteMoveRequest(req.user, requestId)
+
+  res.status(204).send()
 }

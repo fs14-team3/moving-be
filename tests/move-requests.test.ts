@@ -820,3 +820,220 @@ describe('POST /api/move-requests/:requestId/designations', () => {
     expect(await designatedMoverIds(request.id)).toEqual([mover.id])
   })
 })
+
+describe('DELETE /api/move-requests/:requestId', () => {
+  function deleteRequest(id: string, viewer?: Express.User) {
+    return api(viewer).delete(`/api/move-requests/${id}`)
+  }
+
+  it('견적이 없는 본인의 요청을 삭제하면 204를 반환한다', async () => {
+    const created = await createRequest(customer)
+    expect(created.status).toBe(201)
+
+    const res = await deleteRequest(created.body.id, customer)
+
+    expect(res.status).toBe(204)
+    expect(res.text).toBe('')
+
+    const deleted = await prisma.moveRequest.findUnique({
+      where: { id: created.body.id },
+    })
+
+    expect(deleted).toBeNull()
+  })
+
+  it('견적이 존재하면 409를 반환하고 요청을 유지한다', async () => {
+    const created = await createRequest(customer)
+    const requestId = created.body.id
+
+    await prisma.quote.create({
+      data: {
+        moveRequestId: requestId,
+        moverId: mover.id,
+        price: 350000,
+      },
+    })
+
+    const res = await deleteRequest(requestId, customer)
+
+    expect(res.status).toBe(409)
+    expect(res.body.error.code).toBe('REQUEST_HAS_QUOTES')
+
+    expect(
+      await prisma.moveRequest.findUnique({
+        where: { id: requestId },
+      }),
+    ).not.toBeNull()
+
+    expect(
+      await prisma.quote.count({
+        where: { moveRequestId: requestId },
+      }),
+    ).toBe(1)
+  })
+
+  it('지정 견적 요청이 있어도 견적이 없으면 함께 삭제한다', async () => {
+    const created = await createRequest(customer)
+    const requestId = created.body.id
+
+    await prisma.designatedRequest.create({
+      data: {
+        moveRequestId: requestId,
+        moverId: mover.id,
+      },
+    })
+
+    const res = await deleteRequest(requestId, customer)
+
+    expect(res.status).toBe(204)
+
+    expect(
+      await prisma.designatedRequest.count({
+        where: { moveRequestId: requestId },
+      }),
+    ).toBe(0)
+  })
+
+  it('반려 기록이 있어도 견적이 없으면 함께 삭제한다', async () => {
+    const created = await createRequest(customer)
+    const requestId = created.body.id
+
+    await prisma.requestRejection.create({
+      data: {
+        moveRequestId: requestId,
+        moverId: mover.id,
+      },
+    })
+
+    const res = await deleteRequest(requestId, customer)
+
+    expect(res.status).toBe(204)
+
+    expect(
+      await prisma.requestRejection.count({
+        where: { moveRequestId: requestId },
+      }),
+    ).toBe(0)
+  })
+
+  it('연결된 알림도 함께 삭제하고 다른 알림은 유지한다', async () => {
+    const created = await createRequest(customer)
+    const requestId = created.body.id
+
+    const unrelated = await prisma.notification.create({
+      data: {
+        userId: customer.id,
+        type: 'MOVE_DAY',
+        payload: {},
+      },
+    })
+
+    const res = await deleteRequest(requestId, customer)
+
+    expect(res.status).toBe(204)
+
+    expect(
+      await prisma.notification.count({
+        where: { moveRequestId: requestId },
+      }),
+    ).toBe(0)
+
+    expect(
+      await prisma.notification.findUnique({
+        where: { id: unrelated.id },
+      }),
+    ).not.toBeNull()
+  })
+
+  it('다른 고객의 요청은 삭제할 수 없다', async () => {
+    const created = await createRequest(otherCustomer)
+    const requestId = created.body.id
+
+    const res = await deleteRequest(requestId, customer)
+
+    expect(res.status).toBe(404)
+    expect(res.body.error.code).toBe('NOT_FOUND')
+
+    expect(
+      await prisma.moveRequest.findUnique({
+        where: { id: requestId },
+      }),
+    ).not.toBeNull()
+  })
+
+  it('존재하지 않는 요청은 404를 반환한다', async () => {
+    const res = await deleteRequest(
+      '11111111-1111-4111-8111-111111111111',
+      customer,
+    )
+
+    expect(res.status).toBe(404)
+    expect(res.body.error.code).toBe('NOT_FOUND')
+  })
+
+  it('유효하지 않은 요청 ID는 400을 반환한다', async () => {
+    const res = await deleteRequest('invalid-uuid', customer)
+
+    expect(res.status).toBe(400)
+    expect(res.body.error.code).toBe('VALIDATION_ERROR')
+  })
+
+  it('비로그인 사용자는 401을 반환한다', async () => {
+    const created = await createRequest(customer)
+
+    const res = await deleteRequest(created.body.id)
+
+    expect(res.status).toBe(401)
+    expect(res.body.error.code).toBe('UNAUTHORIZED')
+  })
+
+  it('기사님은 요청을 삭제할 수 없다', async () => {
+    const created = await createRequest(customer)
+
+    const res = await deleteRequest(created.body.id, mover)
+
+    expect(res.status).toBe(403)
+    expect(res.body.error.code).toBe('FORBIDDEN')
+  })
+
+  it('프로필이 없는 고객은 요청을 삭제할 수 없다', async () => {
+    const created = await createRequest(customer)
+
+    const res = await deleteRequest(created.body.id, customerWithoutProfile)
+
+    expect(res.status).toBe(403)
+    expect(res.body.error.code).toBe('PROFILE_REQUIRED')
+  })
+
+  it('견적 제출과 삭제가 동시에 실행되어도 데이터 무결성을 유지한다', async () => {
+    const created = await createRequest(customer)
+    const requestId = created.body.id
+
+    const [deleteRes, quoteRes] = await Promise.all([
+      deleteRequest(requestId, customer),
+      api(mover)
+        .post(`/api/move-requests/${requestId}/quotes`)
+        .send({ price: 350000 }),
+    ])
+
+    const request = await prisma.moveRequest.findUnique({
+      where: { id: requestId },
+    })
+
+    const quoteCount = await prisma.quote.count({
+      where: { moveRequestId: requestId },
+    })
+
+    if (deleteRes.status === 204) {
+      expect(request).toBeNull()
+      expect(quoteCount).toBe(0)
+      expect(quoteRes.status).toBe(404)
+    } else {
+      expect(deleteRes.status).toBe(409)
+      expect(deleteRes.body.error.code).toBe('REQUEST_HAS_QUOTES')
+      expect(quoteRes.status).toBe(201)
+      expect(request).not.toBeNull()
+      expect(quoteCount).toBe(1)
+    }
+  })
+})

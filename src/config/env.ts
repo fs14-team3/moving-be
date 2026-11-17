@@ -26,4 +26,6 @@ export const env = {
   IMAGE_BASE_URL: process.env.IMAGE_BASE_URL,
 
   SESSION_SECRET: sessionSecret,
+
+  GEMINI_API_KEY: process.env.GEMINI_API_KEY,
 }
