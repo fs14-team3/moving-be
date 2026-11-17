@@ -6,7 +6,7 @@ import {
 } from '@aws-sdk/client-s3'
 import { createPresignedPost } from '@aws-sdk/s3-presigned-post'
 import * as Sentry from '@sentry/node'
-import { AppError } from '../errors/app-error'
+import { AppError, type ErrorCode } from '../errors/app-error'
 import type { Prisma } from '../generated/prisma/client'
 import { prisma } from '../lib/prisma'
 import { s3 } from '../lib/s3'
@@ -58,7 +58,31 @@ function assertMover(viewer: Express.User | undefined) {
   return viewer.id
 }
 
-async function countUploadablePhotos(
+const editableQuoteSelect = {
+  moverId: true,
+  status: true,
+  moveRequest: { select: { moveDate: true } },
+  _count: { select: { proofPhotos: true, reviews: true } },
+} as const
+
+type EditableQuote = Prisma.QuoteGetPayload<{
+  select: typeof editableQuoteSelect
+}>
+
+function editRestriction({
+  status,
+  moveRequest,
+  _count,
+}: EditableQuote): ErrorCode | null {
+  const today = new Date(todayInSeoul())
+  if (status !== 'CONFIRMED' || moveRequest.moveDate >= today) {
+    return 'PROOF_PHOTO_NOT_ALLOWED'
+  }
+  if (_count.reviews > 0) return 'PROOF_PHOTO_REVIEWED'
+  return null
+}
+
+async function assertEditable(
   viewer: Express.User | undefined,
   quoteId: string,
 ) {
@@ -66,18 +90,12 @@ async function countUploadablePhotos(
 
   const quote = await prisma.quote.findFirst({
     where: { id: quoteId, moverId },
-    select: {
-      status: true,
-      moveRequest: { select: { moveDate: true } },
-      _count: { select: { proofPhotos: true } },
-    },
+    select: editableQuoteSelect,
   })
   if (!quote) throw new AppError('NOT_FOUND')
 
-  const today = new Date(todayInSeoul())
-  if (quote.status !== 'CONFIRMED' || quote.moveRequest.moveDate >= today) {
-    throw new AppError('PROOF_PHOTO_NOT_ALLOWED')
-  }
+  const restriction = editRestriction(quote)
+  if (restriction) throw new AppError(restriction)
 
   return quote._count.proofPhotos
 }
@@ -177,7 +195,7 @@ export async function createProofPhotoUploads(
   quoteId: string,
   { count, contentType }: CreateProofPhotoUploadsBody,
 ) {
-  const photoCount = await countUploadablePhotos(viewer, quoteId)
+  const photoCount = await assertEditable(viewer, quoteId)
   if (photoCount + count > MAX_PROOF_PHOTOS) {
     throw new AppError('PROOF_PHOTO_LIMIT_REACHED')
   }
@@ -203,7 +221,7 @@ export async function confirmProofPhoto(
   quoteId: string,
   uploadId: string,
 ) {
-  const photoCount = await countUploadablePhotos(viewer, quoteId)
+  const photoCount = await assertEditable(viewer, quoteId)
 
   const saved = await prisma.proofPhoto.findUnique({
     where: { quoteId_uploadId: { quoteId, uploadId } },
@@ -240,8 +258,7 @@ export async function listProofPhotos(
       OR: [{ moverId: viewer.id }, { moveRequest: { customerId: viewer.id } }],
     },
     select: {
-      moverId: true,
-      _count: { select: { reviews: true } },
+      ...editableQuoteSelect,
       proofPhotos: {
         select: proofPhotoSelect,
         orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
@@ -253,7 +270,7 @@ export async function listProofPhotos(
   return {
     items: quote.proofPhotos.map(toProofPhoto),
     maxCount: MAX_PROOF_PHOTOS,
-    canDelete: quote.moverId === viewer.id && quote._count.reviews === 0,
+    canEdit: quote.moverId === viewer.id && editRestriction(quote) === null,
   }
 }
 
@@ -262,20 +279,13 @@ export async function deleteProofPhoto(
   quoteId: string,
   photoId: string,
 ) {
-  const moverId = assertMover(viewer)
+  await assertEditable(viewer, quoteId)
 
   const photo = await prisma.proofPhoto.findFirst({
-    where: { id: photoId, quoteId, quote: { moverId } },
-    select: {
-      imageKey: true,
-      thumbnailKey: true,
-      quote: { select: { _count: { select: { reviews: true } } } },
-    },
+    where: { id: photoId, quoteId },
+    select: { imageKey: true, thumbnailKey: true },
   })
   if (!photo) throw new AppError('NOT_FOUND')
-  if (photo.quote._count.reviews > 0) {
-    throw new AppError('PROOF_PHOTO_REVIEWED')
-  }
 
   const bucket = uploadBucket()
   const { count } = await prisma.proofPhoto.deleteMany({

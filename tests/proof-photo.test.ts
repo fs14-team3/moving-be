@@ -302,6 +302,16 @@ describe('POST /api/quotes/:quoteId/proof-photos/uploads', () => {
     expect(fits.status).toBe(201)
   })
 
+  it('리뷰가 작성된 견적이면 409를 반환한다', async () => {
+    const quoteId = await createQuote()
+    await createReview(quoteId)
+
+    const response = await presign(quoteId, mover)
+
+    expect(response.status).toBe(409)
+    expect(response.body.error.code).toBe('PROOF_PHOTO_REVIEWED')
+  })
+
   it('S3 설정이 없으면 503을 반환한다', async () => {
     const original = env.S3_BUCKET
     env.S3_BUCKET = undefined
@@ -476,6 +486,19 @@ describe('POST /api/quotes/:quoteId/proof-photos', () => {
     expect(send).not.toHaveBeenCalled()
   })
 
+  it('업로드 정보를 받은 뒤 리뷰가 작성되면 저장하지 않고 409를 반환한다', async () => {
+    const quoteId = await createQuote()
+    const { body } = await presign(quoteId, mover)
+    await createReview(quoteId)
+
+    const response = await confirm(quoteId, mover, body.items[0].uploadId)
+
+    expect(response.status).toBe(409)
+    expect(response.body.error.code).toBe('PROOF_PHOTO_REVIEWED')
+    expect(await prisma.proofPhoto.count()).toBe(0)
+    expect(copies()).toEqual([])
+  })
+
   it('동시에 확정해도 100장을 넘지 않는다', async () => {
     const quoteId = await createQuote()
     await fillPhotos(quoteId, 98)
@@ -514,9 +537,9 @@ describe('POST /api/quotes/:quoteId/proof-photos', () => {
 
 describe('GET /api/quotes/:quoteId/proof-photos', () => {
   it.each([
-    { name: '견적을 보낸 기사님', viewer: mover, canDelete: true },
-    { name: '요청한 일반 유저', viewer: customer, canDelete: false },
-  ])('$name 조회 시 올린 순서대로 반환한다', async ({ viewer, canDelete }) => {
+    { name: '견적을 보낸 기사님', viewer: mover, canEdit: true },
+    { name: '요청한 일반 유저', viewer: customer, canEdit: false },
+  ])('$name 조회 시 올린 순서대로 반환한다', async ({ viewer, canEdit }) => {
     const quoteId = await createQuote()
     const first = await confirm(quoteId, mover)
     const second = await confirm(quoteId, mover)
@@ -527,17 +550,26 @@ describe('GET /api/quotes/:quoteId/proof-photos', () => {
     expect(response.body).toEqual({
       items: [first.body, second.body],
       maxCount: 100,
-      canDelete,
+      canEdit,
     })
   })
 
-  it('리뷰가 작성된 견적이면 기사님도 canDelete가 false다', async () => {
+  it('이사일이 지나지 않았으면 기사님도 canEdit이 false다', async () => {
+    const response = await list(
+      await createQuote('CONFIRMED', futureDate),
+      mover,
+    )
+
+    expect(response.body.canEdit).toBe(false)
+  })
+
+  it('리뷰가 작성된 견적이면 기사님도 canEdit이 false다', async () => {
     const quoteId = await createQuote()
     await createReview(quoteId)
 
     const response = await list(quoteId, mover)
 
-    expect(response.body.canDelete).toBe(false)
+    expect(response.body.canEdit).toBe(false)
   })
 
   it('로그인하지 않으면 401을 반환한다', async () => {

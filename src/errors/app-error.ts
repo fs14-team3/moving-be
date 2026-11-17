@@ -77,7 +77,7 @@ const ERROR_CATALOG = {
   },
   PROOF_PHOTO_REVIEWED: {
     status: 409,
-    message: '리뷰가 작성된 견적의 작업 사진은 삭제할 수 없습니다',
+    message: '리뷰가 작성된 견적의 작업 사진은 올리거나 삭제할 수 없습니다',
   },
 } as const
 

@@ -1072,7 +1072,7 @@ paths:
       summary: 작업 사진 목록
       description: >-
         견적을 보낸 기사님과 해당 견적 요청의 일반 유저만 조회할 수 있습니다. 올린 순서대로 반환하며, `maxCount`는 견적 하나에 올릴 수 있는 최대 장수입니다.
-        `canDelete`가 `true`일 때만 사진 삭제 버튼을 보여 줍니다.
+        `canEdit`이 `true`일 때만 사진 올리기와 삭제 버튼을 보여 줍니다.
       operationId: listProofPhotos
       security:
         - sessionCookie: []
@@ -1121,8 +1121,9 @@ paths:
         '404': { '$ref': '#/components/responses/NotFound' }
         '409':
           description: >-
-            `PROOF_PHOTO_LIMIT_REACHED` (이미 100장을 올림) 또는
-            `PROOF_PHOTO_NOT_UPLOADED` (사진이나 썸네일이 S3에 없음. 업로드 정보를 다시 받아 올린 뒤 확정)
+            `PROOF_PHOTO_LIMIT_REACHED` (이미 100장을 올림),
+            `PROOF_PHOTO_NOT_UPLOADED` (사진이나 썸네일이 S3에 없음. 업로드 정보를 다시 받아 올린 뒤 확정) 또는
+            `PROOF_PHOTO_REVIEWED` (업로드 정보를 받은 뒤 리뷰가 작성됨)
           content:
             application/json:
               schema: { '$ref': '#/components/schemas/ErrorResponse' }
@@ -1136,7 +1137,7 @@ paths:
       tags: [Quotes]
       summary: 작업 사진 삭제
       description: >-
-        기사님이 본인 견적의 작업 사진을 삭제합니다. 일반 유저가 리뷰를 작성한 뒤에는 삭제할 수 없습니다.
+        기사님이 본인 견적의 작업 사진을 삭제합니다. 일반 유저가 리뷰를 작성한 뒤에는 올리기와 마찬가지로 삭제할 수 없습니다.
         사진과 썸네일 파일도 S3에서 함께 지웁니다.
       operationId: deleteProofPhoto
       security:
@@ -1172,7 +1173,7 @@ paths:
       summary: 작업 사진 업로드 정보 발급
       description: >-
         기사님이 본인의 확정된 견적에 올릴 사진 `count`장의 S3 업로드 정보를 받습니다.
-        한국 시간(Asia/Seoul) 기준 이사일 다음 날부터 받을 수 있으며, 이미 확정된 사진과 합쳐 100장을 넘을 수 없습니다.
+        한국 시간(Asia/Seoul) 기준 이사일 다음 날부터 일반 유저가 리뷰를 작성하기 전까지 받을 수 있으며, 이미 확정된 사진과 합쳐 100장을 넘을 수 없습니다.
 
 
         사진마다 `image`(긴 변 약 2000px)와 `thumbnail`(긴 변 약 300px)을 브라우저에서 WebP나 JPEG로 다시 인코딩해 각각 올립니다.
@@ -1208,7 +1209,9 @@ paths:
               schema: { '$ref': '#/components/schemas/ErrorResponse' }
         '404': { '$ref': '#/components/responses/NotFound' }
         '409':
-          description: '`PROOF_PHOTO_LIMIT_REACHED` (확정된 사진과 합쳐 100장을 넘음)'
+          description: >-
+            `PROOF_PHOTO_LIMIT_REACHED` (확정된 사진과 합쳐 100장을 넘음) 또는
+            `PROOF_PHOTO_REVIEWED` (리뷰가 작성된 견적)
           content:
             application/json:
               schema: { '$ref': '#/components/schemas/ErrorResponse' }
@@ -1642,15 +1645,15 @@ components:
         uploadId: { type: string, format: uuid }
     ProofPhotoList:
       type: object
-      required: [items, maxCount, canDelete]
+      required: [items, maxCount, canEdit]
       properties:
         items:
           type: array
           items: { '$ref': '#/components/schemas/ProofPhoto' }
         maxCount: { type: integer, example: 100 }
-        canDelete:
+        canEdit:
           type: boolean
-          description: 호출자가 견적을 보낸 기사님이고 리뷰가 아직 없으면 `true`
+          description: 호출자가 지금 사진을 올리거나 삭제할 수 있으면 `true` (견적을 보낸 기사님, 이사일 다음 날부터 리뷰 작성 전까지)
           example: true
     SignupRequest:
       type: object
