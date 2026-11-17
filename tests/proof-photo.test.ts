@@ -14,6 +14,7 @@ import {
   vi,
 } from 'vitest'
 import { env } from '../src/config/env'
+import type { Prisma } from '../src/generated/prisma/client'
 import type { QuoteStatus } from '../src/generated/prisma/enums'
 import { prisma } from '../src/lib/prisma'
 import { s3 } from '../src/lib/s3'
@@ -92,10 +93,35 @@ function createPhoto(quoteId: string) {
   })
 }
 
-function createReview(quoteId: string) {
-  return prisma.review.create({
-    data: { quoteId, rating: 5, content: '꼼꼼하게 옮겨 주셨어요.' },
+const REVIEW = { rating: 5, content: '꼼꼼하게 옮겨 주셨어요.' }
+
+function createReview(quoteId: string, db: Prisma.TransactionClient = prisma) {
+  return db.review.create({ data: { quoteId, ...REVIEW } })
+}
+
+async function untilWaitingForLock() {
+  for (;;) {
+    const [{ waiting }] = await prisma.$queryRaw<{ waiting: number }[]>`
+      SELECT count(*)::int AS waiting
+      FROM pg_stat_activity
+      WHERE datname = current_database() AND wait_event_type = 'Lock'
+    `
+    if (waiting > 0) return
+    await new Promise((resolve) => setTimeout(resolve, 10))
+  }
+}
+
+async function whileWriting<T>(
+  write: (tx: Prisma.TransactionClient) => Promise<unknown>,
+  request: () => PromiseLike<T>,
+) {
+  let response!: Promise<T>
+  await prisma.$transaction(async (tx) => {
+    await write(tx)
+    response = Promise.resolve(request())
+    await untilWaitingForLock()
   })
+  return response
 }
 
 function fillPhotos(quoteId: string, count: number) {
@@ -486,6 +512,21 @@ describe('POST /api/quotes/:quoteId/proof-photos', () => {
     expect(send).not.toHaveBeenCalled()
   })
 
+  it('복사하는 사이 리뷰가 저장되면 기다렸다가 저장하지 않고 409를 반환한다', async () => {
+    const quoteId = await createQuote()
+    const { body } = await presign(quoteId, mover)
+
+    const response = await whileWriting(
+      (tx) => createReview(quoteId, tx),
+      () => confirm(quoteId, mover, body.items[0].uploadId),
+    )
+
+    expect(response.status).toBe(409)
+    expect(response.body.error.code).toBe('PROOF_PHOTO_REVIEWED')
+    expect(await prisma.proofPhoto.count()).toBe(0)
+    await expectCopiesSavedOrDeleted()
+  })
+
   it('업로드 정보를 받은 뒤 리뷰가 작성되면 저장하지 않고 409를 반환한다', async () => {
     const quoteId = await createQuote()
     const { body } = await presign(quoteId, mover)
@@ -613,6 +654,36 @@ describe('DELETE /api/quotes/:quoteId/proof-photos/:photoId', () => {
     expect(response.body.error.code).toBe('PROOF_PHOTO_REVIEWED')
     expect(await prisma.proofPhoto.count()).toBe(1)
     expect(deletedKeys()).toEqual([])
+  })
+
+  it('삭제하는 사이 리뷰가 저장되면 기다렸다가 지우지 않고 409를 반환한다', async () => {
+    const quoteId = await createQuote()
+    const photo = await createPhoto(quoteId)
+
+    const response = await whileWriting(
+      (tx) => createReview(quoteId, tx),
+      () => deletePhoto(quoteId, mover, photo.id),
+    )
+
+    expect(response.status).toBe(409)
+    expect(response.body.error.code).toBe('PROOF_PHOTO_REVIEWED')
+    expect(await prisma.proofPhoto.count()).toBe(1)
+    expect(deletedKeys()).toEqual([])
+  })
+
+  it('사진을 바꾸는 중이면 리뷰 작성은 끝날 때까지 기다린다', async () => {
+    const quoteId = await createQuote()
+
+    const response = await whileWriting(
+      (tx) =>
+        tx.$queryRaw`SELECT id FROM quotes WHERE id = ${quoteId}::uuid FOR UPDATE`,
+      () =>
+        api(customer)
+          .post('/api/reviews')
+          .send({ quoteId, ...REVIEW }),
+    )
+
+    expect(response.status).toBe(201)
   })
 
   it('S3 파일을 지우지 못해도 사진은 삭제하고 204를 반환한다', async () => {

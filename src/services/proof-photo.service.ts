@@ -159,18 +159,31 @@ async function deletePhotoObjects(
   }
 }
 
+async function lockUnreviewedQuote(
+  tx: Prisma.TransactionClient,
+  quoteId: string,
+) {
+  await tx.$queryRaw`
+    SELECT id
+    FROM quotes
+    WHERE id = ${quoteId}::uuid
+    FOR UPDATE
+  `
+
+  const review = await tx.review.findUnique({
+    where: { quoteId },
+    select: { id: true },
+  })
+  if (review) throw new AppError('PROOF_PHOTO_REVIEWED')
+}
+
 function saveProofPhoto(
   quoteId: string,
   uploadId: string,
   keys: ProofPhotoKeys,
 ) {
   return prisma.$transaction(async (tx) => {
-    await tx.$queryRaw`
-      SELECT id
-      FROM quotes
-      WHERE id = ${quoteId}::uuid
-      FOR UPDATE
-    `
+    await lockUnreviewedQuote(tx, quoteId)
 
     const saved = await tx.proofPhoto.findUnique({
       where: { quoteId_uploadId: { quoteId, uploadId } },
@@ -280,18 +293,20 @@ export async function deleteProofPhoto(
   photoId: string,
 ) {
   await assertEditable(viewer, quoteId)
-
-  const photo = await prisma.proofPhoto.findFirst({
-    where: { id: photoId, quoteId },
-    select: { imageKey: true, thumbnailKey: true },
-  })
-  if (!photo) throw new AppError('NOT_FOUND')
-
   const bucket = uploadBucket()
-  const { count } = await prisma.proofPhoto.deleteMany({
-    where: { id: photoId },
+
+  const photo = await prisma.$transaction(async (tx) => {
+    await lockUnreviewedQuote(tx, quoteId)
+
+    const photo = await tx.proofPhoto.findFirst({
+      where: { id: photoId, quoteId },
+      select: { imageKey: true, thumbnailKey: true },
+    })
+    if (!photo) throw new AppError('NOT_FOUND')
+
+    await tx.proofPhoto.delete({ where: { id: photoId } })
+    return photo
   })
-  if (count === 0) throw new AppError('NOT_FOUND')
 
   await deletePhotoObjects(bucket, photo)
 }
