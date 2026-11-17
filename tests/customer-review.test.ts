@@ -52,6 +52,8 @@ async function createTestQuote(
     moveDate?: string
     price?: number
     isDesignated?: boolean
+    fromZonecode?: string | null
+    toZonecode?: string | null
   } = {},
 ) {
   const status = options.status ?? 'CONFIRMED'
@@ -66,10 +68,12 @@ async function createTestQuote(
     where: { id: request.id },
     data: {
       fromAddress: '서울특별시 강남구 테헤란로',
-      fromZonecode: '06236',
+      fromZonecode:
+        options.fromZonecode === undefined ? '06236' : options.fromZonecode,
       fromRegion: '서울',
       toAddress: '경기도 성남시 분당구',
-      toZonecode: '13529',
+      toZonecode:
+        options.toZonecode === undefined ? '13529' : options.toZonecode,
       toRegion: '경기',
     },
   })
@@ -256,6 +260,32 @@ describe('GET /api/customers/me/reviews', () => {
       reviews[0].id,
     ])
   })
+
+  it('우편번호가 null이어도 작성한 리뷰의 주소를 반환한다', async () => {
+    const quote = await createTestQuote(customerId, {
+      fromZonecode: null,
+      toZonecode: null,
+    })
+
+    await createTestReview(quote.id)
+
+    const res = await listMyReviews({}, customer)
+
+    expect(res.status).toBe(200)
+    expect(res.body.items).toHaveLength(1)
+    expect(res.body.items[0]).toMatchObject({
+      from: {
+        address: '서울특별시 강남구 테헤란로',
+        zonecode: null,
+        region: '서울',
+      },
+      to: {
+        address: '경기도 성남시 분당구',
+        zonecode: null,
+        region: '경기',
+      },
+    })
+  })
 })
 
 describe('GET /api/customers/me/reviews/writable', () => {
@@ -279,6 +309,10 @@ describe('GET /api/customers/me/reviews/writable', () => {
 
     await createTestQuote(customerId, {
       status: 'SUBMITTED',
+    })
+
+    await createTestQuote(customerId, {
+      status: 'NOT_SELECTED',
     })
 
     await createTestQuote(otherCustomerId, {
@@ -402,6 +436,31 @@ describe('GET /api/customers/me/reviews/writable', () => {
     expect(
       second.body.items.map((item: { quoteId: string }) => item.quoteId),
     ).toEqual([firstQuote.id])
+  })
+
+  it('우편번호가 null이어도 작성 가능한 리뷰의 주소를 반환한다', async () => {
+    const quote = await createTestQuote(customerId, {
+      fromZonecode: null,
+      toZonecode: null,
+    })
+
+    const res = await listWritableReviews({}, customer)
+
+    expect(res.status).toBe(200)
+    expect(res.body.items).toHaveLength(1)
+    expect(res.body.items[0]).toMatchObject({
+      quoteId: quote.id,
+      from: {
+        address: '서울특별시 강남구 테헤란로',
+        zonecode: null,
+        region: '서울',
+      },
+      to: {
+        address: '경기도 성남시 분당구',
+        zonecode: null,
+        region: '경기',
+      },
+    })
   })
 })
 

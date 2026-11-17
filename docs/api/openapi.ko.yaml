@@ -1127,12 +1127,16 @@ paths:
           content:
             application/json:
               schema: { '$ref': '#/components/schemas/MyReviewListResponse' }
+        '400': { '$ref': '#/components/responses/ValidationError' }
         '401': { '$ref': '#/components/responses/Unauthorized' }
         '403': { '$ref': '#/components/responses/Forbidden' }
   '/customers/me/reviews/writable':
     get:
       tags: [Reviews]
       summary: 작성 가능한 리뷰 목록
+      description: >-
+        본인의 확정 견적(CONFIRMED) 중 한국 시간(Asia/Seoul) 기준
+        이사일이 지났고 아직 리뷰를 작성하지 않은 견적만 조회합니다.
       operationId: listWritableReviews
       security:
         - sessionCookie: []
@@ -1147,6 +1151,7 @@ paths:
             application/json:
               schema:
                 { '$ref': '#/components/schemas/WritableReviewListResponse' }
+        '400': { '$ref': '#/components/responses/ValidationError' }
         '401': { '$ref': '#/components/responses/Unauthorized' }
         '403': { '$ref': '#/components/responses/Forbidden' }
   '/notifications':
