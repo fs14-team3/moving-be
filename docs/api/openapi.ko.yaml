@@ -892,7 +892,20 @@ paths:
         - { '$ref': '#/components/parameters/RequestIdPath' }
       description: |-
         로그인 세션으로 인증된 기사님만 요청할 수 있습니다. 비로그인은 401, 고객은 403을 반환합니다.
-        지역에 관계없이 받은 요청을 반려합니다(§8.3). 반려 사유 입력은 요구하지 않습니다.
+        지역에 관계없이 받은 요청을 반려합니다(§8.3).
+        반려 사유는 선택 입력이며, 생략하거나 빈 문자열로 전달하면 사유 없이 반려합니다.
+        이미 반려한 요청은 최초 반려 기록과 사유를 유지합니다.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+                  nullable: true
+                  description: 선택적 반려 사유. 빈 문자열과 공백만 입력한 경우 null로 저장됩니다.
       responses:
         '201':
           description: 반려 완료. 해당 요청은 받은 요청 목록에서 사라집니다.
@@ -1231,6 +1244,58 @@ paths:
           '$ref': '#/components/responses/ValidationError'
         '401':
           '$ref': '#/components/responses/Unauthorized'
+  '/estimates':
+    get:
+      tags: [MoveRequests]
+      summary: 이사 예상 비용
+      description: |-
+        견적 요청 전에 이사 유형 · 날짜 · 출발지 · 도착지로 대략적인 예상 비용을 계산합니다.
+        거리는 카카오 로컬 API로 주소를 좌표로 바꾼 뒤 직선거리에 1.3을 곱해 구합니다.
+        유형별 기본료에 거리 요금을 더하고, 주말 · 공휴일이면 추가 비용을 붙입니다(겹치면 높은 비율 하나만 적용).
+        계산값의 ±15%를 만 원 단위로 반올림해 범위로 반환합니다.
+      operationId: getMoveEstimate
+      security:
+        - sessionCookie: []
+      x-roles: [CUSTOMER]
+      parameters:
+        - name: moveType
+          in: query
+          required: true
+          schema: { '$ref': '#/components/schemas/ServiceType' }
+        - name: moveDate
+          in: query
+          required: true
+          description: 이사 날짜. 한국 시간 기준 오늘 또는 이후
+          schema: { type: string, format: date }
+        - name: from
+          in: query
+          required: true
+          description: 출발지 주소. 끝의 괄호 참고 항목은 빼고 검색합니다.
+          schema: { type: string, maxLength: 200 }
+        - name: to
+          in: query
+          required: true
+          description: 도착지 주소. 끝의 괄호 참고 항목은 빼고 검색합니다.
+          schema: { type: string, maxLength: 200 }
+      responses:
+        '200':
+          description: 예상 비용
+          content:
+            application/json:
+              schema: { '$ref': '#/components/schemas/MoveEstimate' }
+        '400': { '$ref': '#/components/responses/ValidationError' }
+        '401': { '$ref': '#/components/responses/Unauthorized' }
+        '403': { '$ref': '#/components/responses/Forbidden' }
+        '422':
+          description: '`ADDRESS_NOT_FOUND`. 출발지나 도착지 주소로 좌표를 찾지 못한 경우'
+          content:
+            application/json:
+              schema: { '$ref': '#/components/schemas/ErrorResponse' }
+        '503':
+          description: '`SERVICE_UNAVAILABLE`. 서버에 카카오 REST API 키(`KAKAO_CLIENT_ID`)가 없거나 카카오 API 호출에 실패한 경우'
+          content:
+            application/json:
+              schema: { '$ref': '#/components/schemas/ErrorResponse' }
 components:
   securitySchemes:
     sessionCookie:
@@ -1334,6 +1399,20 @@ components:
       type: string
       description: SMALL 소형이사, HOME 가정이사, OFFICE 사무실이사
       enum: [SMALL, HOME, OFFICE]
+    MoveEstimate:
+      type: object
+      required: [distanceKm, minPrice, maxPrice, surcharges]
+      properties:
+        distanceKm:
+          { type: number, description: '예상 이동 거리 (km, 소수점 첫째 자리)' }
+        minPrice:
+          { type: integer, description: '예상 비용 최솟값 (원, 만 원 단위)' }
+        maxPrice:
+          { type: integer, description: '예상 비용 최댓값 (원, 만 원 단위)' }
+        surcharges:
+          type: array
+          description: 적용된 추가 비용 사유. WEEKEND 주말, HOLIDAY 공휴일
+          items: { type: string, enum: [WEEKEND, HOLIDAY] }
     Region:
       {
         type: string,
@@ -1930,10 +2009,14 @@ components:
               items: { '$ref': '#/components/schemas/SentQuote' }
     RejectedRequest:
       type: object
-      required: [moveRequest, rejectedAt]
+      required: [moveRequest, rejectedAt, reason]
       properties:
         moveRequest: { '$ref': '#/components/schemas/RequestForMover' }
         rejectedAt: { type: string, format: date-time }
+        reason:
+          type: string
+          nullable: true
+          description: 반려 사유. 입력하지 않은 경우 null을 반환합니다.
     RejectedRequestListResponse:
       allOf:
         - { '$ref': '#/components/schemas/CursorMeta' }
