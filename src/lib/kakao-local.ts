@@ -11,6 +11,15 @@ type AddressSearchResponse = {
   documents: { x: string; y: string }[]
 }
 
+// 카카오 좌표는 문자열로 온다. 빈 문자열은 Number()로 0이 되므로 따로 거른다.
+function toCoordinate(value: unknown, max: number) {
+  if (typeof value !== 'string' || !value.trim()) return null
+  const coordinate = Number(value)
+  return Number.isFinite(coordinate) && Math.abs(coordinate) <= max
+    ? coordinate
+    : null
+}
+
 // 우편번호 검색 결과 끝의 '(태평로1가, 서울시청)' 같은 참고 항목은 검색되지 않아서 뗀다.
 function toQuery(address: string) {
   return address.replace(/\s*\(.*\)\s*$/, '').trim()
@@ -50,5 +59,12 @@ export async function geocode(address: string): Promise<Coordinates | null> {
   const [first] = documents
   if (!first) return null
 
-  return { lat: Number(first.y), lng: Number(first.x) }
+  const lat = toCoordinate(first.y, 90)
+  const lng = toCoordinate(first.x, 180)
+  if (lat === null || lng === null) {
+    console.error('[Kakao Local Invalid Coordinates]', first)
+    throw new AppError('SERVICE_UNAVAILABLE')
+  }
+
+  return { lat, lng }
 }
