@@ -27,6 +27,7 @@ function getToday(): Date {
 export async function rejectMoveRequest(
   viewer: Express.User | undefined,
   requestId: string,
+  reason: string | null = null,
 ) {
   const moverId = assertMover(viewer)
 
@@ -86,6 +87,7 @@ export async function rejectMoveRequest(
       create: {
         moveRequestId: requestId,
         moverId,
+        reason,
       },
     })
 
@@ -125,6 +127,7 @@ export async function rejectMoveRequest(
         createdAt: moveRequest.createdAt,
       },
       rejectedAt: rejection.createdAt,
+      reason: rejection.reason,
     }
   })
 }

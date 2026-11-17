@@ -20,7 +20,11 @@ describe('GET /api/movers/me/rejections', () => {
     role: 'CUSTOMER',
   }
 
-  async function createRejection(ownerId = moverId, isDesignated = false) {
+  async function createRejection(
+    ownerId = moverId,
+    isDesignated = false,
+    reason: string | null = null,
+  ) {
     const moveDate = new Date()
     moveDate.setUTCDate(moveDate.getUTCDate() + 14)
 
@@ -54,6 +58,7 @@ describe('GET /api/movers/me/rejections', () => {
       data: {
         moveRequestId: moveRequest.id,
         moverId: ownerId,
+        reason,
       },
     })
 
@@ -122,7 +127,28 @@ describe('GET /api/movers/me/rejections', () => {
         },
       },
       rejectedAt: rejection.createdAt.toISOString(),
+      reason: null,
     })
+  })
+
+  it('저장된 반려 사유를 목록에서 반환한다', async () => {
+    const { moveRequest } = await createRejection(
+      moverId,
+      false,
+      '일정이 맞지 않습니다',
+    )
+
+    const res = await api(mover).get('/api/movers/me/rejections')
+
+    expect(res.status).toBe(200)
+
+    const item = res.body.items.find(
+      (item: { moveRequest: { id: string } }) =>
+        item.moveRequest.id === moveRequest.id,
+    )
+
+    expect(item).toBeDefined()
+    expect(item.reason).toBe('일정이 맞지 않습니다')
   })
 
   it('고객의 사용자 이름을 반환한다', async () => {
