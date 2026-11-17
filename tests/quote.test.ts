@@ -83,10 +83,14 @@ describe('POST /api/move-requests/:requestId/quotes', () => {
     requestId: string,
     user?: Express.User,
     price: unknown = 200000,
+    comment?: unknown,
   ) {
-    return api(user).post(`/api/move-requests/${requestId}/quotes`).send({
-      price,
-    })
+    return api(user)
+      .post(`/api/move-requests/${requestId}/quotes`)
+      .send({
+        price,
+        ...(comment !== undefined ? { comment } : {}),
+      })
   }
 
   beforeEach(async () => {
@@ -201,6 +205,69 @@ describe('POST /api/move-requests/:requestId/quotes', () => {
       expect(res.status).toBe(201)
       expect(res.body.moveRequest.customerName).toBe('견적 요청 고객')
     })
+
+    it('견적 코멘트를 저장하고 응답에 반환한다', async () => {
+      const request = await createMoveRequest()
+      const comment = '포장 및 운반 비용이 포함된 견적입니다.'
+
+      const res = await sendQuote(request.id, mover, 350000, comment)
+
+      expect(res.status).toBe(201)
+      expect(res.body.comment).toBe(comment)
+
+      const saved = await prisma.quote.findUniqueOrThrow({
+        where: { id: res.body.id },
+      })
+
+      expect(saved.comment).toBe(comment)
+    })
+
+    it('코멘트를 생략하면 null로 저장하고 반환한다', async () => {
+      const request = await createMoveRequest()
+
+      const res = await sendQuote(request.id, mover)
+
+      expect(res.status).toBe(201)
+      expect(res.body.comment).toBeNull()
+
+      const saved = await prisma.quote.findUniqueOrThrow({
+        where: { id: res.body.id },
+      })
+
+      expect(saved.comment).toBeNull()
+    })
+
+    it.each([
+      ['빈 문자열', ''],
+      ['공백 문자열', '   '],
+    ])('%s 코멘트는 null로 저장한다', async (_, comment) => {
+      const request = await createMoveRequest()
+
+      const res = await sendQuote(request.id, mover, 350000, comment)
+
+      expect(res.status).toBe(201)
+      expect(res.body.comment).toBeNull()
+
+      const saved = await prisma.quote.findUniqueOrThrow({
+        where: { id: res.body.id },
+      })
+
+      expect(saved.comment).toBeNull()
+    })
+
+    it('코멘트 앞뒤 공백을 제거하여 저장한다', async () => {
+      const request = await createMoveRequest()
+
+      const res = await sendQuote(
+        request.id,
+        mover,
+        350000,
+        '  사다리차 비용 포함  ',
+      )
+
+      expect(res.status).toBe(201)
+      expect(res.body.comment).toBe('사다리차 비용 포함')
+    })
   })
 
   describe('인증 및 권한', () => {
@@ -299,6 +366,27 @@ describe('POST /api/move-requests/:requestId/quotes', () => {
 
       expect(res.status).toBe(404)
       expect(res.body.error.code).toBe('NOT_FOUND')
+    })
+
+    it('코멘트가 문자열이 아니면 400을 반환하고 견적을 저장하지 않는다', async () => {
+      const request = await createMoveRequest()
+
+      const res = await sendQuote(request.id, mover, 350000, 123)
+
+      expect(res.status).toBe(400)
+      expect(res.body.error.code).toBe('VALIDATION_ERROR')
+      expect(res.body.error.details).toEqual(
+        expect.arrayContaining([expect.objectContaining({ field: 'comment' })]),
+      )
+
+      const count = await prisma.quote.count({
+        where: {
+          moveRequestId: request.id,
+          moverId,
+        },
+      })
+
+      expect(count).toBe(0)
     })
   })
 

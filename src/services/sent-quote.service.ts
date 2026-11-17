@@ -25,6 +25,7 @@ export function toSentQuote(
   return {
     id: quote.id,
     price: quote.price,
+    comment: quote.comment,
     status: quote.status,
     isDesignated: quote.isDesignated,
     createdAt: quote.createdAt,

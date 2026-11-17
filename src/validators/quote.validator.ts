@@ -6,6 +6,11 @@ export const sendQuoteParamsSchema = z.object({
 
 export const sendQuoteBodySchema = z.object({
   price: z.number().int().min(1).max(2147483647),
+  comment: z
+    .string()
+    .trim()
+    .nullish()
+    .transform((value) => value || null),
 })
 
 export type SendQuoteBody = z.infer<typeof sendQuoteBodySchema>
