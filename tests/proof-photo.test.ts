@@ -124,6 +124,10 @@ async function whileWriting<T>(
   return response
 }
 
+function activePhotoCount() {
+  return prisma.proofPhoto.count({ where: { deletedAt: null } })
+}
+
 function fillPhotos(quoteId: string, count: number) {
   return prisma.proofPhoto.createMany({
     data: Array.from({ length: count }, (_, index) => ({
@@ -642,7 +646,10 @@ describe('DELETE /api/quotes/:quoteId/proof-photos/:photoId', () => {
     const response = await deletePhoto(quoteId, mover, photo.id)
 
     expect(response.status).toBe(204)
-    expect(await prisma.proofPhoto.count()).toBe(0)
+    expect((await list(quoteId, mover)).body.items).toEqual([])
+    expect(
+      await prisma.proofPhoto.findUnique({ where: { id: photo.id } }),
+    ).toMatchObject({ uploadId: photo.uploadId, deletedAt: expect.any(Date) })
     expect(deletedKeys().sort()).toEqual(
       [
         photo.imageKey,
@@ -654,30 +661,79 @@ describe('DELETE /api/quotes/:quoteId/proof-photos/:photoId', () => {
   })
 
   it('삭제한 사진의 uploadId로 다시 확정해도 되살리지 않고 409를 반환한다', async () => {
-    const removed = new Set<string>()
-    send.mockImplementation((command: unknown) => {
-      if (command instanceof DeleteObjectCommand) {
-        removed.add(`test-bucket/${command.input.Key}`)
-      }
-      if (
-        command instanceof CopyObjectCommand &&
-        removed.has(command.input.CopySource ?? '')
-      ) {
-        return noSuchKey()
-      }
-      return Promise.resolve()
-    })
     const quoteId = await createQuote()
     const uploadId = randomUUID()
     const { body: photo } = await confirm(quoteId, mover, uploadId)
 
     const deleted = await deletePhoto(quoteId, mover, photo.id)
+    send.mockClear()
     const retry = await confirm(quoteId, mover, uploadId)
 
     expect(deleted.status).toBe(204)
     expect(retry.status).toBe(409)
-    expect(retry.body.error.code).toBe('PROOF_PHOTO_NOT_UPLOADED')
-    expect(await prisma.proofPhoto.count()).toBe(0)
+    expect(retry.body.error.code).toBe('PROOF_PHOTO_DELETED')
+    expect(send).not.toHaveBeenCalled()
+    expect((await list(quoteId, mover)).body.items).toEqual([])
+  })
+
+  it.each([false, true])(
+    '확정 중 삭제되면 복사 실패 여부(%s)와 관계없이 삭제된 업로드로 거절한다',
+    async (copyFails) => {
+      let releaseCopies = () => {}
+      let signalCopiesStarted = () => {}
+      const gate = new Promise<void>((resolve) => {
+        releaseCopies = resolve
+      })
+      const copiesStarted = new Promise<void>((resolve) => {
+        signalCopiesStarted = resolve
+      })
+      let copyCount = 0
+      send.mockImplementation((command: unknown) => {
+        if (command instanceof CopyObjectCommand && ++copyCount <= 2) {
+          if (copyCount === 2) signalCopiesStarted()
+          return gate.then(() => (copyFails ? noSuchKey() : undefined))
+        }
+        return Promise.resolve()
+      })
+      const quoteId = await createQuote()
+      const uploadId = randomUUID()
+      const delayed = Promise.resolve(confirm(quoteId, mover, uploadId))
+      try {
+        await copiesStarted
+        const saved = await confirm(quoteId, mover, uploadId)
+        expect(saved.status).toBe(201)
+        const deleted = await deletePhoto(quoteId, mover, saved.body.id)
+        expect(deleted.status).toBe(204)
+      } finally {
+        releaseCopies()
+      }
+      const response = await delayed
+
+      expect(response.status).toBe(409)
+      expect(response.body.error.code).toBe('PROOF_PHOTO_DELETED')
+      expect((await list(quoteId, mover)).body.items).toEqual([])
+      expect(deletedKeys()).toEqual(
+        expect.arrayContaining(copies().map(({ Key }) => Key)),
+      )
+    },
+  )
+
+  it('삭제한 사진은 업로드 제한 장수에 포함하지 않는다', async () => {
+    const quoteId = await createQuote()
+    await fillPhotos(quoteId, 100)
+    const photo = await prisma.proofPhoto.findFirstOrThrow({
+      where: { quoteId },
+    })
+
+    expect((await deletePhoto(quoteId, mover, photo.id)).status).toBe(204)
+    expect((await presign(quoteId, mover)).status).toBe(201)
+    expect((await confirm(quoteId, mover)).status).toBe(201)
+    const response = await list(quoteId, mover)
+
+    expect(response.body.items).toHaveLength(100)
+    expect(response.body.items).not.toContainEqual(
+      expect.objectContaining({ id: photo.id }),
+    )
   })
 
   it('리뷰가 작성된 견적이면 지우지 않고 409를 반환한다', async () => {
@@ -689,7 +745,7 @@ describe('DELETE /api/quotes/:quoteId/proof-photos/:photoId', () => {
 
     expect(response.status).toBe(409)
     expect(response.body.error.code).toBe('PROOF_PHOTO_REVIEWED')
-    expect(await prisma.proofPhoto.count()).toBe(1)
+    expect(await activePhotoCount()).toBe(1)
     expect(deletedKeys()).toEqual([])
   })
 
@@ -704,7 +760,7 @@ describe('DELETE /api/quotes/:quoteId/proof-photos/:photoId', () => {
 
     expect(response.status).toBe(409)
     expect(response.body.error.code).toBe('PROOF_PHOTO_REVIEWED')
-    expect(await prisma.proofPhoto.count()).toBe(1)
+    expect(await activePhotoCount()).toBe(1)
     expect(deletedKeys()).toEqual([])
   })
 
@@ -736,7 +792,7 @@ describe('DELETE /api/quotes/:quoteId/proof-photos/:photoId', () => {
     expect(failed.status).toBe(500)
     expect(photoCount).toBe(1)
     expect(retry.status).toBe(204)
-    expect(await prisma.proofPhoto.count()).toBe(0)
+    expect((await list(quoteId, mover)).body.items).toEqual([])
   })
 
   it('동시에 삭제하면 한 번만 지우고 나머지는 404를 반환한다', async () => {
@@ -768,7 +824,7 @@ describe('DELETE /api/quotes/:quoteId/proof-photos/:photoId', () => {
     const response = await deletePhoto(quoteId, customer, photo.id)
 
     expect(response.status).toBe(403)
-    expect(await prisma.proofPhoto.count()).toBe(1)
+    expect(await activePhotoCount()).toBe(1)
   })
 
   it('다른 기사님의 견적이면 지우지 않고 404를 반환한다', async () => {
@@ -778,7 +834,7 @@ describe('DELETE /api/quotes/:quoteId/proof-photos/:photoId', () => {
     const response = await deletePhoto(quoteId, otherMover, photo.id)
 
     expect(response.status).toBe(404)
-    expect(await prisma.proofPhoto.count()).toBe(1)
+    expect(await activePhotoCount()).toBe(1)
   })
 
   it('다른 견적의 사진이면 지우지 않고 404를 반환한다', async () => {
@@ -787,7 +843,7 @@ describe('DELETE /api/quotes/:quoteId/proof-photos/:photoId', () => {
     const response = await deletePhoto(await createQuote(), mover, photo.id)
 
     expect(response.status).toBe(404)
-    expect(await prisma.proofPhoto.count()).toBe(1)
+    expect(await activePhotoCount()).toBe(1)
   })
 
   it('사진 ID 형식이 잘못되면 400을 반환한다', async () => {
@@ -807,7 +863,7 @@ describe('DELETE /api/quotes/:quoteId/proof-photos/:photoId', () => {
       const response = await deletePhoto(quoteId, mover, photo.id)
 
       expect(response.status).toBe(503)
-      expect(await prisma.proofPhoto.count()).toBe(1)
+      expect(await activePhotoCount()).toBe(1)
     } finally {
       env.S3_BUCKET = original
     }

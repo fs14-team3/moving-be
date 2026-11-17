@@ -25,6 +25,7 @@ const proofPhotoSelect = {
   imageKey: true,
   thumbnailKey: true,
   createdAt: true,
+  deletedAt: true,
 } as const
 
 type ProofPhotoRow = Prisma.ProofPhotoGetPayload<{
@@ -62,7 +63,12 @@ const editableQuoteSelect = {
   moverId: true,
   status: true,
   moveRequest: { select: { moveDate: true } },
-  _count: { select: { proofPhotos: true, reviews: true } },
+  _count: {
+    select: {
+      proofPhotos: { where: { deletedAt: null } },
+      reviews: true,
+    },
+  },
 } as const
 
 type EditableQuote = Prisma.QuoteGetPayload<{
@@ -171,6 +177,19 @@ async function lockUnreviewedQuote(
   if (review) throw new AppError('PROOF_PHOTO_REVIEWED')
 }
 
+async function findProofPhoto(
+  db: Prisma.TransactionClient,
+  quoteId: string,
+  uploadId: string,
+) {
+  const photo = await db.proofPhoto.findUnique({
+    where: { quoteId_uploadId: { quoteId, uploadId } },
+    select: proofPhotoSelect,
+  })
+  if (photo?.deletedAt) throw new AppError('PROOF_PHOTO_DELETED')
+  return photo
+}
+
 function saveProofPhoto(
   quoteId: string,
   uploadId: string,
@@ -179,13 +198,12 @@ function saveProofPhoto(
   return prisma.$transaction(async (tx) => {
     await lockUnreviewedQuote(tx, quoteId)
 
-    const saved = await tx.proofPhoto.findUnique({
-      where: { quoteId_uploadId: { quoteId, uploadId } },
-      select: proofPhotoSelect,
-    })
+    const saved = await findProofPhoto(tx, quoteId, uploadId)
     if (saved) return saved
 
-    const count = await tx.proofPhoto.count({ where: { quoteId } })
+    const count = await tx.proofPhoto.count({
+      where: { quoteId, deletedAt: null },
+    })
     if (count >= MAX_PROOF_PHOTOS) {
       throw new AppError('PROOF_PHOTO_LIMIT_REACHED')
     }
@@ -230,10 +248,7 @@ export async function confirmProofPhoto(
 ) {
   const photoCount = await assertEditable(viewer, quoteId)
 
-  const saved = await prisma.proofPhoto.findUnique({
-    where: { quoteId_uploadId: { quoteId, uploadId } },
-    select: proofPhotoSelect,
-  })
+  const saved = await findProofPhoto(prisma, quoteId, uploadId)
   if (saved) return toProofPhoto(saved)
   if (photoCount >= MAX_PROOF_PHOTOS) {
     throw new AppError('PROOF_PHOTO_LIMIT_REACHED')
@@ -246,6 +261,17 @@ export async function confirmProofPhoto(
     await copyPhotoFromPending(bucket, proofPhotoKeys(quoteId, uploadId), keys)
     photo = await saveProofPhoto(quoteId, uploadId, keys)
     return toProofPhoto(photo)
+  } catch (error) {
+    if (
+      error instanceof AppError &&
+      error.code === 'PROOF_PHOTO_NOT_UPLOADED'
+    ) {
+      await prisma.$transaction(async (tx) => {
+        await lockUnreviewedQuote(tx, quoteId)
+        await findProofPhoto(tx, quoteId, uploadId)
+      })
+    }
+    throw error
   } finally {
     if (photo?.imageKey !== keys.imageKey) {
       await deleteObjects(bucket, [keys.imageKey, keys.thumbnailKey]).catch(
@@ -269,6 +295,7 @@ export async function listProofPhotos(
     select: {
       ...editableQuoteSelect,
       proofPhotos: {
+        where: { deletedAt: null },
         select: proofPhotoSelect,
         orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
       },
@@ -295,7 +322,7 @@ export async function deleteProofPhoto(
     await lockUnreviewedQuote(tx, quoteId)
 
     const photo = await tx.proofPhoto.findFirst({
-      where: { id: photoId, quoteId },
+      where: { id: photoId, quoteId, deletedAt: null },
       select: { uploadId: true, imageKey: true, thumbnailKey: true },
     })
     if (!photo) throw new AppError('NOT_FOUND')
@@ -307,6 +334,9 @@ export async function deleteProofPhoto(
       `${PENDING_PREFIX}${uploaded.imageKey}`,
       `${PENDING_PREFIX}${uploaded.thumbnailKey}`,
     ])
-    await tx.proofPhoto.delete({ where: { id: photoId } })
+    await tx.proofPhoto.update({
+      where: { id: photoId },
+      data: { deletedAt: new Date() },
+    })
   })
 }
