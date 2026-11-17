@@ -797,23 +797,30 @@ describe('DELETE /api/quotes/:quoteId/proof-photos/:photoId', () => {
     expect(response.status).toBe(201)
   })
 
-  it('S3 파일을 지우지 못하면 사진을 남기고 500을 반환해 다시 지울 수 있다', async () => {
+  it('S3 파일을 일부만 지우면 사진은 목록에서 빼고 500을 반환해 파일 삭제를 다시 시도할 수 있다', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
-    send.mockRejectedValueOnce(new Error('Access Denied'))
+    send.mockImplementation((command: unknown) =>
+      command instanceof DeleteObjectCommand &&
+      command.input.Key?.startsWith('pending/')
+        ? Promise.reject(new Error('Access Denied'))
+        : Promise.resolve(),
+    )
     const quoteId = await createQuote()
     const photo = await createPhoto(quoteId)
 
     const failed = await deletePhoto(quoteId, mover, photo.id)
-    const photoCount = await prisma.proofPhoto.count()
+    const afterFailure = await list(quoteId, mover)
+    send.mockClear()
+    send.mockResolvedValue(undefined as never)
     const retry = await deletePhoto(quoteId, mover, photo.id)
 
     expect(failed.status).toBe(500)
-    expect(photoCount).toBe(1)
+    expect(afterFailure.body.items).toEqual([])
     expect(retry.status).toBe(204)
-    expect((await list(quoteId, mover)).body.items).toEqual([])
+    expect(deletedKeys()).toHaveLength(4)
   })
 
-  it('동시에 삭제하면 한 번만 지우고 나머지는 404를 반환한다', async () => {
+  it('같은 사진을 동시에 삭제해도 둘 다 204를 반환한다', async () => {
     const quoteId = await createQuote()
     const photo = await createPhoto(quoteId)
 
@@ -822,8 +829,8 @@ describe('DELETE /api/quotes/:quoteId/proof-photos/:photoId', () => {
       deletePhoto(quoteId, mover, photo.id),
     ])
 
-    expect(responses.map(({ status }) => status).sort()).toEqual([204, 404])
-    expect(deletedKeys()).toHaveLength(4)
+    expect(responses.map(({ status }) => status)).toEqual([204, 204])
+    expect(await activePhotoCount()).toBe(0)
   })
 
   it('로그인하지 않으면 401을 반환한다', async () => {

@@ -322,25 +322,33 @@ export async function deleteProofPhoto(
   assertEditable(await findMoverQuote(viewer, quoteId))
   const bucket = uploadBucket()
 
-  await prisma.$transaction(async (tx) => {
+  const photo = await prisma.$transaction(async (tx) => {
     await lockUnreviewedQuote(tx, quoteId)
 
     const photo = await tx.proofPhoto.findFirst({
-      where: { id: photoId, quoteId, deletedAt: null },
-      select: { uploadId: true, imageKey: true, thumbnailKey: true },
+      where: { id: photoId, quoteId },
+      select: {
+        uploadId: true,
+        imageKey: true,
+        thumbnailKey: true,
+        deletedAt: true,
+      },
     })
     if (!photo) throw new AppError('NOT_FOUND')
-
-    const uploaded = proofPhotoKeys(quoteId, photo.uploadId)
-    await deleteObjects(bucket, [
-      photo.imageKey,
-      photo.thumbnailKey,
-      `${PENDING_PREFIX}${uploaded.imageKey}`,
-      `${PENDING_PREFIX}${uploaded.thumbnailKey}`,
-    ])
-    await tx.proofPhoto.update({
-      where: { id: photoId },
-      data: { deletedAt: new Date() },
-    })
+    if (!photo.deletedAt) {
+      await tx.proofPhoto.update({
+        where: { id: photoId },
+        data: { deletedAt: new Date() },
+      })
+    }
+    return photo
   })
+
+  const uploaded = proofPhotoKeys(quoteId, photo.uploadId)
+  await deleteObjects(bucket, [
+    photo.imageKey,
+    photo.thumbnailKey,
+    `${PENDING_PREFIX}${uploaded.imageKey}`,
+    `${PENDING_PREFIX}${uploaded.thumbnailKey}`,
+  ])
 }
