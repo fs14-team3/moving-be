@@ -169,6 +169,8 @@ export async function getChats({
 
     const lastMessage = room.messages[0] ?? null
 
+    const request = room.quote.moveRequest
+
     return {
       id: room.id,
       createdAt: room.createdAt,
@@ -179,7 +181,14 @@ export async function getChats({
         price: Number(room.quote.price),
         status: room.quote.status,
         isDesignated: room.quote.isDesignated,
-        moveRequest: room.quote.moveRequest,
+        moveRequest: {
+          id: request.id,
+          moveType: request.moveType,
+          moveDate: request.moveDate.toISOString().slice(0, 10),
+          fromRegion: request.fromRegion,
+          toRegion: request.toRegion,
+          customer: request.customer,
+        },
       },
       lastMessage,
       unreadCount: unreadCountMap.get(room.id) ?? 0,
