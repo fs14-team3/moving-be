@@ -686,14 +686,19 @@ describe('DELETE /api/quotes/:quoteId/proof-photos/:photoId', () => {
     expect(response.status).toBe(201)
   })
 
-  it('S3 파일을 지우지 못해도 사진은 삭제하고 204를 반환한다', async () => {
-    send.mockRejectedValue(new Error('Access Denied'))
+  it('S3 파일을 지우지 못하면 사진을 남기고 500을 반환해 다시 지울 수 있다', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    send.mockRejectedValueOnce(new Error('Access Denied'))
     const quoteId = await createQuote()
     const photo = await createPhoto(quoteId)
 
-    const response = await deletePhoto(quoteId, mover, photo.id)
+    const failed = await deletePhoto(quoteId, mover, photo.id)
+    const photoCount = await prisma.proofPhoto.count()
+    const retry = await deletePhoto(quoteId, mover, photo.id)
 
-    expect(response.status).toBe(204)
+    expect(failed.status).toBe(500)
+    expect(photoCount).toBe(1)
+    expect(retry.status).toBe(204)
     expect(await prisma.proofPhoto.count()).toBe(0)
   })
 

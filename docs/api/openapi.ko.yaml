@@ -1139,6 +1139,7 @@ paths:
       description: >-
         기사님이 본인 견적의 작업 사진을 삭제합니다. 일반 유저가 리뷰를 작성한 뒤에는 올리기와 마찬가지로 삭제할 수 없습니다.
         사진과 썸네일 파일도 S3에서 함께 지웁니다.
+        S3에서 파일을 지우지 못하면 사진을 남겨 두고 `INTERNAL_ERROR`(500)를 반환하므로 다시 시도하면 됩니다.
       operationId: deleteProofPhoto
       security:
         - sessionCookie: []

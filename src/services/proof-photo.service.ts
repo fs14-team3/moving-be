@@ -145,18 +145,12 @@ async function copyPhotoFromPending(
   if (failed) throw failed.reason
 }
 
-async function deletePhotoObjects(
-  bucket: string,
-  { imageKey, thumbnailKey }: ProofPhotoKeys,
-) {
-  const deletes = await Promise.allSettled(
-    [imageKey, thumbnailKey].map((key) =>
+function deleteObjects(bucket: string, keys: string[]) {
+  return Promise.all(
+    keys.map((key) =>
       s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: key })),
     ),
   )
-  for (const result of deletes) {
-    if (result.status === 'rejected') Sentry.captureException(result.reason)
-  }
 }
 
 async function lockUnreviewedQuote(
@@ -254,7 +248,9 @@ export async function confirmProofPhoto(
     return toProofPhoto(photo)
   } finally {
     if (photo?.imageKey !== keys.imageKey) {
-      await deletePhotoObjects(bucket, keys)
+      await deleteObjects(bucket, [keys.imageKey, keys.thumbnailKey]).catch(
+        (error) => Sentry.captureException(error),
+      )
     }
   }
 }
@@ -295,7 +291,7 @@ export async function deleteProofPhoto(
   await assertEditable(viewer, quoteId)
   const bucket = uploadBucket()
 
-  const photo = await prisma.$transaction(async (tx) => {
+  await prisma.$transaction(async (tx) => {
     await lockUnreviewedQuote(tx, quoteId)
 
     const photo = await tx.proofPhoto.findFirst({
@@ -304,9 +300,7 @@ export async function deleteProofPhoto(
     })
     if (!photo) throw new AppError('NOT_FOUND')
 
+    await deleteObjects(bucket, [photo.imageKey, photo.thumbnailKey])
     await tx.proofPhoto.delete({ where: { id: photoId } })
-    return photo
   })
-
-  await deletePhotoObjects(bucket, photo)
 }
