@@ -16,6 +16,7 @@ import { userRouter } from './user.routes'
 import { reviewRouter } from './review.routes'
 import { uploadRouter } from './upload.routes'
 import { chatRouter } from './chat.routes'
+import { estimateRouter } from './estimate.routes'
 
 export const apiRouter = Router()
 
@@ -59,3 +60,4 @@ apiRouter.use('/users', userRouter)
 apiRouter.use('/reviews', reviewRouter)
 apiRouter.use('/uploads', uploadRouter)
 apiRouter.use('/chats', chatRouter)
+apiRouter.use('/estimates', estimateRouter)
