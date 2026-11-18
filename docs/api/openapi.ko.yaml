@@ -20,6 +20,7 @@ tags:
   - { name: Quotes }
   - { name: Reviews }
   - { name: Notifications }
+  - { name: Chat }
 paths:
   '/auth/signup':
     post:
@@ -1270,6 +1271,158 @@ paths:
           '$ref': '#/components/responses/ValidationError'
         '401':
           '$ref': '#/components/responses/Unauthorized'
+  '/chats/{chatRoomId}/messages':
+    get:
+      tags: [Chats]
+      summary: 채팅 메시지 목록 조회
+      description: |
+        채팅방 참여자만 메시지를 조회할 수 있습니다.
+        메시지는 생성 시각과 ID 기준 내림차순으로 조회합니다.
+        cursor 기반 페이지네이션을 사용합니다.
+        견적이 NOT_SELECTED 상태여도 기존 메시지는 조회할 수 있습니다.
+      operationId: listChatMessages
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: chatRoomId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: cursor
+          in: query
+          required: false
+          description: 이전 응답의 nextCursor 값
+          schema:
+            type: string
+        - name: limit
+          in: query
+          required: false
+          description: 한 페이지에 조회할 메시지 수
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 10
+      responses:
+        '200':
+          description: 채팅 메시지 목록
+          content:
+            application/json:
+              schema:
+                '$ref': '#/components/schemas/ChatMessageListResponse'
+        '400':
+          '$ref': '#/components/responses/ValidationError'
+        '401':
+          '$ref': '#/components/responses/Unauthorized'
+        '403':
+          description: 채팅방 참여자가 아닌 경우
+          content:
+            application/json:
+              schema:
+                '$ref': '#/components/schemas/ErrorResponse'
+
+    post:
+      tags: [Chats]
+      summary: 채팅 메시지 전송
+      description: |
+        채팅방 참여자만 메시지를 전송할 수 있습니다.
+        견적이 NOT_SELECTED 상태인 채팅방에는 새 메시지를 전송할 수 없습니다.
+      operationId: sendChatMessage
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: chatRoomId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              '$ref': '#/components/schemas/SendChatMessageRequest'
+      responses:
+        '201':
+          description: 메시지 전송 완료
+          content:
+            application/json:
+              schema:
+                '$ref': '#/components/schemas/ChatMessage'
+        '400':
+          '$ref': '#/components/responses/ValidationError'
+        '401':
+          '$ref': '#/components/responses/Unauthorized'
+        '403':
+          description: 채팅방 참여자가 아니거나 메시지 전송이 제한된 견적 상태인 경우
+          content:
+            application/json:
+              schema:
+                '$ref': '#/components/schemas/ErrorResponse'
+
+  '/chats':
+    get:
+      tags: [Chats]
+      summary: 채팅방 목록 조회
+      description: 로그인한 사용자의 채팅방 목록을 최근 메시지 순으로 조회합니다.
+      operationId: listChats
+      security:
+        - sessionCookie: []
+      parameters:
+        - { '$ref': '#/components/parameters/Cursor' }
+        - name: limit
+          in: query
+          required: false
+          description: 한 페이지에 조회할 채팅방 수
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 10
+      responses:
+        '200':
+          description: 채팅방 목록
+          content:
+            application/json:
+              schema:
+                '$ref': '#/components/schemas/ChatListResponse'
+        '400':
+          '$ref': '#/components/responses/ValidationError'
+        '401':
+          '$ref': '#/components/responses/Unauthorized'
+  '/chats/{chatRoomId}/read':
+    patch:
+      tags: [Chats]
+      summary: 채팅방 읽음 처리
+      description: 채팅방 참여자의 마지막 읽은 시각을 현재 시각으로 갱신합니다.
+      operationId: markChatRoomAsRead
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: chatRoomId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: 읽음 처리 완료
+          content:
+            application/json:
+              schema:
+                '$ref': '#/components/schemas/ChatReadResponse'
+        '401':
+          '$ref': '#/components/responses/Unauthorized'
+        '403':
+          description: 채팅방 참여자가 아닌 경우
+          content:
+            application/json:
+              schema:
+                '$ref': '#/components/schemas/ErrorResponse'
   '/estimates':
     get:
       tags: [MoveRequests]
@@ -2174,3 +2327,161 @@ components:
             items:
               type: array
               items: { '$ref': '#/components/schemas/Notification' }
+    ChatMessage:
+      type: object
+      required: [id, chatRoomId, senderId, content, createdAt, senderName]
+      properties:
+        id: { type: string, format: uuid }
+        chatRoomId: { type: string, format: uuid }
+        senderId: { type: string, format: uuid }
+        content: { type: string }
+        createdAt: { type: string, format: date-time }
+        senderName:
+          type: string
+          nullable: true
+          description: 메시지 작성자 이름
+    ChatMessageListResponse:
+      allOf:
+        - { '$ref': '#/components/schemas/CursorMeta' }
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items: { '$ref': '#/components/schemas/ChatMessage' }
+    SendChatMessageRequest:
+      type: object
+      required: [content]
+      properties:
+        content:
+          type: string
+          minLength: 1
+          description: 공백만 입력한 메시지는 허용하지 않습니다.
+    ChatReadResponse:
+      type: object
+      required: [updated, lastReadAt]
+      properties:
+        updated: { type: boolean, enum: [true] }
+        lastReadAt: { type: string, format: date-time }
+    ChatOtherParticipant:
+      type: object
+      required: [id, role, name, imageUrl]
+      properties:
+        id:
+          type: string
+          format: uuid
+        role:
+          $ref: '#/components/schemas/Role'
+        name:
+          type: string
+          description: 상대방 이름 또는 기사님 닉네임
+        imageUrl:
+          type: string
+          nullable: true
+    ChatMoveRequestCustomer:
+      type: object
+      required: [imageUrl, user]
+      properties:
+        imageUrl:
+          type: string
+          nullable: true
+        user:
+          type: object
+          required: [id, name]
+          properties:
+            id:
+              type: string
+              format: uuid
+            name:
+              type: string
+    ChatMoveRequestSummary:
+      type: object
+      required: [id, moveType, moveDate, fromRegion, toRegion, customer]
+      properties:
+        id:
+          type: string
+          format: uuid
+        moveType:
+          $ref: '#/components/schemas/ServiceType'
+        moveDate:
+          type: string
+          format: date
+        fromRegion:
+          $ref: '#/components/schemas/Region'
+        toRegion:
+          $ref: '#/components/schemas/Region'
+        customer:
+          $ref: '#/components/schemas/ChatMoveRequestCustomer'
+    ChatLastMessage:
+      type: object
+      required: [id, content, senderId, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        content:
+          type: string
+        senderId:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+    ChatRoomListItem:
+      type: object
+      required:
+        - id
+        - createdAt
+        - lastMessageAt
+        - otherParticipant
+        - quote
+        - lastMessage
+        - unreadCount
+      properties:
+        id:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+        lastMessageAt:
+          type: string
+          format: date-time
+          nullable: true
+        otherParticipant:
+          $ref: '#/components/schemas/ChatOtherParticipant'
+        quote:
+          type: object
+          required: [id, price, status, isDesignated, moveRequest]
+          properties:
+            id:
+              type: string
+              format: uuid
+            price:
+              type: number
+              description: 견적 금액
+            status:
+              $ref: '#/components/schemas/QuoteStatus'
+            isDesignated:
+              type: boolean
+            moveRequest:
+              $ref: '#/components/schemas/ChatMoveRequestSummary'
+        lastMessage:
+          type: object
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/ChatLastMessage'
+        unreadCount:
+          type: integer
+          minimum: 0
+          description: 읽지 않은 메시지 수
+    ChatListResponse:
+      allOf:
+        - $ref: '#/components/schemas/CursorMeta'
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/ChatRoomListItem'

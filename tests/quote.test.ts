@@ -141,6 +141,22 @@ describe('POST /api/move-requests/:requestId/quotes', () => {
         status: 'SUBMITTED',
         isDesignated: false,
       })
+
+      // 견적 제출 시 채팅방과 참여자가 생성되는지 확인
+      const chatRoom = await prisma.chatRoom.findUnique({
+        where: { quoteId: res.body.id },
+        include: {
+          participants: {
+            select: { userId: true },
+          },
+        },
+      })
+
+      expect(chatRoom).not.toBeNull()
+      expect(chatRoom?.participants).toHaveLength(2)
+      expect(
+        chatRoom?.participants.map((participant) => participant.userId),
+      ).toEqual(expect.arrayContaining([customerId, moverId]))
     })
 
     it('지정된 기사님의 견적은 지정 견적으로 저장된다', async () => {
