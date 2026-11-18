@@ -170,7 +170,10 @@ export async function generateAndSaveReviewSummary(moverId: string) {
     where: reviewsOf(moverId),
     select: { content: true, rating: true },
   })
-  if (reviews.length < 10) return
+  if (reviews.length < 10) {
+    await prisma.reviewSummary.deleteMany({ where: { moverId } })
+    return
+  }
 
   const summary = await generateReviewSummary(reviews)
 
@@ -199,7 +202,10 @@ export async function getMoverReviewSummary(moverId: string) {
   const reviewCount = await prisma.review.count({
     where,
   })
-  if (reviewCount < 10) return null
+  if (reviewCount < 10) {
+    await prisma.reviewSummary.deleteMany({ where: { moverId } })
+    return null
+  }
 
   const savedReviewSummary = await prisma.reviewSummary.findUnique({
     where: { moverId },

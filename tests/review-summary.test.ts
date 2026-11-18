@@ -88,6 +88,21 @@ describe('GET /api/movers/:moverId/review-summary', () => {
     expect(send).not.toHaveBeenCalled()
   })
 
+  it('리뷰가 10건 미만이고 저장본이 있으면 저장본을 지우고 null을 반환한다', async () => {
+    await prisma.reviewSummary.create({
+      data: { moverId, ...savedSummary },
+    })
+
+    const res = await api().get(`/api/movers/${moverId}/review-summary`)
+
+    expect(res.status).toBe(200)
+    expect(res.body).toBe(null)
+    expect(send).not.toHaveBeenCalled()
+    expect(
+      await prisma.reviewSummary.findUnique({ where: { moverId } }),
+    ).toBeNull()
+  })
+
   it('저장본이 최신이면 큐에 넣지 않고 저장본을 반환한다', async () => {
     await createReviews(10)
     await prisma.reviewSummary.create({
@@ -139,6 +154,19 @@ describe('GET /api/movers/:moverId/review-summary', () => {
 
 describe('generateAndSaveReviewSummary', () => {
   it('리뷰가 10건 미만이면 요약을 만들지 않는다', async () => {
+    await generateAndSaveReviewSummary(moverId)
+
+    expect(generateContent).not.toHaveBeenCalled()
+    expect(
+      await prisma.reviewSummary.findUnique({ where: { moverId } }),
+    ).toBeNull()
+  })
+
+  it('리뷰가 10건 미만이고 저장본이 있으면 저장본을 지운다', async () => {
+    await prisma.reviewSummary.create({
+      data: { moverId, ...savedSummary },
+    })
+
     await generateAndSaveReviewSummary(moverId)
 
     expect(generateContent).not.toHaveBeenCalled()
