@@ -196,11 +196,10 @@ export async function getMoverReviewSummary(moverId: string) {
   if (!mover) throw new AppError('NOT_FOUND')
 
   const where = reviewsOf(moverId)
-  const reviews = await prisma.review.findMany({
+  const reviewCount = await prisma.review.count({
     where,
-    select: { content: true, rating: true },
   })
-  if (reviews.length < 10) return null
+  if (reviewCount < 10) return null
 
   const savedReviewSummary = await prisma.reviewSummary.findUnique({
     where: { moverId },
@@ -210,8 +209,7 @@ export async function getMoverReviewSummary(moverId: string) {
       aspects: true,
     },
   })
-  if (savedReviewSummary?.reviewCount === reviews.length)
-    return savedReviewSummary
+  if (savedReviewSummary?.reviewCount === reviewCount) return savedReviewSummary
 
   // 요약이 없거나 리뷰 수가 달라지면 생성 작업을 큐에 추가
   await boss.send('review-summary', { moverId }, { singletonKey: moverId })
