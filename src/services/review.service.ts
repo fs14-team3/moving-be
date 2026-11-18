@@ -1,6 +1,7 @@
 import { GoogleGenAI } from '@google/genai'
 import { AppError } from '../errors/app-error'
 import type { Prisma } from '../generated/prisma/client'
+import { boss } from '../lib/boss'
 import { prisma } from '../lib/prisma'
 import { reviewSummarySchema } from '../validators/review-summary.validator'
 import type { ListMoverReviewsQuery } from '../validators/review.validator'
@@ -163,6 +164,30 @@ async function generateReviewSummary(reviews: Review[]) {
   }
 }
 
+// 워커가 실행할 함수
+export async function generateAndSaveReviewSummary(moverId: string) {
+  const reviews = await prisma.review.findMany({
+    where: reviewsOf(moverId),
+    select: { content: true, rating: true },
+  })
+  if (reviews.length < 10) return
+
+  const summary = await generateReviewSummary(reviews)
+
+  await prisma.reviewSummary.upsert({
+    where: { moverId },
+    create: {
+      moverId,
+      reviewCount: reviews.length,
+      ...summary,
+    },
+    update: {
+      reviewCount: reviews.length,
+      ...summary,
+    },
+  })
+}
+
 export async function getMoverReviewSummary(moverId: string) {
   const mover = await prisma.moverProfile.findUnique({
     where: { userId: moverId },
@@ -188,29 +213,8 @@ export async function getMoverReviewSummary(moverId: string) {
   if (savedReviewSummary?.reviewCount === reviews.length)
     return savedReviewSummary
 
-  let newReviewSummary
-  try {
-    newReviewSummary = await generateReviewSummary(reviews)
-  } catch {
-    return savedReviewSummary ?? null
-  }
+  // 요약이 없거나 리뷰 수가 달라지면 생성 작업을 큐에 추가
+  await boss.send('review-summary', { moverId }, { singletonKey: moverId })
 
-  // DB 저장
-  return await prisma.reviewSummary.upsert({
-    where: { moverId },
-    create: {
-      moverId,
-      reviewCount: reviews.length,
-      ...newReviewSummary,
-    },
-    update: {
-      reviewCount: reviews.length,
-      ...newReviewSummary,
-    },
-    select: {
-      reviewCount: true,
-      summary: true,
-      aspects: true,
-    },
-  })
+  return savedReviewSummary ?? null
 }
