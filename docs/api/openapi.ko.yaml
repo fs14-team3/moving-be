@@ -492,8 +492,11 @@ paths:
       tags: [Movers, Reviews]
       summary: 기사님 리뷰 AI 요약
       description: |
-        공개 API. 리뷰가 10건 미만이거나 요약을 만들 수 없으면 `null`입니다.
-        리뷰 수가 바뀌면 다시 생성하고, 생성에 실패했을 때 이전 저장본이 있으면 이를 반환합니다.
+        공개 API. 리뷰가 10건 미만이면 `null`을 반환합니다.
+        현재 리뷰 수가 요약 생성 당시와 같으면 저장된 요약을 반환합니다.
+        요약이 없거나 리뷰 수가 달라지면 요약 생성 작업을 큐에 등록합니다.
+        생성 완료를 기다리지 않고 기존 요약을 반환하며, 저장된 요약이 없으면 `null`을 반환합니다.
+        큐 등록에 실패한 경우에도 기존 요약 또는 `null`을 반환합니다.
       operationId: getMoverReviewSummary
       security: []
       parameters:
