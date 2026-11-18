@@ -23,6 +23,7 @@ describe('GET /api/movers/me/quotes', () => {
     ownerId = moverId,
     status: 'SUBMITTED' | 'CONFIRMED' | 'NOT_SELECTED' = 'SUBMITTED',
     isDesignated = false,
+    comment: string | null = null,
   ) {
     const date = new Date()
     date.setUTCDate(date.getUTCDate() + 14)
@@ -49,6 +50,7 @@ describe('GET /api/movers/me/quotes', () => {
         moveRequestId: moveRequest.id,
         moverId: ownerId,
         price: 300000,
+        comment,
         status,
         isDesignated,
       },
@@ -115,6 +117,24 @@ describe('GET /api/movers/me/quotes', () => {
           region: '경기',
         },
       },
+    })
+  })
+
+  it('보낸 견적 목록에서 코멘트를 반환한다', async () => {
+    const quote = await createQuote(
+      moverId,
+      'SUBMITTED',
+      false,
+      '추가 운반 비용은 없습니다.',
+    )
+
+    const res = await api(mover).get('/api/movers/me/quotes')
+
+    expect(res.status).toBe(200)
+    expect(res.body.items).toHaveLength(1)
+    expect(res.body.items[0]).toMatchObject({
+      id: quote.id,
+      comment: '추가 운반 비용은 없습니다.',
     })
   })
 
@@ -258,5 +278,74 @@ describe('GET /api/movers/me/quotes', () => {
 
     expect(res.status).toBe(403)
     expect(res.body.error.code).toBe('FORBIDDEN')
+  })
+
+  describe('GET /api/movers/me/quotes/:quoteId', () => {
+    it('본인이 보낸 견적의 금액과 이사 요청 정보를 반환한다', async () => {
+      const quote = await createQuote(moverId, 'CONFIRMED', true)
+
+      const res = await api(mover).get(`/api/movers/me/quotes/${quote.id}`)
+
+      expect(res.status).toBe(200)
+      expect(res.body).toMatchObject({
+        id: quote.id,
+        price: 300000,
+        status: 'CONFIRMED',
+        isDesignated: true,
+        createdAt: expect.any(String),
+        moveRequest: {
+          id: quote.moveRequestId,
+          customerName: '테스트 고객',
+          moveType: 'HOME',
+          moveDate: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+          from: { address: '서울 출발지', region: '서울' },
+          to: { address: '경기 도착지', region: '경기' },
+          status: 'PENDING',
+          isDesignated: true,
+          createdAt: expect.any(String),
+        },
+      })
+    })
+
+    it('다른 기사님이 보낸 견적은 404를 반환한다', async () => {
+      const otherQuote = await createQuote(otherMoverId)
+
+      const res = await api(mover).get(`/api/movers/me/quotes/${otherQuote.id}`)
+
+      expect(res.status).toBe(404)
+      expect(res.body.error.code).toBe('NOT_FOUND')
+    })
+
+    it('없는 견적은 404를 반환한다', async () => {
+      const res = await api(mover).get(`/api/movers/me/quotes/${randomUUID()}`)
+
+      expect(res.status).toBe(404)
+      expect(res.body.error.code).toBe('NOT_FOUND')
+    })
+
+    it('견적 ID가 UUID가 아니면 400을 반환한다', async () => {
+      const res = await api(mover).get('/api/movers/me/quotes/not-a-uuid')
+
+      expect(res.status).toBe(400)
+      expect(res.body.error.code).toBe('VALIDATION_ERROR')
+    })
+
+    it('비로그인 사용자는 조회할 수 없다', async () => {
+      const quote = await createQuote()
+
+      const res = await api().get(`/api/movers/me/quotes/${quote.id}`)
+
+      expect(res.status).toBe(401)
+      expect(res.body.error.code).toBe('UNAUTHORIZED')
+    })
+
+    it('일반 유저는 조회할 수 없다', async () => {
+      const quote = await createQuote()
+
+      const res = await api(customer).get(`/api/movers/me/quotes/${quote.id}`)
+
+      expect(res.status).toBe(403)
+      expect(res.body.error.code).toBe('FORBIDDEN')
+    })
   })
 })

@@ -68,10 +68,14 @@ model User {
   createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt    DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
-  socialAccounts  SocialAccount[]
-  customerProfile CustomerProfile?
-  moverProfile    MoverProfile?
-  notifications   Notification[]
+
+  socialAccounts     SocialAccount[]
+  customerProfile    CustomerProfile?
+  moverProfile       MoverProfile?
+  notifications      Notification[]
+  chatParticipations ChatParticipant[]
+  sentMessages       Message[]
+  
 
   @@unique([email, role], name: "email_role")
   @@map("users")
@@ -169,6 +173,7 @@ model Quote {
   moveRequestId String         @map("move_request_id") @db.Uuid
   moverId       String         @map("mover_id") @db.Uuid
   price         Int
+  comment       String?        @db.Text
   isDesignated  Boolean        @default(false) @map("is_designated")
   status        QuoteStatus    @default(SUBMITTED)
   confirmedAt   DateTime?      @map("confirmed_at") @db.Timestamptz
@@ -178,6 +183,7 @@ model Quote {
   mover         MoverProfile   @relation(fields: [moverId], references: [userId], onDelete: Cascade)
   reviews       Review[]
   notifications Notification[]
+  chatRoom      ChatRoom?
 
   // Partial unique index on confirmed quotes is defined in the migration SQL.
   @@map("quotes")
@@ -186,6 +192,7 @@ model Quote {
 model RequestRejection {
   moveRequestId String       @map("move_request_id") @db.Uuid
   moverId       String       @map("mover_id") @db.Uuid
+  reason        String?      @db.Text
   createdAt     DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
   moveRequest   MoveRequest  @relation(fields: [moveRequestId], references: [id], onDelete: Cascade)
   mover         MoverProfile @relation(fields: [moverId], references: [userId], onDelete: Cascade)
@@ -242,6 +249,46 @@ model Session {
 
   @@index([expire])
   @@map("session")
+}
+
+model ChatRoom {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  quoteId       String    @unique @map("quote_id") @db.Uuid
+  lastMessageAt DateTime? @map("last_message_at") @db.Timestamptz
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  quote        Quote             @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  participants ChatParticipant[]
+  messages     Message[]
+
+  @@map("chat_rooms")
+}
+
+model ChatParticipant {
+  chatRoomId String    @map("chat_room_id") @db.Uuid
+  userId     String    @map("user_id") @db.Uuid
+  lastReadAt DateTime? @map("last_read_at") @db.Timestamptz
+
+  chatRoom ChatRoom @relation(fields: [chatRoomId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([chatRoomId, userId])
+  @@index([userId, chatRoomId])
+  @@map("chat_participants")
+}
+
+model Message {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  chatRoomId String   @map("chat_room_id") @db.Uuid
+  senderId   String   @map("sender_id") @db.Uuid
+  content    String   @db.Text
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  chatRoom ChatRoom @relation(fields: [chatRoomId], references: [id], onDelete: Cascade)
+  sender   User     @relation(fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@index([chatRoomId, createdAt, id])
+  @@map("messages")
 }
 
 model ReviewSummary {

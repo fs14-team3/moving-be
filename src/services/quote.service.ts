@@ -1,6 +1,7 @@
 import { AppError } from '../errors/app-error'
 import { prisma } from '../lib/prisma'
 import { createNotification } from './notification-creation.service'
+import { toSentQuote } from './sent-quote.service'
 import type { SendQuoteBody } from '../validators/quote.validator'
 
 type SendQuoteInput = SendQuoteBody & {
@@ -32,7 +33,7 @@ function assertMover(viewer: Express.User | undefined): string {
 
 export async function sendQuote(
   viewer: Express.User | undefined,
-  { requestId, price }: SendQuoteInput,
+  { requestId, price, comment }: SendQuoteInput,
 ) {
   const moverId = assertMover(viewer)
 
@@ -143,8 +144,32 @@ export async function sendQuote(
         moveRequestId: requestId,
         moverId,
         price,
+        comment,
         isDesignated,
         status: 'SUBMITTED',
+      },
+    })
+
+    // 견적별 채팅방 및 참여자 생성
+    await tx.chatRoom.create({
+      data: {
+        quote: {
+          connect: { id: quote.id },
+        },
+        participants: {
+          create: [
+            {
+              user: {
+                connect: { id: request.customerId },
+              },
+            },
+            {
+              user: {
+                connect: { id: moverId },
+              },
+            },
+          ],
+        },
       },
     })
 
@@ -163,32 +188,9 @@ export async function sendQuote(
       tx,
     )
 
-    // OpenAPI SentQuote 응답 구조
-    return {
-      id: quote.id,
-      price: quote.price,
-      status: quote.status,
-      isDesignated: quote.isDesignated,
-      createdAt: quote.createdAt,
-      moveRequest: {
-        id: request.id,
-        customerName: request.customer.user.name ?? null,
-        moveType: request.moveType,
-        moveDate: request.moveDate.toISOString().slice(0, 10),
-        from: {
-          address: request.fromAddress,
-          zonecode: request.fromZonecode,
-          region: request.fromRegion,
-        },
-        to: {
-          address: request.toAddress,
-          zonecode: request.toZonecode,
-          region: request.toRegion,
-        },
-        status: request.status,
-        isDesignated,
-        createdAt: request.createdAt,
-      },
-    }
+    return toSentQuote(
+      { ...quote, moveRequest: request },
+      request.customer.user.name ?? null,
+    )
   })
 }
