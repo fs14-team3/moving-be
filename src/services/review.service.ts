@@ -1,6 +1,7 @@
 import { GoogleGenAI } from '@google/genai'
 import { AppError } from '../errors/app-error'
 import type { Prisma } from '../generated/prisma/client'
+import { boss } from '../lib/boss'
 import { prisma } from '../lib/prisma'
 import { reviewSummarySchema } from '../validators/review-summary.validator'
 import type { ListMoverReviewsQuery } from '../validators/review.validator'
@@ -163,6 +164,33 @@ async function generateReviewSummary(reviews: Review[]) {
   }
 }
 
+// 워커가 실행할 함수
+export async function generateAndSaveReviewSummary(moverId: string) {
+  const reviews = await prisma.review.findMany({
+    where: reviewsOf(moverId),
+    select: { content: true, rating: true },
+  })
+  if (reviews.length < 10) {
+    await prisma.reviewSummary.deleteMany({ where: { moverId } })
+    return
+  }
+
+  const summary = await generateReviewSummary(reviews)
+
+  await prisma.reviewSummary.upsert({
+    where: { moverId },
+    create: {
+      moverId,
+      reviewCount: reviews.length,
+      ...summary,
+    },
+    update: {
+      reviewCount: reviews.length,
+      ...summary,
+    },
+  })
+}
+
 export async function getMoverReviewSummary(moverId: string) {
   const mover = await prisma.moverProfile.findUnique({
     where: { userId: moverId },
@@ -171,11 +199,13 @@ export async function getMoverReviewSummary(moverId: string) {
   if (!mover) throw new AppError('NOT_FOUND')
 
   const where = reviewsOf(moverId)
-  const reviews = await prisma.review.findMany({
+  const reviewCount = await prisma.review.count({
     where,
-    select: { content: true, rating: true },
   })
-  if (reviews.length < 10) return null
+  if (reviewCount < 10) {
+    await prisma.reviewSummary.deleteMany({ where: { moverId } })
+    return null
+  }
 
   const savedReviewSummary = await prisma.reviewSummary.findUnique({
     where: { moverId },
@@ -185,32 +215,14 @@ export async function getMoverReviewSummary(moverId: string) {
       aspects: true,
     },
   })
-  if (savedReviewSummary?.reviewCount === reviews.length)
-    return savedReviewSummary
+  if (savedReviewSummary?.reviewCount === reviewCount) return savedReviewSummary
 
-  let newReviewSummary
+  // 요약이 없거나 리뷰 수가 달라지면 생성 작업을 큐에 추가
   try {
-    newReviewSummary = await generateReviewSummary(reviews)
+    await boss.send('review-summary', { moverId }, { singletonKey: moverId })
   } catch {
-    return savedReviewSummary ?? null
+    // 큐에 넣지 못해도 아래 반환을 유지
   }
 
-  // DB 저장
-  return await prisma.reviewSummary.upsert({
-    where: { moverId },
-    create: {
-      moverId,
-      reviewCount: reviews.length,
-      ...newReviewSummary,
-    },
-    update: {
-      reviewCount: reviews.length,
-      ...newReviewSummary,
-    },
-    select: {
-      reviewCount: true,
-      summary: true,
-      aspects: true,
-    },
-  })
+  return savedReviewSummary ?? null
 }
