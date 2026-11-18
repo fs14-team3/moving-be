@@ -212,7 +212,11 @@ export async function getMoverReviewSummary(moverId: string) {
   if (savedReviewSummary?.reviewCount === reviewCount) return savedReviewSummary
 
   // 요약이 없거나 리뷰 수가 달라지면 생성 작업을 큐에 추가
-  await boss.send('review-summary', { moverId }, { singletonKey: moverId })
+  try {
+    await boss.send('review-summary', { moverId }, { singletonKey: moverId })
+  } catch {
+    // 큐에 넣지 못해도 아래 반환을 유지
+  }
 
   return savedReviewSummary ?? null
 }
