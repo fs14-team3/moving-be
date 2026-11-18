@@ -10,7 +10,7 @@ const server = createApp().listen(
   { port: env.PORT, host: env.HOST },
   async () => {
     await boss.start()
-    await boss.createQueue('review-summary', { policy: 'singleton' })
+    await boss.createQueue('review-summary', { policy: 'exclusive' })
     await boss.work<{ moverId: string }>('review-summary', async (jobs) => {
       for (const job of jobs) {
         await generateAndSaveReviewSummary(job.data.moverId)
