@@ -1312,12 +1312,16 @@ paths:
           content:
             application/json:
               schema: { '$ref': '#/components/schemas/MyReviewListResponse' }
+        '400': { '$ref': '#/components/responses/ValidationError' }
         '401': { '$ref': '#/components/responses/Unauthorized' }
         '403': { '$ref': '#/components/responses/Forbidden' }
   '/customers/me/reviews/writable':
     get:
       tags: [Reviews]
       summary: 작성 가능한 리뷰 목록
+      description: >-
+        본인의 확정 견적(CONFIRMED) 중 한국 시간(Asia/Seoul) 기준
+        이사일이 지났고 아직 리뷰를 작성하지 않은 견적만 조회합니다.
       operationId: listWritableReviews
       security:
         - sessionCookie: []
@@ -1332,6 +1336,7 @@ paths:
             application/json:
               schema:
                 { '$ref': '#/components/schemas/WritableReviewListResponse' }
+        '400': { '$ref': '#/components/responses/ValidationError' }
         '401': { '$ref': '#/components/responses/Unauthorized' }
         '403': { '$ref': '#/components/responses/Forbidden' }
   '/notifications':
@@ -2492,7 +2497,8 @@ components:
     ReviewTarget:
       description: 리뷰 대상인(또는 리뷰할 수 있는) 완료된 이사
       type: object
-      required: [quoteId, price, isDesignated, moveType, moveDate, mover]
+      required:
+        [quoteId, price, isDesignated, moveType, moveDate, from, to, mover]
       properties:
         quoteId: { type: string, format: uuid }
         price: { type: integer }
@@ -2500,6 +2506,20 @@ components:
         moveType: { '$ref': '#/components/schemas/ServiceType' }
         moveDate: { type: string, format: date }
         mover: { '$ref': '#/components/schemas/MoverSummary' }
+        from:
+          type: object
+          required: [address, zonecode, region]
+          properties:
+            address: { type: string }
+            zonecode: { type: string, nullable: true }
+            region: { type: string }
+        to:
+          type: object
+          required: [address, zonecode, region]
+          properties:
+            address: { type: string }
+            zonecode: { type: string, nullable: true }
+            region: { type: string }
     MyReview:
       allOf:
         - { '$ref': '#/components/schemas/ReviewTarget' }
