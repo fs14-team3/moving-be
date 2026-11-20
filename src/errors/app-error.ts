@@ -63,6 +63,26 @@ const ERROR_CATALOG = {
     status: 409,
     message: '이미 작성한 리뷰가 있습니다',
   },
+  PROOF_PHOTO_NOT_ALLOWED: {
+    status: 403,
+    message: '작업 사진을 올릴 수 없는 견적입니다',
+  },
+  PROOF_PHOTO_LIMIT_REACHED: {
+    status: 409,
+    message: '작업 사진은 최대 100장까지 올릴 수 있습니다',
+  },
+  PROOF_PHOTO_NOT_UPLOADED: {
+    status: 409,
+    message: '업로드된 작업 사진을 찾을 수 없습니다',
+  },
+  PROOF_PHOTO_DELETED: {
+    status: 409,
+    message: '삭제된 작업 사진은 다시 올릴 수 없습니다',
+  },
+  PROOF_PHOTO_REVIEWED: {
+    status: 409,
+    message: '리뷰가 작성된 견적의 작업 사진은 올리거나 삭제할 수 없습니다',
+  },
   ADDRESS_NOT_FOUND: {
     status: 422,
     message: '주소를 찾을 수 없습니다',

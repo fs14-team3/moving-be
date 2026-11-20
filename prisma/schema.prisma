@@ -182,6 +182,7 @@ model Quote {
   moveRequest   MoveRequest    @relation(fields: [moveRequestId], references: [id], onDelete: Cascade)
   mover         MoverProfile   @relation(fields: [moverId], references: [userId], onDelete: Cascade)
   reviews       Review[]
+  proofPhotos   ProofPhoto[]
   notifications Notification[]
   chatRoom      ChatRoom?
 
@@ -211,6 +212,21 @@ model Review {
   quote     Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
 
   @@map("reviews")
+}
+
+model ProofPhoto {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  quoteId      String    @map("quote_id") @db.Uuid
+  uploadId     String    @map("upload_id") @db.Uuid
+  imageKey     String    @map("image_key")
+  thumbnailKey String    @map("thumbnail_key")
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  deletedAt    DateTime? @map("deleted_at") @db.Timestamptz
+  quote        Quote     @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+
+  @@unique([quoteId, uploadId])
+  @@index([quoteId, createdAt, id])
+  @@map("proof_photos")
 }
 
 model Favorite {
