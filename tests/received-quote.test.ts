@@ -44,6 +44,7 @@ type QuoteOptions = {
   status?: QuoteStatus
   isDesignated?: boolean
   price?: number
+  comment?: string | null
   createdAt?: Date
   confirmedAt?: Date
 }
@@ -58,6 +59,7 @@ async function createQuote(
       moveRequestId: requestId,
       moverId: ownerId,
       price: options.price ?? 350000,
+      comment: options.comment ?? null,
       status: options.status ?? 'SUBMITTED',
       isDesignated: options.isDesignated ?? false,
       ...(options.createdAt ? { createdAt: options.createdAt } : {}),
@@ -351,6 +353,22 @@ describe('GET /api/move-requests/:requestId/quotes', () => {
     expect(res.status).toBe(403)
     expect(res.body.error.code).toBe('PROFILE_REQUIRED')
   })
+
+  it('받은 견적 목록에서 코멘트를 반환한다', async () => {
+    const request = await createMoveRequest()
+    const quote = await createQuote(request.id, moverId, {
+      comment: '포장 서비스가 포함됩니다.',
+    })
+
+    const res = await listQuotes(request.id, customer)
+
+    expect(res.status).toBe(200)
+    expect(res.body.items).toHaveLength(1)
+    expect(res.body.items[0]).toMatchObject({
+      id: quote.id,
+      comment: '포장 서비스가 포함됩니다.',
+    })
+  })
 })
 
 describe('GET /api/quotes/:quoteId', () => {
@@ -478,5 +496,17 @@ describe('GET /api/quotes/:quoteId', () => {
 
     expect(res.status).toBe(403)
     expect(res.body.error.code).toBe('PROFILE_REQUIRED')
+  })
+
+  it('견적 상세에서 코멘트를 반환한다', async () => {
+    const request = await createMoveRequest()
+    const quote = await createQuote(request.id, moverId, {
+      comment: '이사 당일 추가 비용은 없습니다.',
+    })
+
+    const res = await getQuote(quote.id, customer)
+
+    expect(res.status).toBe(200)
+    expect(res.body.comment).toBe('이사 당일 추가 비용은 없습니다.')
   })
 })

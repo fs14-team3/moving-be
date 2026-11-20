@@ -83,6 +83,10 @@ const ERROR_CATALOG = {
     status: 409,
     message: '리뷰가 작성된 견적의 작업 사진은 올리거나 삭제할 수 없습니다',
   },
+  ADDRESS_NOT_FOUND: {
+    status: 422,
+    message: '주소를 찾을 수 없습니다',
+  },
 } as const
 
 export type ErrorCode = keyof typeof ERROR_CATALOG

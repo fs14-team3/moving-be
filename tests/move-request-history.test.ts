@@ -43,6 +43,7 @@ async function createQuote(
   ownerId = moverId,
   options: {
     price?: number
+    comment?: string | null
     status?: 'SUBMITTED' | 'CONFIRMED' | 'NOT_SELECTED'
     isDesignated?: boolean
     createdAt?: Date
@@ -53,6 +54,7 @@ async function createQuote(
       moveRequestId: requestId,
       moverId: ownerId,
       price: options.price ?? 350000,
+      comment: options.comment ?? null,
       status: options.status ?? 'SUBMITTED',
       isDesignated: options.isDesignated ?? false,
       ...(options.createdAt ? { createdAt: options.createdAt } : {}),
@@ -241,6 +243,7 @@ describe('GET /api/move-requests/history', () => {
 
     const quote = await createQuote(request.id, moverId, {
       price: 420000,
+      comment: '안전하게 운반하겠습니다.',
       status: 'CONFIRMED',
     })
 
@@ -260,6 +263,7 @@ describe('GET /api/move-requests/history', () => {
         {
           id: quote.id,
           price: 420000,
+          comment: '안전하게 운반하겠습니다.',
           status: 'CONFIRMED',
           isDesignated: false,
           createdAt: expect.any(String),
@@ -271,6 +275,26 @@ describe('GET /api/move-requests/history', () => {
           },
         },
       ],
+    })
+  })
+
+  it('코멘트가 없는 견적은 comment null을 반환한다', async () => {
+    const request = await createMoveRequest(
+      customerId,
+      'COMPLETED',
+      moveDate(-10),
+    )
+
+    const quote = await createQuote(request.id, moverId)
+
+    const res = await getHistory(customer)
+
+    expect(res.status).toBe(200)
+    expect(res.body.items).toHaveLength(1)
+    expect(res.body.items[0].quotes).toHaveLength(1)
+    expect(res.body.items[0].quotes[0]).toMatchObject({
+      id: quote.id,
+      comment: null,
     })
   })
 
