@@ -159,6 +159,9 @@ describe('Socket.IO 채팅 연결 및 채팅방 입장', () => {
     httpServer = createServer(app)
     io = new SocketIOServer(httpServer) as ChatSocketServer
 
+    // 테스트 환경에서도 Express 컨트롤러가 Socket.IO를 사용할 수 있도록 등록
+    app.set('io', io)
+
     // Express와 Socket.IO가 동일한 세션 미들웨어 공유
     io.engine.use(
       (req: IncomingMessage, res: ServerResponse, next: NextFunction) => {
@@ -302,5 +305,140 @@ describe('Socket.IO 채팅 연결 및 채팅방 입장', () => {
     await expect(joinChatRoom(socket, fixture.chatRoomId)).resolves.toEqual({
       ok: true,
     })
+  })
+  it('메시지 전송 시 채팅방 참여자 양쪽에 chat:message:new 이벤트를 전달한다', async () => {
+    const fixture = await createChatFixture()
+
+    // CUSTOMER와 MOVER의 로그인 세션 생성
+    const customerCookie = await loginAndGetCookie({
+      id: fixture.customerId,
+      role: 'CUSTOMER',
+    })
+
+    const moverCookie = await loginAndGetCookie({
+      id: fixture.moverId,
+      role: 'MOVER',
+    })
+
+    // 양쪽 소켓 연결
+    const customerSocket = await connectSocket(customerCookie)
+    const moverSocket = await connectSocket(moverCookie)
+
+    await Promise.all([
+      waitForConnection(customerSocket),
+      waitForConnection(moverSocket),
+    ])
+
+    // 양쪽 모두 동일한 채팅방 참여
+    const [customerJoin, moverJoin] = await Promise.all([
+      joinChatRoom(customerSocket, fixture.chatRoomId),
+      joinChatRoom(moverSocket, fixture.chatRoomId),
+    ])
+
+    expect(customerJoin).toEqual({ ok: true })
+    expect(moverJoin).toEqual({ ok: true })
+
+    // 양쪽 소켓의 이벤트 수신 대기
+    type ChatMessageEvent = Parameters<
+      ServerToClientEvents['chat:message:new']
+    >[0]
+
+    const customerMessagePromise = new Promise<ChatMessageEvent>((resolve) => {
+      customerSocket.once('chat:message:new', resolve)
+    })
+
+    const moverMessagePromise = new Promise<ChatMessageEvent>((resolve) => {
+      moverSocket.once('chat:message:new', resolve)
+    })
+
+    // CUSTOMER가 REST API로 메시지 전송
+    await request(httpServer)
+      .post(`/api/chats/${fixture.chatRoomId}/messages`)
+      .set('Cookie', customerCookie)
+      .send({ content: '실시간 메시지 테스트' })
+      .expect(201)
+
+    // 양쪽 소켓에서 이벤트 수신 확인
+    const [customerMessage, moverMessage] = await Promise.all([
+      customerMessagePromise,
+      moverMessagePromise,
+    ])
+
+    expect(customerMessage).toMatchObject({
+      chatRoomId: fixture.chatRoomId,
+      senderId: fixture.customerId,
+      content: '실시간 메시지 테스트',
+    })
+
+    expect(moverMessage).toMatchObject({
+      chatRoomId: fixture.chatRoomId,
+      senderId: fixture.customerId,
+      content: '실시간 메시지 테스트',
+    })
+
+    // 양쪽 소켓이 동일한 메시지를 수신했는지 확인
+    expect(customerMessage.id).toBe(moverMessage.id)
+  })
+  it('채팅방 읽음 처리 시 채팅방 참여자에게 chat:read 이벤트를 전달한다', async () => {
+    const fixture = await createChatFixture()
+
+    const customerCookie = await loginAndGetCookie({
+      id: fixture.customerId,
+      role: 'CUSTOMER',
+    })
+
+    const moverCookie = await loginAndGetCookie({
+      id: fixture.moverId,
+      role: 'MOVER',
+    })
+
+    const customerSocket = await connectSocket(customerCookie)
+    const moverSocket = await connectSocket(moverCookie)
+
+    await Promise.all([
+      waitForConnection(customerSocket),
+      waitForConnection(moverSocket),
+    ])
+
+    const [customerJoin, moverJoin] = await Promise.all([
+      joinChatRoom(customerSocket, fixture.chatRoomId),
+      joinChatRoom(moverSocket, fixture.chatRoomId),
+    ])
+
+    expect(customerJoin).toEqual({ ok: true })
+    expect(moverJoin).toEqual({ ok: true })
+
+    type ChatReadEvent = Parameters<ServerToClientEvents['chat:read']>[0]
+
+    const customerReadPromise = new Promise<ChatReadEvent>((resolve) => {
+      customerSocket.once('chat:read', resolve)
+    })
+
+    const moverReadPromise = new Promise<ChatReadEvent>((resolve) => {
+      moverSocket.once('chat:read', resolve)
+    })
+
+    await request(httpServer)
+      .patch(`/api/chats/${fixture.chatRoomId}/read`)
+      .set('Cookie', customerCookie)
+      .expect(200)
+
+    const [customerRead, moverRead] = await Promise.all([
+      customerReadPromise,
+      moverReadPromise,
+    ])
+
+    expect(customerRead).toMatchObject({
+      chatRoomId: fixture.chatRoomId,
+      userId: fixture.customerId,
+    })
+
+    expect(moverRead).toMatchObject({
+      chatRoomId: fixture.chatRoomId,
+      userId: fixture.customerId,
+    })
+
+    expect(customerRead.lastReadAt).toBe(moverRead.lastReadAt)
+    expect(Number.isNaN(Date.parse(customerRead.lastReadAt))).toBe(false)
   })
 })
