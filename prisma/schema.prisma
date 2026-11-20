@@ -58,6 +58,26 @@ enum NotificationType {
   @@map("notification_type")
 }
 
+enum ReviewKeywordBaseKey {
+  PUNCTUALITY
+  PACKING
+  HANDLING
+  EFFICIENCY
+  COMMUNICATION
+  PRICE
+  PROFESSIONALISM
+
+  @@map("review_keyword_base_key")
+}
+
+enum ReviewKeywordSentiment {
+  POSITIVE
+  NEGATIVE
+  UNCLEAR
+
+  @@map("review_keyword_sentiment")
+}
+
 model User {
   id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   role         UserRole
@@ -68,14 +88,12 @@ model User {
   createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt    DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
-
   socialAccounts     SocialAccount[]
   customerProfile    CustomerProfile?
   moverProfile       MoverProfile?
   notifications      Notification[]
   chatParticipations ChatParticipant[]
   sentMessages       Message[]
-  
 
   @@unique([email, role], name: "email_role")
   @@map("users")
@@ -203,13 +221,14 @@ model RequestRejection {
 }
 
 model Review {
-  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  quoteId   String   @unique @map("quote_id") @db.Uuid
-  rating    Int
-  content   String
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
-  quote     Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  id              String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  quoteId         String                 @unique @map("quote_id") @db.Uuid
+  rating          Int
+  content         String
+  createdAt       DateTime               @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime               @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  quote           Quote                  @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  keywordMentions ReviewKeywordMention[]
 
   @@map("reviews")
 }
@@ -318,4 +337,35 @@ model ReviewSummary {
   mover       MoverProfile @relation(fields: [moverId], references: [userId], onDelete: Cascade)
 
   @@map("review_summaries")
+}
+
+model ReviewKeyword {
+  id            String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name          String                @unique
+  description   String?
+  baseKey       ReviewKeywordBaseKey? @unique @map("base_key")
+  parentBaseKey ReviewKeywordBaseKey? @map("parent_base_key")
+  createdAt     DateTime              @default(now()) @map("created_at") @db.Timestamptz
+
+  mentions ReviewKeywordMention[]
+
+  @@map("review_keywords")
+}
+
+model ReviewKeywordMention {
+  id        String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  reviewId  String                 @map("review_id") @db.Uuid
+  keywordId String                 @map("keyword_id") @db.Uuid
+  sentiment ReviewKeywordSentiment
+  evidence  String                 @db.Text
+  start     Int
+  end       Int
+  createdAt DateTime               @default(now()) @map("created_at") @db.Timestamptz
+
+  review  Review        @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  keyword ReviewKeyword @relation(fields: [keywordId], references: [id], onDelete: Cascade)
+
+  @@unique([reviewId, keywordId])
+  @@index([keywordId, reviewId])
+  @@map("review_keyword_mentions")
 }
