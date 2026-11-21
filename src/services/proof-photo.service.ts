@@ -4,8 +4,10 @@ import {
   DeleteObjectCommand,
   NoSuchKey,
 } from '@aws-sdk/client-s3'
+import { getSignedUrl } from '@aws-sdk/cloudfront-signer'
 import { createPresignedPost } from '@aws-sdk/s3-presigned-post'
 import * as Sentry from '@sentry/node'
+import { env } from '../config/env'
 import { AppError, type ErrorCode } from '../errors/app-error'
 import type { Prisma } from '../generated/prisma/client'
 import { prisma } from '../lib/prisma'
@@ -18,6 +20,7 @@ const MAX_PROOF_PHOTOS = 100
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024
 const MAX_THUMBNAIL_BYTES = 512 * 1024
 const UPLOAD_EXPIRES_SECONDS = 600
+const SIGNED_URL_WINDOW_MS = 60 * 60 * 1000
 const PENDING_PREFIX = 'pending/'
 
 const proofPhotoSelect = {
@@ -32,16 +35,38 @@ type ProofPhotoRow = Prisma.ProofPhotoGetPayload<{
   select: typeof proofPhotoSelect
 }>
 
-function toProofPhoto({
-  id,
-  imageKey,
-  thumbnailKey,
-  createdAt,
-}: ProofPhotoRow) {
+function signedQuery(quoteId: string) {
+  const keyPairId = env.CLOUDFRONT_KEY_PAIR_ID
+  const privateKey = env.CLOUDFRONT_PRIVATE_KEY
+  if (!keyPairId || !privateKey) throw new AppError('UPLOAD_NOT_CONFIGURED')
+
+  const windowStart =
+    Math.floor(Date.now() / SIGNED_URL_WINDOW_MS) * SIGNED_URL_WINDOW_MS
+  const resource = imageUrl(`proof-photos/${quoteId}/*`)
+  const policy = JSON.stringify({
+    Statement: [
+      {
+        Resource: resource,
+        Condition: {
+          DateLessThan: {
+            'AWS:EpochTime': (windowStart + 2 * SIGNED_URL_WINDOW_MS) / 1000,
+          },
+        },
+      },
+    ],
+  })
+  return new URL(getSignedUrl({ url: resource, keyPairId, privateKey, policy }))
+    .search
+}
+
+function toProofPhoto(
+  { id, imageKey, thumbnailKey, createdAt }: ProofPhotoRow,
+  query: string,
+) {
   return {
     id,
-    url: imageUrl(imageKey),
-    thumbnailUrl: imageUrl(thumbnailKey),
+    url: `${imageUrl(imageKey)}${query}`,
+    thumbnailUrl: `${imageUrl(thumbnailKey)}${query}`,
     createdAt,
   }
 }
@@ -250,9 +275,10 @@ export async function confirmProofPhoto(
   uploadId: string,
 ) {
   const quote = await findMoverQuote(viewer, quoteId)
+  const query = signedQuery(quoteId)
 
   const saved = await findProofPhoto(prisma, quoteId, uploadId)
-  if (saved) return toProofPhoto(saved)
+  if (saved) return toProofPhoto(saved, query)
   const photoCount = assertEditable(quote)
   if (photoCount >= MAX_PROOF_PHOTOS) {
     throw new AppError('PROOF_PHOTO_LIMIT_REACHED')
@@ -264,7 +290,7 @@ export async function confirmProofPhoto(
   try {
     await copyPhotoFromPending(bucket, proofPhotoKeys(quoteId, uploadId), keys)
     photo = await saveProofPhoto(quoteId, uploadId, keys)
-    return toProofPhoto(photo)
+    return toProofPhoto(photo, query)
   } catch (error) {
     if (
       error instanceof AppError &&
@@ -306,9 +332,10 @@ export async function listProofPhotos(
     },
   })
   if (!quote) throw new AppError('NOT_FOUND')
+  const query = quote.proofPhotos.length > 0 ? signedQuery(quoteId) : ''
 
   return {
-    items: quote.proofPhotos.map(toProofPhoto),
+    items: quote.proofPhotos.map((photo) => toProofPhoto(photo, query)),
     maxCount: MAX_PROOF_PHOTOS,
     canEdit: quote.moverId === viewer.id && editRestriction(quote) === null,
   }
