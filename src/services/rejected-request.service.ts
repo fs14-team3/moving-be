@@ -1,6 +1,7 @@
 import { AppError } from '../errors/app-error'
 import { prisma } from '../lib/prisma'
 import { encodeCursor } from '../utils/cursor'
+import { toRequestForMover } from './move-request.service'
 import type { RejectedRequestQuery } from '../validators/rejected-request.validator'
 
 function assertMover(viewer: Express.User | undefined): string {
@@ -97,25 +98,11 @@ export async function listMyRejectedRequests(
     const request = rejection.moveRequest
 
     return {
-      moveRequest: {
-        id: request.id,
-        customerName: request.customer.user.name ?? null,
-        moveType: request.moveType,
-        moveDate: request.moveDate.toISOString().slice(0, 10),
-        from: {
-          address: request.fromAddress,
-          zonecode: request.fromZonecode,
-          region: request.fromRegion,
-        },
-        to: {
-          address: request.toAddress,
-          zonecode: request.toZonecode,
-          region: request.toRegion,
-        },
-        status: request.status,
-        isDesignated: request.designatedRequests.length > 0,
-        createdAt: request.createdAt,
-      },
+      moveRequest: toRequestForMover(
+        request,
+        request.customer.user.name ?? null,
+        request.designatedRequests.length > 0,
+      ),
       rejectedAt: rejection.createdAt,
       reason: rejection.reason,
     }

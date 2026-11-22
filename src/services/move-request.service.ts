@@ -1,5 +1,5 @@
 import { AppError } from '../errors/app-error'
-import { Prisma } from '../generated/prisma/client'
+import { type MoveRequest, Prisma } from '../generated/prisma/client'
 import { prisma } from '../lib/prisma'
 import { todayInSeoul } from '../utils/date'
 import type { CreateMoveRequestBody } from '../validators/move-request.validator'
@@ -257,5 +257,31 @@ export function toMoveRequest(row: MoveRequestRow) {
     designatedMoverIds: row.designatedRequests.map(({ moverId }) => moverId),
     createdAt: row.createdAt,
     confirmedAt: row.confirmedAt,
+  }
+}
+
+export function toRequestForMover(
+  request: MoveRequest,
+  customerName: string | null,
+  isDesignated: boolean,
+) {
+  return {
+    id: request.id,
+    customerName,
+    moveType: request.moveType,
+    moveDate: request.moveDate.toISOString().slice(0, 10),
+    from: {
+      address: request.fromAddress,
+      zonecode: request.fromZonecode,
+      region: request.fromRegion,
+    },
+    to: {
+      address: request.toAddress,
+      zonecode: request.toZonecode,
+      region: request.toRegion,
+    },
+    status: request.status,
+    isDesignated,
+    createdAt: request.createdAt,
   }
 }
