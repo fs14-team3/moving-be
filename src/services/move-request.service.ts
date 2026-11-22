@@ -18,7 +18,7 @@ import {
 
 const MAX_DESIGNATED_MOVERS = 3
 
-const moveRequestDetailsSelect = {
+export const moveRequestDetailsSelect = {
   serviceLevel: true,
   fromBuildingType: true,
   fromFloor: true,
@@ -291,8 +291,11 @@ export function toMoveRequest(row: MoveRequestRow) {
   }
 }
 
+export type RequestForMoverRow = MoveRequest &
+  Pick<MoveRequestDetailsRow, 'items'>
+
 export function toRequestForMover(
-  request: MoveRequest,
+  request: RequestForMoverRow,
   customerName: string | null,
   isDesignated: boolean,
 ) {
@@ -311,6 +314,7 @@ export function toRequestForMover(
       zonecode: request.toZonecode,
       region: request.toRegion,
     },
+    details: toMoveRequestDetails(request),
     status: request.status,
     isDesignated,
     createdAt: request.createdAt,

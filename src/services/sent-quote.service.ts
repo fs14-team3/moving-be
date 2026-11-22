@@ -1,9 +1,13 @@
 import { AppError } from '../errors/app-error'
-import type { MoveRequest, Quote } from '../generated/prisma/client'
+import type { Quote } from '../generated/prisma/client'
 import { prisma } from '../lib/prisma'
 import { encodeCursor } from '../utils/cursor'
 import type { SentQuoteQuery } from '../validators/sent-quote.validator'
-import { toRequestForMover } from './move-request.service'
+import {
+  moveRequestDetailsSelect,
+  toRequestForMover,
+  type RequestForMoverRow,
+} from './move-request.service'
 
 function assertMover(viewer: Express.User | undefined): string {
   if (!viewer) {
@@ -18,7 +22,7 @@ function assertMover(viewer: Express.User | undefined): string {
 }
 
 export function toSentQuote(
-  quote: Quote & { moveRequest: MoveRequest },
+  quote: Quote & { moveRequest: RequestForMoverRow },
   customerName: string | null,
 ) {
   return {
@@ -59,7 +63,7 @@ export async function listMySentQuotes(
         : {}),
     },
     include: {
-      moveRequest: true,
+      moveRequest: { include: { items: moveRequestDetailsSelect.items } },
     },
     orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     take: limit + 1,
@@ -120,6 +124,7 @@ export async function getMySentQuote(
       moveRequest: {
         include: {
           customer: { select: { user: { select: { name: true } } } },
+          items: moveRequestDetailsSelect.items,
         },
       },
     },

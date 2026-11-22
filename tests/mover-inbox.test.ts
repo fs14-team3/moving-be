@@ -104,6 +104,64 @@ describe('GET /api/movers/me/received-requests', () => {
     })
   })
 
+  it('요청의 상세 정보를 함께 반환하고 상세 정보가 없는 요청은 null을 반환한다', async () => {
+    const withoutDetails = await createMoveRequest(otherCustomer.id)
+    const withDetails = await prisma.moveRequest.create({
+      data: {
+        customerId: customer.id,
+        moveType: 'HOME',
+        moveDate: new Date('2030-11-16T00:00:00.000Z'),
+        fromAddress: '서울특별시 강남구',
+        fromRegion: '서울',
+        toAddress: '경기도 성남시',
+        toRegion: '경기',
+        serviceLevel: 'FULL_PACKING',
+        fromBuildingType: 'APARTMENT',
+        fromFloor: 5,
+        fromHasElevator: true,
+        fromCanPark: true,
+        toBuildingType: 'HOUSE',
+        toFloor: -1,
+        toHasElevator: false,
+        toCanPark: false,
+        areaRange: 'THIRTIES',
+        residentCount: 4,
+        boxRange: 'OVER_50',
+        memo: '에어컨 철거가 필요해요',
+        items: { create: [{ item: 'AIRCON_STAND', quantity: 2 }] },
+      },
+    })
+
+    const res = await api(mover).get(`${endpoint}?sort=MOVE_DATE_ASC`)
+
+    expect(res.status).toBe(200)
+    expect(res.body.items.map((item: { id: string }) => item.id)).toEqual([
+      withoutDetails.id,
+      withDetails.id,
+    ])
+    expect(res.body.items[0].details).toBeNull()
+    expect(res.body.items[1].details).toEqual({
+      serviceLevel: 'FULL_PACKING',
+      from: {
+        buildingType: 'APARTMENT',
+        floor: 5,
+        hasElevator: true,
+        canPark: true,
+      },
+      to: {
+        buildingType: 'HOUSE',
+        floor: -1,
+        hasElevator: false,
+        canPark: false,
+      },
+      areaRange: 'THIRTIES',
+      residentCount: 4,
+      items: [{ item: 'AIRCON_STAND', quantity: 2 }],
+      boxRange: 'OVER_50',
+      memo: '에어컨 철거가 필요해요',
+    })
+  })
+
   it('기사님에게 지정된 요청은 isDesignated가 true이다', async () => {
     const moveRequest = await createMoveRequest(customer.id)
 

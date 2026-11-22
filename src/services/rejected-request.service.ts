@@ -1,7 +1,10 @@
 import { AppError } from '../errors/app-error'
 import { prisma } from '../lib/prisma'
 import { encodeCursor } from '../utils/cursor'
-import { toRequestForMover } from './move-request.service'
+import {
+  moveRequestDetailsSelect,
+  toRequestForMover,
+} from './move-request.service'
 import type { RejectedRequestQuery } from '../validators/rejected-request.validator'
 
 function assertMover(viewer: Express.User | undefined): string {
@@ -84,6 +87,7 @@ export async function listMyRejectedRequests(
             where: { moverId },
             select: { moverId: true },
           },
+          items: moveRequestDetailsSelect.items,
         },
       },
     },

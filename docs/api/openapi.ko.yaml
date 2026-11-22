@@ -635,7 +635,7 @@ paths:
         출발지와 도착지의 지역은 서버가 주소의 첫 단어(시/도)로 판별하며, 강원도, 전라북도, 제주도처럼 바뀌기 전 명칭과 줄임 명칭도 인식합니다.
         새 요청을 모든 서비스 지역의 기사님들에게 알립니다.
         입력 중 수정(§4.1.4)은 제출 전 프론트엔드 폼에서 처리합니다.
-        `details`로 이사 방식, 출발지·도착지 환경, 집 규모, 짐 목록, 잔짐 양, 요청사항을 함께 저장할 수 있습니다.
+        `details`로 이사 방식, 출발지·도착지 환경, 집 규모, 짐 목록, 잔짐 양, 요청사항을 함께 저장할 수 있으며, 기사님에게 보이는 요청에도 같은 정보가 포함됩니다.
       operationId: createMoveRequest
       security:
         - sessionCookie: []
@@ -2507,6 +2507,7 @@ components:
           moveDate,
           from,
           to,
+          details,
           status,
           isDesignated,
           createdAt,
@@ -2521,6 +2522,11 @@ components:
         moveDate: { type: string, format: date }
         from: { '$ref': '#/components/schemas/Address' }
         to: { '$ref': '#/components/schemas/Address' }
+        details:
+          description: 상세 정보 없이 만든 요청은 null
+          oneOf:
+            - { '$ref': '#/components/schemas/MoveRequestDetails' }
+            - { enum: [null] }
         status: { '$ref': '#/components/schemas/MoveRequestStatus' }
         isDesignated: { type: boolean }
         createdAt: { type: string, format: date-time }

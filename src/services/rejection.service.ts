@@ -1,6 +1,9 @@
 import { AppError } from '../errors/app-error'
 import { prisma } from '../lib/prisma'
-import { toRequestForMover } from './move-request.service'
+import {
+  moveRequestDetailsSelect,
+  toRequestForMover,
+} from './move-request.service'
 
 function assertMover(viewer: Express.User | undefined): string {
   if (!viewer) {
@@ -56,6 +59,7 @@ export async function rejectMoveRequest(
 
     const moveRequest = await tx.moveRequest.findUniqueOrThrow({
       where: { id: requestId },
+      include: { items: moveRequestDetailsSelect.items },
     })
 
     // 기존에 받은 요청 목록에 나타날 수 있는 요청만 반려

@@ -1,7 +1,10 @@
 import type { Prisma } from '../generated/prisma/client'
 import { AppError } from '../errors/app-error'
 import { prisma } from '../lib/prisma'
-import { toRequestForMover } from './move-request.service'
+import {
+  moveRequestDetailsSelect,
+  toRequestForMover,
+} from './move-request.service'
 import type { ReceivedRequestsQuery } from '../validators/mover-inbox.validator'
 
 type ReceivedRequestSort = 'MOVE_DATE_ASC' | 'CREATED_DESC'
@@ -177,6 +180,7 @@ export async function listReceivedRequests({
         where: { moverId },
         select: { moverId: true },
       },
+      items: moveRequestDetailsSelect.items,
     },
 
     orderBy:

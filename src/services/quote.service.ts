@@ -1,5 +1,6 @@
 import { AppError } from '../errors/app-error'
 import { prisma } from '../lib/prisma'
+import { moveRequestDetailsSelect } from './move-request.service'
 import { createNotification } from './notification-creation.service'
 import { toSentQuote } from './sent-quote.service'
 import type { SendQuoteBody } from '../validators/quote.validator'
@@ -71,6 +72,7 @@ export async function sendQuote(
             },
           },
         },
+        items: moveRequestDetailsSelect.items,
       },
     })
     if (request.status !== 'PENDING' || request.moveDate < getToday()) {
