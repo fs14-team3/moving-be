@@ -147,7 +147,7 @@ describe('알림 관리 API', () => {
     })
 
     it('목록을 넘기는 중 읽음 처리해도 같은 페이지를 다시 조회하고 다음 페이지를 누락 없이 조회한다', async () => {
-      for (let index = 0; index < 5; index++) {
+      for (let index = 0; index < 12; index++) {
         await createNotification({ seconds: index })
       }
 
@@ -172,7 +172,7 @@ describe('알림 관리 API', () => {
           ...firstIds,
           ...second.body.items.map((item: { id: string }) => item.id),
         ]).size,
-      ).toBe(5)
+      ).toBe(12)
     })
 
     it('최신 알림부터 정렬한다', async () => {
@@ -190,28 +190,28 @@ describe('알림 관리 API', () => {
       ])
     })
 
-    it('첫 페이지에서 최대 3개를 반환한다', async () => {
-      for (let index = 0; index < 5; index++) {
+    it('첫 페이지에서 최대 10개를 반환한다', async () => {
+      for (let index = 0; index < 12; index++) {
         await createNotification({ seconds: index })
       }
 
       const res = await notificationApi().get('/api/notifications')
 
       expect(res.status).toBe(200)
-      expect(res.body.items).toHaveLength(3)
+      expect(res.body.items).toHaveLength(10)
       expect(res.body.hasNext).toBe(true)
       expect(res.body.nextCursor).toEqual(expect.any(String))
     })
 
     it('커서로 다음 페이지를 중복 없이 조회한다', async () => {
-      for (let index = 0; index < 5; index++) {
+      for (let index = 0; index < 12; index++) {
         await createNotification({ seconds: index })
       }
 
       const first = await notificationApi().get('/api/notifications')
 
       expect(first.status).toBe(200)
-      expect(first.body.items).toHaveLength(3)
+      expect(first.body.items).toHaveLength(10)
 
       const second = await notificationApi()
         .get('/api/notifications')
@@ -226,11 +226,11 @@ describe('알림 관리 API', () => {
         (item: { id: string }) => item.id,
       )
 
-      expect(new Set(ids).size).toBe(5)
+      expect(new Set(ids).size).toBe(12)
     })
 
     it('생성 시각이 같아도 알림을 중복이나 누락 없이 조회한다', async () => {
-      for (let index = 0; index < 5; index++) {
+      for (let index = 0; index < 12; index++) {
         await createNotification({ seconds: 1 })
       }
 
@@ -247,8 +247,8 @@ describe('알림 관리 API', () => {
         (item: { id: string }) => item.id,
       )
 
-      expect(ids).toHaveLength(5)
-      expect(new Set(ids).size).toBe(5)
+      expect(ids).toHaveLength(12)
+      expect(new Set(ids).size).toBe(12)
     })
 
     it('알림이 없으면 빈 목록을 반환한다', async () => {
