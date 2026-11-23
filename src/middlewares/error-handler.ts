@@ -27,7 +27,7 @@ export const errorHandler: ErrorRequestHandler = (
     status = 500
   }
   if (status >= 500) {
-    console.error(error)
+    res.err = error instanceof Error ? error : new Error(String(error))
     Sentry.captureException(error)
   }
   res.status(status).json({

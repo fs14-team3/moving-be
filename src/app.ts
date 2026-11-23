@@ -5,6 +5,7 @@ import helmet from 'helmet'
 import session from 'express-session'
 import { env } from './config/env'
 import { errorHandler, notFoundHandler } from './middlewares/error-handler'
+import { httpLogger } from './middlewares/http-logger'
 import { apiRouter } from './routes'
 const PgStore = connectPgSimple(session)
 export function createApp() {
@@ -13,6 +14,7 @@ export function createApp() {
     throw new Error('DATABASE_URL 환경 변수가 설정되지 않았습니다.')
   }
   app.set('trust proxy', env.TRUST_PROXY)
+  app.use(httpLogger)
   app.use(helmet())
   app.use(
     cors({

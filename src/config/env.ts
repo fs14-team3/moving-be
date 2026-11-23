@@ -10,6 +10,7 @@ if (!sessionSecret || sessionSecret.length < 32) {
 
 export const env = {
   NODE_ENV: process.env.NODE_ENV ?? 'development',
+  LOG_LEVEL: process.env.LOG_LEVEL ?? 'info',
   PORT: Number(process.env.PORT ?? 4000),
   HOST: process.env.HOST,
   TRUST_PROXY: Number(process.env.TRUST_PROXY ?? 0),

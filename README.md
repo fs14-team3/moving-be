@@ -28,6 +28,7 @@ npm run dev              # http://localhost:4000/api/health
 | `DATABASE_URL`           | `postgresql://…@localhost:5432/moving`                  | PostgreSQL 연결 문자열                                                                                                                                                            |
 | `TEST_DATABASE_URL`      | `postgresql://…@localhost:5432/moving_test`             | `npm test` 전용 DB. 테스트가 모든 행을 지우므로 `DATABASE_URL`과 다른 DB를 사용합니다                                                                                             |
 | `NODE_ENV`               | `development`                                           | `development` / `production`                                                                                                                                                      |
+| `LOG_LEVEL`              | `info`                                                  | 로그 레벨 (`trace`, `debug`, `info`, `warn`, `error`, `fatal`, `silent`). 생략하면 `info`                                                                                         |
 | `SENTRY_DSN`             | `https://…@o0.ingest.sentry.io/0`                       | Sentry 에러 수집 DSN. 생략하면 Sentry를 사용하지 않습니다 (로컬은 생략)                                                                                                           |
 | `TRUST_PROXY`            | `0`                                                     | 신뢰할 프록시 홉 수. 로컬 `0`, Nginx 뒤 `1`, Cloudflare·로드밸런서 + Nginx는 `2`                                                                                                  |
 | `AWS_REGION`             | `ap-southeast-2`                                        | 이미지 업로드 S3 버킷의 리전. 아래 두 값과 함께 생략하면 업로드 API만 503을 반환합니다 (로컬은 생략 가능)                                                                         |
@@ -51,21 +52,21 @@ npm run dev              # http://localhost:4000/api/health
 
 ## 명령어
 
-| 명령어                   | 설명                                  |
-| ------------------------ | ------------------------------------- |
-| `npm run dev`            | 개발 서버 (tsx watch)                 |
-| `npm run build`          | Prisma Client 생성 + `dist/`로 컴파일 |
-| `npm start`              | 빌드 결과 실행                        |
-| `npm run lint`           | ESLint 검사 (`lint:fix`로 자동 수정)  |
-| `npm run lint:api`       | `docs/api/openapi.ko.yaml` 명세 검사  |
-| `npm run typecheck`      | 타입 검사                             |
-| `npm run knip`           | 사용하지 않는 파일·export·의존성 검사 |
-| `npm run format:check`   | Prettier 검사 (`format`으로 수정)     |
-| `npm test`               | 테스트 실행 (Vitest)                  |
-| `npm run prisma:migrate` | 마이그레이션 생성 및 로컬 DB 적용     |
-| `npm run prisma:deploy`  | 기존 마이그레이션을 DB에 적용         |
-| `npm run prisma:seed`    | 빈 개발 DB에 시드 데이터 추가         |
-| `npm run prisma:studio`  | Prisma Studio                         |
+| 명령어                   | 설명                                             |
+| ------------------------ | ------------------------------------------------ |
+| `npm run dev`            | 개발 서버 (tsx watch, 로그는 pino-pretty로 출력) |
+| `npm run build`          | Prisma Client 생성 + `dist/`로 컴파일            |
+| `npm start`              | 빌드 결과 실행                                   |
+| `npm run lint`           | ESLint 검사 (`lint:fix`로 자동 수정)             |
+| `npm run lint:api`       | `docs/api/openapi.ko.yaml` 명세 검사             |
+| `npm run typecheck`      | 타입 검사                                        |
+| `npm run knip`           | 사용하지 않는 파일·export·의존성 검사            |
+| `npm run format:check`   | Prettier 검사 (`format`으로 수정)                |
+| `npm test`               | 테스트 실행 (Vitest)                             |
+| `npm run prisma:migrate` | 마이그레이션 생성 및 로컬 DB 적용                |
+| `npm run prisma:deploy`  | 기존 마이그레이션을 DB에 적용                    |
+| `npm run prisma:seed`    | 빈 개발 DB에 시드 데이터 추가                    |
+| `npm run prisma:studio`  | Prisma Studio                                    |
 
 `npm test`는 `TEST_DATABASE_URL`의 DB에 마이그레이션을 적용한 뒤 실행하고, 테스트마다 모든 행을 지웁니다.
 개발 DB와 다른 DB를 미리 만들어 둡니다 (예: `createdb moving_test`).
@@ -101,6 +102,7 @@ tests/              Vitest + supertest 테스트
 - `GET /api/health`: 프로세스 생존 확인. DB 연결 없이 200을 반환합니다.
 - `GET /api/ready`: DB에 `SELECT 1`을 실행합니다. DB 오류 시 503을 반환합니다. 배포 직후 확인용입니다.
 - `GET /api/docs/`: Swagger UI에서 OpenAPI 초안을 보여줍니다.
+- 로그는 stdout에 JSON으로 한 줄씩 남깁니다. 요청마다 `Request-ID` 응답 헤더를 발급하고, 요청 로그의 `req.id`에 같은 값을 남깁니다. 요청 로그에는 메서드, 쿼리를 뺀 경로, 상태 코드, 응답 시간, 로그인한 사용자 ID만 남기고 5xx는 원인 오류를 함께 남깁니다. 성공한 `/api/ready` 요청은 남기지 않습니다.
 - `GET /api/openapi.yaml`: OpenAPI 초안 파일을 제공합니다. 실행 시 프로젝트 루트의 `docs/api/openapi.ko.yaml` 파일이 필요합니다.
 - DB 연결은 드라이버 기본 설정을 사용합니다. 연결 및 쿼리 대기 시간에 별도 제한을 설정하지 않습니다 (`src/lib/prisma.ts`).
 - `SIGINT` / `SIGTERM`: 새 연결 수락 중단 → 진행 중인 HTTP 요청 완료 → Prisma 연결 해제 순으로 종료합니다. 10초를 넘기면 실패 상태로 종료합니다. PM2/Nginx의 종료 유예 시간도 이에 맞춰 설정합니다.

@@ -12,6 +12,7 @@ export default defineConfig({
   test: {
     env: {
       DATABASE_URL: process.env.TEST_DATABASE_URL ?? '',
+      LOG_LEVEL: 'silent',
       AWS_REGION: 'ap-southeast-2',
       AWS_ACCESS_KEY_ID: 'test-access-key',
       AWS_SECRET_ACCESS_KEY: 'test-secret-key',
