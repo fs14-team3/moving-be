@@ -5,6 +5,7 @@ import { env } from './config/env'
 import { corsMiddleware } from './middlewares/cors'
 import { errorHandler, notFoundHandler } from './middlewares/error-handler'
 import { httpLogger } from './middlewares/http-logger'
+import { noStore } from './middlewares/no-store'
 import { createSessionMiddleware } from './middlewares/session'
 import { apiRouter } from './routes'
 
@@ -24,7 +25,7 @@ export function createApp(sessionMiddleware = createSessionMiddleware()) {
   app.use(express.json())
   app.use(sessionMiddleware)
 
-  app.use('/api', apiRouter)
+  app.use('/api', noStore, apiRouter)
 
   app.use(notFoundHandler)
   app.use(errorHandler)

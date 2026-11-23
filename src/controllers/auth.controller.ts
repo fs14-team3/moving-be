@@ -83,7 +83,7 @@ export async function signup(req: Request, res: Response) {
 
   await establishSession(req, user)
 
-  return res.set('Cache-Control', 'no-store').status(201).json(user)
+  return res.status(201).json(user)
 }
 
 // 이메일 로그인
@@ -93,7 +93,7 @@ export async function login(req: Request, res: Response) {
 
   await establishSession(req, user)
 
-  return res.set('Cache-Control', 'no-store').status(200).json({ user })
+  return res.status(200).json({ user })
 }
 
 // 로그아웃
@@ -121,7 +121,7 @@ export async function logout(req: Request, res: Response) {
 
   res.clearCookie(SESSION_COOKIE, sessionCookieOptions)
 
-  return res.set('Cache-Control', 'no-store').status(200).json({
+  return res.status(200).json({
     message: '로그아웃되었습니다.',
   })
 }
@@ -140,7 +140,6 @@ export function socialLogin(req: Request, res: Response) {
   const cookieOptions = stateCookieOptions()
 
   res.cookie(cookieName, nonce, cookieOptions)
-  res.set('Cache-Control', 'no-store')
 
   return res.redirect(302, authorizationUrl)
 }

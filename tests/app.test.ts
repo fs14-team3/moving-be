@@ -103,6 +103,18 @@ describe('보안 헤더', () => {
     expect(res.headers['strict-transport-security']).toBeDefined()
     expect(res.headers['x-powered-by']).toBeUndefined()
   })
+
+  it('API 응답을 브라우저와 프록시가 캐시하지 않도록 한다', async () => {
+    const res = await api().get('/api/health')
+
+    expect(res.headers['cache-control']).toBe('no-store')
+  })
+
+  it('오류 응답도 캐시하지 않도록 한다', async () => {
+    const res = await api().get('/api/unknown')
+
+    expect(res.headers['cache-control']).toBe('no-store')
+  })
 })
 
 describe('CORS', () => {
