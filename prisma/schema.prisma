@@ -278,6 +278,7 @@ model Quote {
   chatRoom      ChatRoom?
 
   // Partial unique index on confirmed quotes is defined in the migration SQL.
+  @@index([moveRequestId, moverId])
   @@map("quotes")
 }
 
