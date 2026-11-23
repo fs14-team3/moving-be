@@ -5,6 +5,12 @@ import { requireRole } from '../middlewares/require-role'
 
 export const moveProgressRouter = Router()
 
+moveProgressRouter.get(
+  '/:quoteId/progress',
+  requireAuth,
+  moveProgressController.getMoveProgress,
+)
+
 moveProgressRouter.post(
   '/:quoteId/progress',
   requireAuth,

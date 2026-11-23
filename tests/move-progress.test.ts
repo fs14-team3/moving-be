@@ -18,6 +18,7 @@ import {
 const mover: Express.User = { id: randomUUID(), role: 'MOVER' }
 const otherMover: Express.User = { id: randomUUID(), role: 'MOVER' }
 const customer: Express.User = { id: randomUUID(), role: 'CUSTOMER' }
+const otherCustomer: Express.User = { id: randomUUID(), role: 'CUSTOMER' }
 
 const pastDate = '2025-01-10'
 const futureDate = '2099-01-10'
@@ -43,6 +44,10 @@ function record(quoteId: string, viewer?: Express.User, step: unknown = '') {
   return api(viewer).post(`/api/quotes/${quoteId}/progress`).send({ step })
 }
 
+function getProgress(quoteId: string, viewer?: Express.User) {
+  return api(viewer).get(`/api/quotes/${quoteId}/progress`)
+}
+
 function recordedSteps(quoteId: string) {
   return prisma.moveProgress.findMany({
     where: { quoteId },
@@ -62,6 +67,7 @@ beforeEach(async () => {
   await createMover(mover.id, {})
   await createMover(otherMover.id, {})
   await createCustomer(customer.id)
+  await createCustomer(otherCustomer.id)
 })
 
 afterAll(async () => {
@@ -240,5 +246,113 @@ describe('POST /api/quotes/:quoteId/progress', () => {
     expect(upload.body.error.code).toBe('PROOF_PHOTO_NOT_ALLOWED')
     expect(review.status).toBe(403)
     expect(review.body.error.code).toBe('REVIEW_NOT_ALLOWED')
+  })
+})
+
+describe('GET /api/quotes/:quoteId/progress', () => {
+  it('견적의 기사님과 일반 유저가 조회하면 기록한 단계와 기록 시각을 단계 순서대로 반환한다', async () => {
+    const quoteId = await createQuote()
+    await prisma.moveProgress.createMany({
+      data: [
+        {
+          quoteId,
+          step: 'LOADING',
+          recordedAt: new Date('2026-11-23T01:30:00.000Z'),
+        },
+        {
+          quoteId,
+          step: 'DEPARTED',
+          recordedAt: new Date('2026-11-23T00:10:00.000Z'),
+        },
+      ],
+    })
+    const steps = [
+      { step: 'DEPARTED', recordedAt: '2026-11-23T00:10:00.000Z' },
+      { step: 'LOADING', recordedAt: '2026-11-23T01:30:00.000Z' },
+    ]
+
+    const moverResponse = await getProgress(quoteId, mover)
+    const customerResponse = await getProgress(quoteId, customer)
+
+    expect(moverResponse.status).toBe(200)
+    expect(moverResponse.body).toEqual({
+      steps,
+      nextStep: 'IN_TRANSIT',
+      canRecord: true,
+    })
+    expect(customerResponse.status).toBe(200)
+    expect(customerResponse.body).toEqual({
+      steps,
+      nextStep: 'IN_TRANSIT',
+      canRecord: false,
+    })
+  })
+
+  it('기록한 단계가 없으면 빈 목록과 첫 단계를 반환한다', async () => {
+    const quoteId = await createQuote()
+
+    const response = await getProgress(quoteId, customer)
+
+    expect(response.status).toBe(200)
+    expect(response.body).toEqual({
+      steps: [],
+      nextStep: 'DEPARTED',
+      canRecord: false,
+    })
+  })
+
+  it.each([
+    { label: '이사일 전', status: 'CONFIRMED', moveDate: futureDate },
+    { label: '이사일 다음 날부터', status: 'CONFIRMED', moveDate: pastDate },
+    { label: '확정되지 않은 견적', status: 'SUBMITTED', moveDate: undefined },
+  ] satisfies {
+    label: string
+    status: QuoteStatus
+    moveDate: string | undefined
+  }[])(
+    '$label이면 기사님에게도 canRecord를 false로 반환한다',
+    async ({ status, moveDate }) => {
+      const quoteId = await createQuote(status, moveDate)
+
+      const response = await getProgress(quoteId, mover)
+
+      expect(response.status).toBe(200)
+      expect(response.body.canRecord).toBe(false)
+    },
+  )
+
+  it('완료까지 기록하면 다음 단계 없이 canRecord를 false로 반환한다', async () => {
+    const quoteId = await createQuote()
+    await saveSteps(quoteId, [
+      'DEPARTED',
+      'LOADING',
+      'IN_TRANSIT',
+      'UNLOADING',
+      'COMPLETED',
+    ])
+
+    const response = await getProgress(quoteId, mover)
+
+    expect(response.body.steps).toHaveLength(5)
+    expect(response.body.nextStep).toBeNull()
+    expect(response.body.canRecord).toBe(false)
+  })
+
+  it('견적 당사자가 아니거나 없는 견적이면 404를 반환한다', async () => {
+    const quoteId = await createQuote()
+
+    await getProgress(quoteId, otherMover).expect(404)
+    await getProgress(quoteId, otherCustomer).expect(404)
+    await getProgress(randomUUID(), mover).expect(404)
+  })
+
+  it('로그인하지 않으면 401을 반환한다', async () => {
+    const quoteId = await createQuote()
+
+    await getProgress(quoteId).expect(401)
+  })
+
+  it('견적 id가 올바르지 않으면 400을 반환한다', async () => {
+    await getProgress('not-a-uuid', mover).expect(400)
   })
 })

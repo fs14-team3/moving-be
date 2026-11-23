@@ -35,6 +35,27 @@ function toMoveProgress(steps: ProgressRow[], recordable: boolean) {
   return { steps, nextStep, canRecord: recordable && nextStep !== null }
 }
 
+export async function getMoveProgress(
+  viewer: Express.User | undefined,
+  quoteId: string,
+) {
+  if (!viewer) throw new AppError('UNAUTHORIZED')
+
+  const quote = await prisma.quote.findFirst({
+    where: {
+      id: quoteId,
+      OR: [{ moverId: viewer.id }, { moveRequest: { customerId: viewer.id } }],
+    },
+    select: progressQuoteSelect,
+  })
+  if (!quote) throw new AppError('NOT_FOUND')
+
+  return toMoveProgress(
+    quote.progress,
+    quote.moverId === viewer.id && isRecordable(quote),
+  )
+}
+
 export async function recordMoveProgress(
   viewer: Express.User | undefined,
   quoteId: string,

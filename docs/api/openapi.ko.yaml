@@ -1278,6 +1278,31 @@ paths:
             application/json:
               schema: { '$ref': '#/components/schemas/ErrorResponse' }
   '/quotes/{quoteId}/progress':
+    get:
+      tags: [Quotes]
+      summary: 이사 진행 단계 조회
+      description: >-
+        견적을 보낸 기사님과 해당 견적 요청의 일반 유저만 조회할 수 있습니다. 기록한 단계와 기록 시각을 단계 순서대로 반환합니다.
+        확정되지 않은 견적이거나 아직 기록한 단계가 없으면 `steps`가 빈 배열입니다.
+        `canRecord`가 `true`일 때만 `nextStep` 기록 버튼을 보여 줍니다.
+      operationId: getMoveProgress
+      security:
+        - sessionCookie: []
+      parameters:
+        - { '$ref': '#/components/parameters/QuoteIdPath' }
+      responses:
+        '200':
+          description: 진행 상황
+          content:
+            application/json:
+              schema: { '$ref': '#/components/schemas/MoveProgress' }
+        '400': { '$ref': '#/components/responses/ValidationError' }
+        '401': { '$ref': '#/components/responses/Unauthorized' }
+        '404':
+          description: '`NOT_FOUND`. 견적을 보낸 기사님이나 견적을 요청한 일반 유저가 아님'
+          content:
+            application/json:
+              schema: { '$ref': '#/components/schemas/ErrorResponse' }
     post:
       tags: [Quotes]
       summary: 이사 진행 단계 기록
