@@ -28,7 +28,6 @@ describe('fetchHolidays', () => {
 
   beforeEach(() => {
     vi.stubEnv('HOLIDAY_API_KEY', 'test-service-key')
-    vi.spyOn(console, 'error').mockImplementation(() => {})
     fetchMock = vi.spyOn(globalThis, 'fetch')
   })
 
@@ -105,7 +104,6 @@ describe('isHoliday', () => {
 
   beforeEach(() => {
     vi.stubEnv('HOLIDAY_API_KEY', 'test-service-key')
-    vi.spyOn(console, 'error').mockImplementation(() => {})
     fetchMock = vi.spyOn(globalThis, 'fetch')
   })
 

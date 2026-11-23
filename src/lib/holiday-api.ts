@@ -1,3 +1,5 @@
+import { logger } from './logger'
+
 // 공공데이터포털 한국천문연구원 특일 정보 API의 공휴일 정보 조회
 const REST_DAY_URL =
   'https://apis.data.go.kr/B090041/openapi/service/SpcdeInfoService/getRestDeInfo'
@@ -51,7 +53,10 @@ export async function fetchHolidays(yearMonth: string) {
       .map(({ locdate }) => toDate(locdate))
   } catch (error) {
     // URL에 키가 들어 있어서 오류만 남긴다.
-    console.error('[Holiday API Error]', yearMonth, String(error))
+    logger.error(
+      { yearMonth, error: String(error) },
+      'Holiday API request failed',
+    )
     return null
   }
 }

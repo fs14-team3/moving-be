@@ -898,7 +898,6 @@ describe('DELETE /api/quotes/:quoteId/proof-photos/:photoId', () => {
   })
 
   it('S3 파일을 일부만 지우면 사진은 목록에서 빼고 500을 반환해 파일 삭제를 다시 시도할 수 있다', async () => {
-    vi.spyOn(console, 'error').mockImplementation(() => {})
     send.mockImplementation((command: unknown) =>
       command instanceof DeleteObjectCommand &&
       command.input.Key?.startsWith('pending/')
