@@ -24,6 +24,7 @@ import {
   createMoveRequest,
   createMover,
   resetDatabase,
+  whileWriting,
 } from './helpers'
 
 const mover: Express.User = { id: randomUUID(), role: 'MOVER' }
@@ -100,31 +101,6 @@ const REVIEW = { rating: 5, content: '꼼꼼하게 옮겨 주셨어요.' }
 
 function createReview(quoteId: string, db: Prisma.TransactionClient = prisma) {
   return db.review.create({ data: { quoteId, ...REVIEW } })
-}
-
-async function untilWaitingForLock() {
-  for (;;) {
-    const [{ waiting }] = await prisma.$queryRaw<{ waiting: number }[]>`
-      SELECT count(*)::int AS waiting
-      FROM pg_stat_activity
-      WHERE datname = current_database() AND wait_event_type = 'Lock'
-    `
-    if (waiting > 0) return
-    await new Promise((resolve) => setTimeout(resolve, 10))
-  }
-}
-
-async function whileWriting<T>(
-  write: (tx: Prisma.TransactionClient) => Promise<unknown>,
-  request: () => PromiseLike<T>,
-) {
-  let response!: Promise<T>
-  await prisma.$transaction(async (tx) => {
-    await write(tx)
-    response = Promise.resolve(request())
-    await untilWaitingForLock()
-  })
-  return response
 }
 
 function activePhotoCount() {
