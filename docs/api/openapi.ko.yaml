@@ -1277,6 +1277,50 @@ paths:
           content:
             application/json:
               schema: { '$ref': '#/components/schemas/ErrorResponse' }
+  '/quotes/{quoteId}/progress':
+    post:
+      tags: [Quotes]
+      summary: 이사 진행 단계 기록
+      description: >-
+        견적을 보낸 기사님이 확정된 견적의 이사 당일(한국 시간 Asia/Seoul 기준)에 다음 진행 단계를 기록합니다.
+        단계는 출발(`DEPARTED`) → 상차(`LOADING`) → 운행(`IN_TRANSIT`) → 하차(`UNLOADING`) → 완료(`COMPLETED`) 순서로 하나씩만 기록할 수 있으며,
+        응답의 `nextStep`을 `step`에 담아 보냅니다.
+        이미 기록한 단계를 다시 보내면 새로 저장하지 않고 현재 진행 상황을 그대로 반환하므로, 응답을 받지 못했을 때 안전하게 재시도할 수 있습니다.
+        이사일이 지난 뒤에도 이미 기록한 단계는 같은 방식으로 반환합니다.
+        완료를 기록해도 리뷰 작성과 작업 사진 업로드는 기존과 같이 이사일 다음 날부터 가능합니다.
+      operationId: recordMoveProgress
+      security:
+        - sessionCookie: []
+      x-roles: [MOVER]
+      parameters:
+        - { '$ref': '#/components/parameters/QuoteIdPath' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { '$ref': '#/components/schemas/MoveProgressRecord' }
+      responses:
+        '200':
+          description: 기록 후 진행 상황
+          content:
+            application/json:
+              schema: { '$ref': '#/components/schemas/MoveProgress' }
+        '400': { '$ref': '#/components/responses/ValidationError' }
+        '401': { '$ref': '#/components/responses/Unauthorized' }
+        '403': { '$ref': '#/components/responses/Forbidden' }
+        '404':
+          description: '`NOT_FOUND`. 본인이 보낸 견적이 아님'
+          content:
+            application/json:
+              schema: { '$ref': '#/components/schemas/ErrorResponse' }
+        '409':
+          description: >-
+            `MOVE_PROGRESS_NOT_ALLOWED` (확정되지 않은 견적이거나 이사 당일이 아님) 또는
+            `MOVE_PROGRESS_OUT_OF_ORDER` (`step`이 현재 단계의 바로 다음 단계가 아님).
+            진행 상황을 다시 조회해 화면을 갱신합니다.
+          content:
+            application/json:
+              schema: { '$ref': '#/components/schemas/ErrorResponse' }
   '/reviews':
     post:
       tags: [Reviews]
@@ -1830,6 +1874,8 @@ components:
         - QUOTE_LIMIT_REACHED
         - PROOF_PHOTO_LIMIT_REACHED
         - PROOF_PHOTO_NOT_UPLOADED
+        - MOVE_PROGRESS_NOT_ALLOWED
+        - MOVE_PROGRESS_OUT_OF_ORDER
         - RATE_LIMITED
         - INTERNAL_ERROR
         - SERVICE_UNAVAILABLE
@@ -1940,6 +1986,37 @@ components:
         canEdit:
           type: boolean
           description: 호출자가 지금 사진을 올리거나 삭제할 수 있으면 `true` (견적을 보낸 기사님, 이사일 다음 날부터 리뷰 작성 전까지)
+    MoveProgressStep:
+      type: string
+      description: DEPARTED 출발, LOADING 상차, IN_TRANSIT 운행, UNLOADING 하차, COMPLETED 완료. 이 순서대로 기록합니다.
+      enum: [DEPARTED, LOADING, IN_TRANSIT, UNLOADING, COMPLETED]
+    MoveProgressRecord:
+      type: object
+      required: [step]
+      properties:
+        step: { '$ref': '#/components/schemas/MoveProgressStep' }
+    MoveProgressEntry:
+      type: object
+      required: [step, recordedAt]
+      properties:
+        step: { '$ref': '#/components/schemas/MoveProgressStep' }
+        recordedAt: { type: string, format: date-time }
+    MoveProgress:
+      type: object
+      required: [steps, nextStep, canRecord]
+      properties:
+        steps:
+          type: array
+          description: 기록한 단계. 출발부터 단계 순서대로 정렬합니다.
+          items: { '$ref': '#/components/schemas/MoveProgressEntry' }
+        nextStep:
+          type: string
+          enum: [DEPARTED, LOADING, IN_TRANSIT, UNLOADING, COMPLETED, null]
+          nullable: true
+          description: 다음에 기록할 단계. 완료까지 기록했으면 `null`
+        canRecord:
+          type: boolean
+          description: 호출자가 지금 `nextStep`을 기록할 수 있으면 `true` (견적을 보낸 기사님, 확정된 견적의 이사 당일, 완료 기록 전)
           example: true
     SignupRequest:
       type: object
