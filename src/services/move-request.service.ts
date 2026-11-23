@@ -1,8 +1,15 @@
 import { AppError } from '../errors/app-error'
-import { Prisma } from '../generated/prisma/client'
+import {
+  type BuildingType,
+  type MoveRequest,
+  Prisma,
+} from '../generated/prisma/client'
 import { prisma } from '../lib/prisma'
 import { todayInSeoul } from '../utils/date'
-import type { CreateMoveRequestBody } from '../validators/move-request.validator'
+import type {
+  CreateMoveRequestBody,
+  MoveRequestDetailsInput,
+} from '../validators/move-request.validator'
 import { assertCustomer, assertCustomerProfile } from './customer-access'
 import {
   createNewRequestNotifications,
@@ -11,7 +18,29 @@ import {
 
 const MAX_DESIGNATED_MOVERS = 3
 
+export const moveRequestDetailsSelect = {
+  serviceLevel: true,
+  fromBuildingType: true,
+  fromFloor: true,
+  fromHasElevator: true,
+  fromCanPark: true,
+  toBuildingType: true,
+  toFloor: true,
+  toHasElevator: true,
+  toCanPark: true,
+  areaRange: true,
+  residentCount: true,
+  boxRange: true,
+  memo: true,
+  items: { select: { item: true, quantity: true }, orderBy: { item: 'asc' } },
+} satisfies Prisma.MoveRequestSelect
+
+type MoveRequestDetailsRow = Prisma.MoveRequestGetPayload<{
+  select: typeof moveRequestDetailsSelect
+}>
+
 export const moveRequestSelect = {
+  ...moveRequestDetailsSelect,
   id: true,
   moveType: true,
   moveDate: true,
@@ -68,6 +97,7 @@ export async function createMoveRequest(
           toAddress: body.to.address,
           toZonecode: body.to.zonecode,
           toRegion: body.to.region,
+          ...(body.details && toDetailsData(body.details)),
         },
         select: moveRequestSelect,
       })
@@ -252,10 +282,106 @@ export function toMoveRequest(row: MoveRequestRow) {
       zonecode: row.toZonecode,
       region: row.toRegion,
     },
+    details: toMoveRequestDetails(row),
     status: row.status,
     quoteCount: row._count.quotes,
     designatedMoverIds: row.designatedRequests.map(({ moverId }) => moverId),
     createdAt: row.createdAt,
     confirmedAt: row.confirmedAt,
+  }
+}
+
+export type RequestForMoverRow = MoveRequest &
+  Pick<MoveRequestDetailsRow, 'items'>
+
+export function toRequestForMover(
+  request: RequestForMoverRow,
+  customerName: string | null,
+  isDesignated: boolean,
+) {
+  return {
+    id: request.id,
+    customerName,
+    moveType: request.moveType,
+    moveDate: request.moveDate.toISOString().slice(0, 10),
+    from: {
+      address: request.fromAddress,
+      zonecode: request.fromZonecode,
+      region: request.fromRegion,
+    },
+    to: {
+      address: request.toAddress,
+      zonecode: request.toZonecode,
+      region: request.toRegion,
+    },
+    details: toMoveRequestDetails(request),
+    status: request.status,
+    isDesignated,
+    createdAt: request.createdAt,
+  }
+}
+
+function toDetailsData({
+  from,
+  to,
+  items,
+  ...details
+}: MoveRequestDetailsInput) {
+  return {
+    ...details,
+    fromBuildingType: from.buildingType,
+    fromFloor: from.floor,
+    fromHasElevator: from.hasElevator,
+    fromCanPark: from.canPark,
+    toBuildingType: to.buildingType,
+    toFloor: to.floor,
+    toHasElevator: to.hasElevator,
+    toCanPark: to.canPark,
+    items: { create: items },
+  }
+}
+
+function toBuilding(
+  buildingType: BuildingType | null,
+  floor: number | null,
+  hasElevator: boolean | null,
+  canPark: boolean | null,
+) {
+  if (
+    buildingType === null ||
+    floor === null ||
+    hasElevator === null ||
+    canPark === null
+  ) {
+    return null
+  }
+  return { buildingType, floor, hasElevator, canPark }
+}
+
+function toMoveRequestDetails(row: MoveRequestDetailsRow) {
+  const from = toBuilding(
+    row.fromBuildingType,
+    row.fromFloor,
+    row.fromHasElevator,
+    row.fromCanPark,
+  )
+  const to = toBuilding(
+    row.toBuildingType,
+    row.toFloor,
+    row.toHasElevator,
+    row.toCanPark,
+  )
+  const { serviceLevel, areaRange, boxRange } = row
+  if (!serviceLevel || !areaRange || !boxRange || !from || !to) return null
+
+  return {
+    serviceLevel,
+    from,
+    to,
+    areaRange,
+    residentCount: row.residentCount,
+    items: row.items,
+    boxRange,
+    memo: row.memo,
   }
 }
