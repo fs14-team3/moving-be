@@ -71,7 +71,9 @@ function getToday(): Date {
   return new Date(`${today}T00:00:00.000Z`)
 }
 
-function receivedRequestWhere(moverId: string): Prisma.MoveRequestWhereInput {
+export function receivedRequestWhere(
+  moverId: string,
+): Prisma.MoveRequestWhereInput {
   return {
     status: 'PENDING',
     moveDate: { gte: getToday() },

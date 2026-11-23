@@ -11,10 +11,7 @@ import type {
   MoveRequestDetailsInput,
 } from '../validators/move-request.validator'
 import { assertCustomer, assertCustomerProfile } from './customer-access'
-import {
-  createNewRequestNotifications,
-  createNotification,
-} from './notification-creation.service'
+import { createNotification } from './notification-creation.service'
 
 const MAX_DESIGNATED_MOVERS = 3
 
@@ -86,7 +83,7 @@ export async function createMoveRequest(
         data: { status: 'COMPLETED' },
       })
 
-      const created = await tx.moveRequest.create({
+      return tx.moveRequest.create({
         data: {
           customerId,
           moveType: body.moveType,
@@ -101,18 +98,6 @@ export async function createMoveRequest(
         },
         select: moveRequestSelect,
       })
-      await createNewRequestNotifications(
-        {
-          moveRequestId: created.id,
-          regions: [created.fromRegion, created.toRegion],
-          payload: {
-            customerName: await customerNameOf(tx, customerId),
-            moveType: created.moveType,
-          },
-        },
-        tx,
-      )
-      return created
     })
     return toMoveRequest(request)
   } catch (error) {
@@ -211,13 +196,6 @@ export async function designateMover(
     const designation = await tx.designatedRequest.create({
       data: { moveRequestId: requestId, moverId: mover.userId },
       select: { moveRequestId: true, moverId: true, createdAt: true },
-    })
-    await tx.notification.deleteMany({
-      where: {
-        userId: mover.userId,
-        moveRequestId: requestId,
-        type: 'NEW_REQUEST',
-      },
     })
     await createNotification(
       {

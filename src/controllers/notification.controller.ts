@@ -5,15 +5,30 @@ import * as notificationService from '../services/notification.service'
 import {
   listNotificationsQuery,
   notificationIdParamsSchema,
+  readNewRequestsBodySchema,
 } from '../validators/notification.validator'
 import { validate } from '../validators/validate'
 
-// 로그인한 사용자 ID 조회
-function getCurrentUserId(req: Request): string {
+function getCurrentUser(req: Request): Express.User {
   const user = req.user
 
   if (!user) {
     throw new AppError('UNAUTHORIZED')
+  }
+
+  return user
+}
+
+// 로그인한 사용자 ID 조회
+function getCurrentUserId(req: Request): string {
+  return getCurrentUser(req).id
+}
+
+function getCurrentMoverId(req: Request): string {
+  const user = getCurrentUser(req)
+
+  if (user.role !== 'MOVER') {
+    throw new AppError('FORBIDDEN')
   }
 
   return user.id
@@ -34,10 +49,9 @@ export async function listNotifications(req: Request, res: Response) {
 
 // 안 읽은 알림 총개수 조회
 export async function getUnreadCount(req: Request, res: Response) {
-  const userId = getCurrentUserId(req)
+  const user = getCurrentUser(req)
 
-  const unreadCount =
-    await notificationService.getUnreadNotificationCount(userId)
+  const unreadCount = await notificationService.getUnreadNotificationCount(user)
 
   res.status(200).json({ unreadCount })
 }
@@ -57,9 +71,29 @@ export async function readNotification(req: Request, res: Response) {
 
 // 모든 미읽음 알림 읽음 처리
 export async function readAllNotifications(req: Request, res: Response) {
-  const userId = getCurrentUserId(req)
+  const user = getCurrentUser(req)
 
-  const result = await notificationService.markAllNotificationsAsRead(userId)
+  const result = await notificationService.markAllNotificationsAsRead(user)
+
+  res.status(200).json(result)
+}
+
+export async function getNewRequestSummary(req: Request, res: Response) {
+  const moverId = getCurrentMoverId(req)
+
+  const result = await notificationService.getNewRequestSummary(moverId)
+
+  res.status(200).json(result)
+}
+
+export async function readNewRequests(req: Request, res: Response) {
+  const moverId = getCurrentMoverId(req)
+  const { latestAt } = validate(readNewRequestsBodySchema, req.body)
+
+  const result = await notificationService.markNewRequestsSeen(
+    moverId,
+    latestAt,
+  )
 
   res.status(200).json(result)
 }

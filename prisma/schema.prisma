@@ -97,7 +97,6 @@ enum MoveProgressStep {
 }
 
 enum NotificationType {
-  NEW_REQUEST
   NEW_DESIGNATED_REQUEST
   NEW_QUOTE
   QUOTE_CONFIRMED
@@ -185,6 +184,7 @@ model MoverProfile {
   averageRating      Decimal             @default(0) @map("average_rating") @db.Decimal(3, 2)
   confirmedCount     Int                 @default(0) @map("confirmed_count")
   favoriteCount      Int                 @default(0) @map("favorite_count")
+  newRequestsSeenAt  DateTime            @default(now()) @map("new_requests_seen_at") @db.Timestamptz
   createdAt          DateTime            @default(now()) @map("created_at") @db.Timestamptz
   updatedAt          DateTime            @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
   user               User                @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -234,6 +234,8 @@ model MoveRequest {
 
   // Partial unique index on active requests is defined in the migration SQL.
   @@index([customerId])
+  @@index([fromRegion, createdAt])
+  @@index([toRegion, createdAt])
   @@map("move_requests")
 }
 
