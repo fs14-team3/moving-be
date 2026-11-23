@@ -7,6 +7,7 @@ import {
   it,
   vi,
 } from 'vitest'
+import { boss } from '../src/lib/boss'
 import { prisma } from '../src/lib/prisma'
 import { api, userId } from './helpers'
 
@@ -122,5 +123,19 @@ describe('요청 로그', () => {
       err: { message: 'OAuth 제공자 요청 실패 (400 invalid_grant KOE320)' },
     })
     expect(JSON.stringify(lines)).not.toContain('secret')
+  })
+})
+
+describe('큐 로그', () => {
+  it('pg-boss 오류는 프로세스를 종료하지 않고 로그로 남긴다', () => {
+    boss.emit('error', new Error('Connection terminated'))
+
+    expect(lines).toMatchObject([
+      {
+        level: 50,
+        msg: 'pg-boss error',
+        err: { message: 'Connection terminated' },
+      },
+    ])
   })
 })
