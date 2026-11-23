@@ -6,7 +6,7 @@ info:
   description: |
     이사 소비자(CUSTOMER)와 이사 전문가(MOVER, 기사님) 매칭 서비스의 초기 API 초안.
 
-    모든 응답은 요청마다 새로 발급한 `Request-ID` 헤더를 포함합니다. 서버 로그의 `req.id`와 같은 값입니다.
+    모든 응답은 요청마다 새로 발급한 `Request-ID` 헤더를 포함합니다. 서버 로그의 `req.id`와 같은 값이며, 허용된 프론트 주소에서는 CORS로 노출되어 JS에서 읽을 수 있습니다.
 
 servers:
   - { url: '/api' }

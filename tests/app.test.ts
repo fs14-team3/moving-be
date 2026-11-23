@@ -115,6 +115,12 @@ describe('CORS', () => {
     expect(res.headers['access-control-allow-credentials']).toBe('true')
   })
 
+  it('프론트에서 Request-ID 헤더를 읽을 수 있다', async () => {
+    const res = await api().get('/api/health').set('Origin', origin)
+
+    expect(res.headers['access-control-expose-headers']).toBe('Request-ID')
+  })
+
   it('허용된 프론트 주소의 사전 요청에 응답한다', async () => {
     const res = await api()
       .options('/api/movers')
