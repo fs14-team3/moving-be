@@ -3,6 +3,7 @@ import { createApp } from './app'
 import { env } from './config/env'
 import './instrument'
 import { boss } from './lib/boss'
+import { logger } from './lib/logger'
 import { prisma } from './lib/prisma'
 import { generateAndSaveReviewSummary } from './services/review.service'
 
@@ -16,14 +17,14 @@ const server = createApp().listen(
         await generateAndSaveReviewSummary(job.data.moverId)
       }
     })
-    console.info(`API ready on port ${env.PORT}`)
+    logger.info({ port: env.PORT }, 'API ready')
   },
 )
 
 function shutdown(signal: string) {
-  console.info(`Shutting down (${signal})`)
+  logger.info({ signal }, 'Shutting down')
   setTimeout(() => {
-    console.error('Shutdown timed out')
+    logger.error('Shutdown timed out')
     process.exit(1)
   }, 10_000).unref()
   server.close(async () => {

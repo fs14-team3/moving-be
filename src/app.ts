@@ -4,6 +4,7 @@ import express from 'express'
 import helmet from 'helmet'
 import session from 'express-session'
 import { env } from './config/env'
+import { logger } from './lib/logger'
 import { errorHandler, notFoundHandler } from './middlewares/error-handler'
 import { httpLogger } from './middlewares/http-logger'
 import { apiRouter } from './routes'
@@ -29,6 +30,8 @@ export function createApp() {
       store: new PgStore({
         conString: env.DATABASE_URL,
         createTableIfMissing: false,
+        errorLog: (message: string, err: unknown) =>
+          logger.error({ err }, message),
       }),
       name: 'moving.sid',
       secret: env.SESSION_SECRET,

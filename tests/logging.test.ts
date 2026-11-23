@@ -24,6 +24,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks()
+  vi.unstubAllEnvs()
 })
 
 afterAll(async () => {
@@ -79,5 +80,47 @@ describe('요청 로그', () => {
         message: expect.stringContaining('ECONNREFUSED'),
       },
     })
+  })
+
+  it('소셜 로그인 실패는 제공자 오류 코드만 같은 요청 ID로 남긴다', async () => {
+    vi.stubEnv('KAKAO_CLIENT_ID', 'test-client')
+    vi.stubEnv('KAKAO_CLIENT_SECRET', 'test-secret')
+    vi.stubEnv(
+      'KAKAO_CALLBACK_URL',
+      'https://api.example.com/api/auth/kakao/callback',
+    )
+    vi.stubEnv(
+      'SOCIAL_OAUTH_STATE_SECRET',
+      'test-oauth-state-secret-32-characters',
+    )
+    vi.stubEnv('FRONTEND_URL', 'https://moving.example.com')
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      Response.json(
+        {
+          error: 'invalid_grant',
+          error_description: 'authorization code not found for code=secret',
+          error_code: 'KOE320',
+        },
+        { status: 400 },
+      ),
+    )
+
+    const login = await api().get('/api/auth/kakao?role=CUSTOMER').expect(302)
+    const state = new URL(login.headers.location).searchParams.get('state')
+    const res = await api()
+      .get('/api/auth/kakao/callback')
+      .query({ state, code: 'secret' })
+      .set('Cookie', login.headers['set-cookie'][0].split(';')[0])
+      .expect(302)
+
+    await vi.waitFor(() => expect(lines).toHaveLength(3))
+    expect(lines[1]).toMatchObject({
+      level: 50,
+      msg: 'Social login callback failed',
+      provider: 'kakao',
+      req: { id: res.headers['request-id'] },
+      err: { message: 'OAuth 제공자 요청 실패 (400 invalid_grant KOE320)' },
+    })
+    expect(JSON.stringify(lines)).not.toContain('secret')
   })
 })
