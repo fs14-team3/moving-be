@@ -31,6 +31,8 @@ function query(overrides: Record<string, string> = {}) {
 describe('GET /api/estimates', () => {
   beforeEach(() => {
     vi.stubEnv('KAKAO_CLIENT_ID', 'test-rest-api-key')
+    // 공휴일은 정적 목록으로 확인한다. (공휴일 API는 holiday.test.ts)
+    vi.stubEnv('HOLIDAY_API_KEY', '')
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
       const address = new URL(String(input)).searchParams.get('query') ?? ''
       const document = COORDINATES[address]
