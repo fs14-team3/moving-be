@@ -20,22 +20,27 @@ npm run dev              # http://localhost:4000/api/health
 
 ## 환경 변수
 
-| 이름                | 예시                                                    | 설명                                                                                                           |
-| ------------------- | ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| `PORT`              | `4000`                                                  | API 서버 포트                                                                                                  |
-| `HOST`              | `127.0.0.1`                                             | 바인딩 주소. 생략 시 모든 인터페이스, 운영(Nginx 뒤)은 `127.0.0.1`                                             |
-| `CLIENT_ORIGIN`     | `http://localhost:3000`                                 | CORS 허용 프론트 주소                                                                                          |
-| `DATABASE_URL`      | `postgresql://…@localhost:5432/moving`                  | PostgreSQL 연결 문자열                                                                                         |
-| `TEST_DATABASE_URL` | `postgresql://…@localhost:5432/moving_test`             | `npm test` 전용 DB. 테스트가 모든 행을 지우므로 `DATABASE_URL`과 다른 DB를 사용합니다                          |
-| `NODE_ENV`          | `development`                                           | `development` / `production`                                                                                   |
-| `SENTRY_DSN`        | `https://…@o0.ingest.sentry.io/0`                       | Sentry 에러 수집 DSN. 생략하면 Sentry를 사용하지 않습니다 (로컬은 생략)                                        |
-| `TRUST_PROXY`       | `0`                                                     | 신뢰할 프록시 홉 수. 로컬 `0`, Nginx 뒤 `1`, Cloudflare·로드밸런서 + Nginx는 `2`                               |
-| `AWS_REGION`        | `ap-southeast-2`                                        | 이미지 업로드 S3 버킷의 리전. 아래 두 값과 함께 생략하면 업로드 API만 503을 반환합니다 (로컬은 생략 가능)      |
-| `S3_BUCKET`         | `moving-images`                                         | 이미지 업로드 S3 버킷 이름. 자격 증명은 로컬 `aws login`, EC2 인스턴스 역할에서 가져옵니다                     |
-| `IMAGE_BASE_URL`    | `https://moving-images.s3.ap-southeast-2.amazonaws.com` | 업로드한 이미지의 공개 주소 (버킷 또는 CloudFront 도메인, 끝 `/` 제외). moving-fe의 `IMAGE_BASE_URL`과 같은 값 |
-| `GEMINI_API_KEY`    | `your-gemini-api-key`                                   | 리뷰 요약 생성에 사용하는 Google Gemini API 키                                                                 |
+| 이름                     | 예시                                                    | 설명                                                                                                                                                                              |
+| ------------------------ | ------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `PORT`                   | `4000`                                                  | API 서버 포트                                                                                                                                                                     |
+| `HOST`                   | `127.0.0.1`                                             | 바인딩 주소. 생략 시 모든 인터페이스, 운영(Nginx 뒤)은 `127.0.0.1`                                                                                                                |
+| `CLIENT_ORIGIN`          | `http://localhost:3000`                                 | CORS 허용 프론트 주소                                                                                                                                                             |
+| `DATABASE_URL`           | `postgresql://…@localhost:5432/moving`                  | PostgreSQL 연결 문자열                                                                                                                                                            |
+| `TEST_DATABASE_URL`      | `postgresql://…@localhost:5432/moving_test`             | `npm test` 전용 DB. 테스트가 모든 행을 지우므로 `DATABASE_URL`과 다른 DB를 사용합니다                                                                                             |
+| `NODE_ENV`               | `development`                                           | `development` / `production`                                                                                                                                                      |
+| `SENTRY_DSN`             | `https://…@o0.ingest.sentry.io/0`                       | Sentry 에러 수집 DSN. 생략하면 Sentry를 사용하지 않습니다 (로컬은 생략)                                                                                                           |
+| `TRUST_PROXY`            | `0`                                                     | 신뢰할 프록시 홉 수. 로컬 `0`, Nginx 뒤 `1`, Cloudflare·로드밸런서 + Nginx는 `2`                                                                                                  |
+| `AWS_REGION`             | `ap-southeast-2`                                        | 이미지 업로드 S3 버킷의 리전. 아래 두 값과 함께 생략하면 업로드 API만 503을 반환합니다 (로컬은 생략 가능)                                                                         |
+| `S3_BUCKET`              | `moving-images`                                         | 이미지 업로드 S3 버킷 이름. 자격 증명은 로컬 `aws login`, EC2 인스턴스 역할에서 가져옵니다                                                                                        |
+| `IMAGE_BASE_URL`         | `https://images.production.moving-platform.cdn.example` | 이미지 주소 (끝 `/` 제외). moving-fe의 `IMAGE_BASE_URL`과 같은 값                                                                                                                 |
+| `CLOUDFRONT_KEY_PAIR_ID` | `K2ABCDEFGHIJKL`                                        | 작업 사진 서명 URL에 쓰는 CloudFront 공개 키 ID (`proof-photos/*` 동작이 신뢰하는 키 그룹의 키). 아래 값과 함께 없으면 작업 사진 확정과, 사진이 있는 목록 조회가 503을 반환합니다 |
+| `CLOUDFRONT_PRIVATE_KEY` | `"-----BEGIN PRIVATE KEY-----\n…"`                      | 위 공개 키의 PEM 개인 키. 큰따옴표로 감싸고 줄바꿈은 `\n`으로 적습니다                                                                                                            |
+| `GEMINI_API_KEY`         | `your-gemini-api-key`                                   | 리뷰 요약 생성에 사용하는 Google Gemini API 키                                                                                                                                    |
 
 새 환경 변수를 추가하면 `.env.example`과 이 표를 같은 PR에서 수정합니다.
+
+작업 사진을 사용하는 환경에서는 `IMAGE_BASE_URL`에 CloudFront 배포 도메인이나 대체 도메인을 설정합니다.
+`proof-photos/*`에 서명 URL을 요구하고 해당 S3 객체의 직접 조회를 차단합니다.
 
 `CLIENT_ORIGIN`은 쉼표로 여러 origin을 지정할 수 있습니다. 경로나 끝의 `/`는 넣지 않습니다.
 운영 환경에서는 이 값을 명시합니다. `DATABASE_URL`은 DB 연결에 필요하며,

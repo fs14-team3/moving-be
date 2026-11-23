@@ -33,8 +33,11 @@ const otherCustomer: Express.User = { id: randomUUID(), role: 'CUSTOMER' }
 
 const pastDate = '2025-01-10'
 const futureDate = '2099-01-10'
+const MINUTE_MS = 60 * 1000
+const HOUR_MS = 60 * MINUTE_MS
 
 let send: ReturnType<typeof vi.spyOn>
+let hourStart: number
 
 async function createQuote(
   status: QuoteStatus = 'CONFIRMED',
@@ -144,6 +147,33 @@ function policyConditions(fields: Record<string, string>) {
     .conditions
 }
 
+function signedUrl(url: string) {
+  const { origin, pathname, searchParams } = new URL(url)
+  const policy = (searchParams.get('Policy') ?? '')
+    .replace(/-/g, '+')
+    .replace(/_/g, '=')
+    .replace(/~/g, '/')
+  const [statement] = JSON.parse(
+    Buffer.from(policy, 'base64').toString('utf8'),
+  ).Statement
+  return {
+    url: `${origin}${pathname}`,
+    keyPairId: searchParams.get('Key-Pair-Id'),
+    resource: statement.Resource,
+    expiresAt: statement.Condition.DateLessThan['AWS:EpochTime'] * 1000,
+    signed: Boolean(searchParams.get('Signature')),
+  }
+}
+
+function signedFor(quoteId: string, expiresAt = hourStart + 2 * HOUR_MS) {
+  return {
+    keyPairId: 'K2TESTKEYPAIR',
+    resource: `https://images.test/proof-photos/${quoteId}/*`,
+    expiresAt,
+    signed: true,
+  }
+}
+
 function sentCommands(): unknown[] {
   return send.mock.calls.map(([command]: [unknown]) => command)
 }
@@ -199,9 +229,17 @@ beforeEach(async () => {
   await createCustomer(customer.id)
   await createCustomer(otherCustomer.id)
   send = vi.spyOn(s3, 'send').mockResolvedValue(undefined as never)
+  hourStart = Math.floor(Date.now() / HOUR_MS) * HOUR_MS
+  vi.useFakeTimers({
+    toFake: ['Date'],
+    shouldAdvanceTime: true,
+    advanceTimeDelta: 1,
+  })
+  vi.setSystemTime(hourStart + 20 * MINUTE_MS)
 })
 
 afterEach(() => {
+  vi.useRealTimers()
   vi.restoreAllMocks()
 })
 
@@ -400,10 +438,34 @@ describe('POST /api/quotes/:quoteId/proof-photos', () => {
     expect(deletedKeys()).toEqual([])
     expect(response.body).toEqual({
       id: expect.any(String),
-      url: `https://images.test/${photo.imageKey}`,
-      thumbnailUrl: `https://images.test/${photo.thumbnailKey}`,
+      url: expect.any(String),
+      thumbnailUrl: expect.any(String),
       createdAt: expect.any(String),
     })
+    expect(signedUrl(response.body.url)).toEqual({
+      url: `https://images.test/${photo.imageKey}`,
+      ...signedFor(quoteId),
+    })
+    expect(signedUrl(response.body.thumbnailUrl)).toEqual({
+      url: `https://images.test/${photo.thumbnailKey}`,
+      ...signedFor(quoteId),
+    })
+  })
+
+  it('서명 키 설정이 없으면 S3에 복사하지 않고 503을 반환한다', async () => {
+    const original = env.CLOUDFRONT_PRIVATE_KEY
+    env.CLOUDFRONT_PRIVATE_KEY = undefined
+
+    try {
+      const response = await confirm(await createQuote(), mover)
+
+      expect(response.status).toBe(503)
+      expect(response.body.error.code).toBe('UPLOAD_NOT_CONFIGURED')
+      expect(send).not.toHaveBeenCalled()
+      expect(await activePhotoCount()).toBe(0)
+    } finally {
+      env.CLOUDFRONT_PRIVATE_KEY = original
+    }
   })
 
   it('같은 uploadId로 다시 보내면 100장이 찼어도 저장된 사진을 반환한다', async () => {
@@ -619,6 +681,44 @@ describe('GET /api/quotes/:quoteId/proof-photos', () => {
       maxCount: 100,
       canEdit,
     })
+  })
+
+  it('같은 시간대에는 같은 URL을, 다음 시간대에는 새로 서명한 URL을 반환한다', async () => {
+    const quoteId = await createQuote()
+    await confirm(quoteId, mover)
+
+    const first = await list(quoteId, customer)
+    vi.setSystemTime(hourStart + 59 * MINUTE_MS)
+    const sameHour = await list(quoteId, customer)
+    vi.setSystemTime(hourStart + 61 * MINUTE_MS)
+    const nextHour = await list(quoteId, customer)
+
+    expect(sameHour.body.items).toEqual(first.body.items)
+    const [photo] = nextHour.body.items
+    expect(photo.url).not.toBe(first.body.items[0].url)
+    expect(signedUrl(photo.url)).toMatchObject(
+      signedFor(quoteId, hourStart + 3 * HOUR_MS),
+    )
+  })
+
+  it('서명 키 설정이 없으면 사진이 있을 때만 503을 반환한다', async () => {
+    const empty = await createQuote()
+    const withPhoto = await createQuote()
+    await createPhoto(withPhoto)
+    const original = env.CLOUDFRONT_KEY_PAIR_ID
+    env.CLOUDFRONT_KEY_PAIR_ID = undefined
+
+    try {
+      const emptyResponse = await list(empty, mover)
+      const photoResponse = await list(withPhoto, mover)
+
+      expect(emptyResponse.status).toBe(200)
+      expect(emptyResponse.body.items).toEqual([])
+      expect(photoResponse.status).toBe(503)
+      expect(photoResponse.body.error.code).toBe('UPLOAD_NOT_CONFIGURED')
+    } finally {
+      env.CLOUDFRONT_KEY_PAIR_ID = original
+    }
   })
 
   it('이사일이 지나지 않았으면 기사님도 canEdit이 false다', async () => {
