@@ -1,4 +1,5 @@
 import type { Request, Response } from 'express'
+import { SESSION_COOKIE, sessionCookieOptions } from '../middlewares/session'
 import * as authService from '../services/auth.service'
 import { validate } from '../validators/validate'
 import {
@@ -118,12 +119,7 @@ export async function logout(req: Request, res: Response) {
     io?.in(`session:${sessionId}`).disconnectSockets(true)
   }
 
-  res.clearCookie('moving.sid', {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    path: '/',
-  })
+  res.clearCookie(SESSION_COOKIE, sessionCookieOptions)
 
   return res.set('Cache-Control', 'no-store').status(200).json({
     message: '로그아웃되었습니다.',
