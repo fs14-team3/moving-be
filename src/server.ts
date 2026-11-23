@@ -14,7 +14,12 @@ const server = createApp().listen(
     await boss.createQueue('review-summary', { policy: 'exclusive' })
     await boss.work<{ moverId: string }>('review-summary', async (jobs) => {
       for (const job of jobs) {
-        await generateAndSaveReviewSummary(job.data.moverId)
+        try {
+          await generateAndSaveReviewSummary(job.data.moverId)
+        } catch (err) {
+          logger.error({ err, queue: job.name, jobId: job.id }, 'Job failed')
+          throw err
+        }
       }
     })
     logger.info({ port: env.PORT }, 'API ready')
