@@ -152,3 +152,52 @@ describe('CORS', () => {
     expect(res.headers['access-control-allow-origin']).toBeUndefined()
   })
 })
+
+describe('Origin 검사', () => {
+  const origin = env.CLIENT_ORIGIN[0]
+
+  it('허용되지 않은 주소의 변경 요청은 403을 반환한다', async () => {
+    const res = await api()
+      .post('/api/auth/login')
+      .set('Origin', 'https://evil.example')
+      .send({})
+
+    expect(res.status).toBe(403)
+    expect(res.body).toEqual({
+      error: { code: 'FORBIDDEN', message: '접근 권한이 없습니다' },
+    })
+  })
+
+  it('허용된 프론트 주소의 변경 요청은 통과시킨다', async () => {
+    const res = await api()
+      .post('/api/auth/login')
+      .set('Origin', origin)
+      .send({})
+
+    expect(res.status).toBe(400)
+  })
+
+  it('API 자신의 주소에서 보낸 변경 요청은 통과시킨다', async () => {
+    const res = await api()
+      .post('/api/auth/login')
+      .set('Host', 'api.example')
+      .set('Origin', 'http://api.example')
+      .send({})
+
+    expect(res.status).toBe(400)
+  })
+
+  it('Origin 헤더가 없는 요청은 통과시킨다', async () => {
+    const res = await api().post('/api/auth/login').send({})
+
+    expect(res.status).toBe(400)
+  })
+
+  it('조회 요청은 Origin과 관계없이 통과시킨다', async () => {
+    const res = await api()
+      .get('/api/health')
+      .set('Origin', 'https://evil.example')
+
+    expect(res.status).toBe(200)
+  })
+})

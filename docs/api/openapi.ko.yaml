@@ -10,6 +10,8 @@ info:
 
     모든 응답은 `Cache-Control: no-store`를 포함해 브라우저나 프록시에 캐시되지 않습니다.
 
+    `GET`·`HEAD`·`OPTIONS`가 아닌 요청에 `Origin` 헤더가 있으면 허용된 프론트 주소나 API 자신의 주소여야 하며, 아니면 `403 FORBIDDEN`을 반환합니다.
+
 servers:
   - { url: '/api' }
 tags:
