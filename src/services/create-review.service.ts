@@ -5,6 +5,7 @@ import type { CreateReviewInput } from '../validators/create-review.validator'
 import { assertCustomer, assertCustomerProfile } from './customer-access'
 import { moverSummarySelect, toMoverSummary } from './mover.service'
 import { enqueueReviewKeyword } from './review-keyword-processing.service'
+import { logger } from '../lib/logger'
 
 export async function createReview(
   viewer: Express.User | undefined,
@@ -105,9 +106,9 @@ export async function createReview(
   try {
     await enqueueReviewKeyword(review.id)
   } catch (error) {
-    console.error(
-      `[review-keyword] 신규 리뷰 분석 등록 실패: ${review.id}`,
-      error,
+    logger.error(
+      { err: error, reviewId: review.id },
+      '[review-keyword] 신규 리뷰 분석 등록 실패',
     )
   }
 

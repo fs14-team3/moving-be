@@ -1,5 +1,6 @@
 import { boss } from '../lib/boss'
 import { prisma } from '../lib/prisma'
+import { logger } from '../lib/logger'
 
 export const REVIEW_KEYWORD_QUEUE = 'review-keyword'
 export const REVIEW_KEYWORD_RECOVERY_QUEUE = 'review-keyword-recovery'
@@ -181,15 +182,18 @@ export async function recoverReviewKeywords(): Promise<ReviewKeywordRecoveryResu
         try {
           await rollbackRecoveryAttempt(review.id, recovery, nextAttempts, now)
         } catch (rollbackError) {
-          console.error(
-            `[review-keyword] 복구 기록 롤백 실패: ${review.id}`,
-            rollbackError,
+          logger.error(
+            { err: rollbackError, reviewId: review.id },
+            '[review-keyword] 복구 기록 롤백 실패',
           )
         }
 
         result.enqueueFailed++
 
-        console.error(`[review-keyword] 복구 등록 실패: ${review.id}`, error)
+        logger.error(
+          { err: error, reviewId: review.id },
+          '[review-keyword] 복구 등록 실패',
+        )
       }
     }
 
