@@ -228,6 +228,8 @@ model Review {
   updatedAt       DateTime               @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
   quote           Quote                  @relation(fields: [quoteId], references: [id], onDelete: Cascade)
   keywordMentions ReviewKeywordMention[]
+  keywordAnalysis ReviewKeywordAnalysis?
+  keywordRecovery ReviewKeywordRecovery?
 
   @@map("reviews")
 }
@@ -352,4 +354,25 @@ model ReviewKeywordMention {
   @@unique([reviewId, keywordId])
   @@index([keywordId, reviewId])
   @@map("review_keyword_mentions")
+}
+
+model ReviewKeywordAnalysis {
+  reviewId        String   @id @map("review_id") @db.Uuid
+  reviewUpdatedAt DateTime @map("review_updated_at") @db.Timestamptz
+  analyzedAt      DateTime @default(now()) @map("analyzed_at") @db.Timestamptz
+
+  review Review @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+
+  @@map("review_keyword_analyses")
+}
+
+model ReviewKeywordRecovery {
+  reviewId      String    @id @map("review_id") @db.Uuid
+  attempts      Int       @default(0)
+  lastAttemptAt DateTime? @map("last_attempt_at") @db.Timestamptz
+  nextAttemptAt DateTime  @default(now()) @map("next_attempt_at") @db.Timestamptz
+
+  review Review @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+
+  @@map("review_keyword_recoveries")
 }
