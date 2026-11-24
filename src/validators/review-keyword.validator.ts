@@ -1,7 +1,7 @@
 import { z } from 'zod'
 
 // 기본 라벨 7개
-export const baseLabelKeySchema = z.enum([
+const baseLabelKeySchema = z.enum([
   'PUNCTUALITY',
   'PACKING',
   'HANDLING',
@@ -12,11 +12,7 @@ export const baseLabelKeySchema = z.enum([
 ])
 
 // 긍정 / 부정 / 불명확
-export const keywordSentimentSchema = z.enum([
-  'positive',
-  'negative',
-  'unclear',
-])
+const keywordSentimentSchema = z.enum(['positive', 'negative', 'unclear'])
 
 // 기본 라벨 분석 결과
 const baseLabelSchema = z.object({
@@ -94,7 +90,3 @@ export const reviewKeywordSchema = z
       matchedKeywordIds.add(keyword.matchedKeywordId)
     })
   })
-
-export type ReviewKeywordAnalysis = z.infer<typeof reviewKeywordSchema>
-export type BaseLabelKey = z.infer<typeof baseLabelKeySchema>
-export type KeywordSentiment = z.infer<typeof keywordSentimentSchema>
