@@ -92,6 +92,11 @@ const ERROR_CATALOG = {
     status: 409,
     message: '다음 진행 단계만 기록할 수 있습니다',
   },
+  DAMAGE_REPORT_NOT_ALLOWED: {
+    status: 409,
+    message:
+      '확정된 견적의 이사일 다음 날부터 30일 동안만 파손을 접수할 수 있습니다',
+  },
   ADDRESS_NOT_FOUND: {
     status: 422,
     message: '주소를 찾을 수 없습니다',
