@@ -15,7 +15,7 @@ type ProgressRow = Prisma.MoveProgressGetPayload<{
 const progressQuoteSelect = {
   moverId: true,
   status: true,
-  moveRequest: { select: { moveDate: true } },
+  moveRequest: { select: { moveDate: true, status: true } },
   progress: { select: progressSelect, orderBy: { step: 'asc' } },
 } as const
 
@@ -26,6 +26,7 @@ type ProgressQuote = Prisma.QuoteGetPayload<{
 function isRecordable({ status, moveRequest }: ProgressQuote) {
   return (
     status === 'CONFIRMED' &&
+    moveRequest.status === 'CONFIRMED' &&
     moveRequest.moveDate.getTime() === new Date(todayInSeoul()).getTime()
   )
 }

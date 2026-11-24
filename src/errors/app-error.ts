@@ -85,7 +85,8 @@ const ERROR_CATALOG = {
   },
   MOVE_PROGRESS_NOT_ALLOWED: {
     status: 409,
-    message: '확정된 견적의 이사 당일에만 진행 단계를 기록할 수 있습니다',
+    message:
+      '견적과 이사 요청이 모두 확정된 경우에만 이사 당일 진행 단계를 기록할 수 있습니다',
   },
   MOVE_PROGRESS_OUT_OF_ORDER: {
     status: 409,

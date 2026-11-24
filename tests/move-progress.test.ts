@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 import type {
   MoveProgressStep,
+  MoveRequestStatus,
   QuoteStatus,
 } from '../src/generated/prisma/enums'
 import { prisma } from '../src/lib/prisma'
@@ -26,8 +27,9 @@ const futureDate = '2099-01-10'
 async function createQuote(
   status: QuoteStatus = 'CONFIRMED',
   moveDate = todayInSeoul(),
+  requestStatus: MoveRequestStatus = 'CONFIRMED',
 ) {
-  const request = await createMoveRequest(customer.id, 'CONFIRMED', moveDate)
+  const request = await createMoveRequest(customer.id, requestStatus, moveDate)
   const quote = await prisma.quote.create({
     data: {
       moveRequestId: request.id,
@@ -139,6 +141,35 @@ describe('POST /api/quotes/:quoteId/progress', () => {
     expect(response.body.nextStep).toBe('LOADING')
     expect(response.body.canRecord).toBe(false)
   })
+
+  it.each(['PENDING', 'COMPLETED', 'EXPIRED'] as const)(
+    '이사 당일 확정 견적의 요청 상태가 %s이면 기존 단계만 조회하거나 재시도할 수 있다',
+    async (requestStatus) => {
+      const quoteId = await createQuote(
+        'CONFIRMED',
+        todayInSeoul(),
+        requestStatus,
+      )
+      await saveSteps(quoteId, ['DEPARTED'])
+      const before = await recordedSteps(quoteId)
+
+      const progress = await getProgress(quoteId, mover).expect(200)
+      expect(progress.body).toEqual({
+        steps: [
+          { step: 'DEPARTED', recordedAt: before[0].recordedAt.toISOString() },
+        ],
+        nextStep: 'LOADING',
+        canRecord: false,
+      })
+
+      const denied = await record(quoteId, mover, 'LOADING').expect(409)
+      expect(denied.body.error.code).toBe('MOVE_PROGRESS_NOT_ALLOWED')
+
+      const retry = await record(quoteId, mover, 'DEPARTED').expect(200)
+      expect(retry.body).toEqual(progress.body)
+      expect(await recordedSteps(quoteId)).toEqual(before)
+    },
+  )
 
   it('다른 요청이 같은 단계를 기록하는 중이면 끝날 때까지 기다렸다가 그 기록을 반환한다', async () => {
     const quoteId = await createQuote()
