@@ -38,7 +38,9 @@ export function pendingKey(key: string) {
 export function signedPhotoQuery(quoteId: string) {
   const keyPairId = env.CLOUDFRONT_KEY_PAIR_ID
   const privateKey = env.CLOUDFRONT_PRIVATE_KEY
-  if (!keyPairId || !privateKey) throw new AppError('UPLOAD_NOT_CONFIGURED')
+  if (!env.IMAGE_BASE_URL || !keyPairId || !privateKey) {
+    throw new AppError('UPLOAD_NOT_CONFIGURED')
+  }
 
   const windowStart =
     Math.floor(Date.now() / SIGNED_URL_WINDOW_MS) * SIGNED_URL_WINDOW_MS

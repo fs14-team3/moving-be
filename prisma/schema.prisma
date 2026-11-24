@@ -101,6 +101,7 @@ enum NotificationType {
   NEW_QUOTE
   QUOTE_CONFIRMED
   MOVE_DAY
+  DAMAGE_REPORTED
 
   @@map("notification_type")
 }
@@ -276,6 +277,7 @@ model Quote {
   reviews       Review[]
   proofPhotos   ProofPhoto[]
   progress      MoveProgress[]
+  damageReports DamageReport[]
   notifications Notification[]
   chatRoom      ChatRoom?
 
@@ -334,6 +336,31 @@ model MoveProgress {
 
   @@id([quoteId, step])
   @@map("move_progress")
+}
+
+model DamageReport {
+  id          String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  quoteId     String        @map("quote_id") @db.Uuid
+  itemName    String        @map("item_name")
+  description String        @db.Text
+  createdAt   DateTime      @default(now()) @map("created_at") @db.Timestamptz
+  quote       Quote         @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  photos      DamagePhoto[]
+
+  @@index([quoteId, createdAt, id])
+  @@map("damage_reports")
+}
+
+model DamagePhoto {
+  reportId     String       @map("report_id") @db.Uuid
+  position     Int
+  uploadId     String       @map("upload_id") @db.Uuid
+  imageKey     String       @map("image_key")
+  thumbnailKey String       @map("thumbnail_key")
+  report       DamageReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  @@id([reportId, position])
+  @@map("damage_photos")
 }
 
 model Favorite {

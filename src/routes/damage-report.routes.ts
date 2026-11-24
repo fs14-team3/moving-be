@@ -11,3 +11,10 @@ damageReportRouter.post(
   requireRole('CUSTOMER'),
   damageReportController.createDamagePhotoUploads,
 )
+
+damageReportRouter.post(
+  '/:quoteId/damage-reports',
+  requireAuth,
+  requireRole('CUSTOMER'),
+  damageReportController.createDamageReport,
+)
