@@ -1,5 +1,4 @@
 import type { ServiceType } from '../generated/prisma/enums'
-import { isHoliday } from './holiday'
 
 // 예상 비용 기준값. 실제 견적 데이터를 보며 조정한다.
 const BASE_PRICE: Record<ServiceType, number> = {
@@ -31,13 +30,15 @@ type MoveEstimateInput = {
   // 'YYYY-MM-DD' (한국 날짜)
   moveDate: string
   distanceKm: number
+  // 공휴일 여부는 services/holiday.service에서 조회해 넘겨받는다.
+  isHoliday: boolean
 }
 
-function surchargesOf(moveDate: string): Surcharge[] {
+function surchargesOf(moveDate: string, isHoliday: boolean): Surcharge[] {
   const day = new Date(`${moveDate}T00:00:00Z`).getUTCDay()
   const surcharges: Surcharge[] = []
   if (day === 0 || day === 6) surcharges.push('WEEKEND')
-  if (isHoliday(moveDate)) surcharges.push('HOLIDAY')
+  if (isHoliday) surcharges.push('HOLIDAY')
   return surcharges
 }
 
@@ -50,8 +51,9 @@ export function estimateMoveCost({
   moveType,
   moveDate,
   distanceKm,
+  isHoliday,
 }: MoveEstimateInput) {
-  const surcharges = surchargesOf(moveDate)
+  const surcharges = surchargesOf(moveDate, isHoliday)
   const rate = Math.max(1, ...surcharges.map((s) => SURCHARGE_RATE[s]))
   const price =
     (BASE_PRICE[moveType] + distanceKm * PRICE_PER_KM[moveType]) * rate

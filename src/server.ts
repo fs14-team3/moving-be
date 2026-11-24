@@ -3,6 +3,7 @@ import { createApp } from './app'
 import { env } from './config/env'
 import './instrument'
 import { boss } from './lib/boss'
+import { logger } from './lib/logger'
 import { prisma } from './lib/prisma'
 import { generateAndSaveReviewSummary } from './services/review.service'
 import {
@@ -19,7 +20,12 @@ const server = createApp().listen(
     await boss.createQueue('review-summary', { policy: 'exclusive' })
     await boss.work<{ moverId: string }>('review-summary', async (jobs) => {
       for (const job of jobs) {
-        await generateAndSaveReviewSummary(job.data.moverId)
+        try {
+          await generateAndSaveReviewSummary(job.data.moverId)
+        } catch (err) {
+          logger.error({ err, queue: job.name, jobId: job.id }, 'Job failed')
+          throw err
+        }
       }
     })
 
@@ -68,7 +74,7 @@ const server = createApp().listen(
 
             await analyzeAndSaveReviewKeywords(reviewId)
           } catch (error) {
-            console.error(`[review-keyword] 분석 실패: ${reviewId}`, error)
+            logger.error({ err: error, reviewId }, '[review-keyword] 분석 실패')
 
             // 반드시 오류를 다시 던져야 pg-boss가 재시도합니다.
             throw error
@@ -90,9 +96,9 @@ const server = createApp().listen(
       try {
         const result = await recoverReviewKeywords()
 
-        console.info('[review-keyword] 정기 복구 결과:', result)
+        logger.info({ result }, '[review-keyword] 정기 복구 결과')
       } catch (error) {
-        console.error('[review-keyword] 정기 복구 실패:', error)
+        logger.error({ err: error }, '[review-keyword] 정기 복구 실패')
         throw error
       }
     })
@@ -106,14 +112,14 @@ const server = createApp().listen(
     )
 
     await boss.send(REVIEW_KEYWORD_RECOVERY_QUEUE, {})
-    console.info(`API ready on port ${env.PORT}`)
+    logger.info({ port: env.PORT }, 'API ready')
   },
 )
 
 function shutdown(signal: string) {
-  console.info(`Shutting down (${signal})`)
+  logger.info({ signal }, 'Shutting down')
   setTimeout(() => {
-    console.error('Shutdown timed out')
+    logger.error('Shutdown timed out')
     process.exit(1)
   }, 10_000).unref()
   server.close(async () => {

@@ -55,13 +55,10 @@ beforeAll(() => {
     : ''
 
   if (
-    process.env.REVIEW_KEYWORD_TEST_DB !== '1' ||
     !databaseName.toLowerCase().includes('test') ||
     databaseName === 'moving'
   ) {
-    throw new Error(
-      '테스트 전용 DB가 아닙니다. DATABASE_URL과 REVIEW_KEYWORD_TEST_DB를 확인하세요.',
-    )
+    throw new Error('테스트 전용 DB가 아닙니다. DATABASE_URL을 확인하세요.')
   }
 
   process.env.GEMINI_KEYWORD_API_KEY = 'mock-gemini-key'

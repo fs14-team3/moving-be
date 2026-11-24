@@ -1,4 +1,5 @@
-// 관공서의 공휴일 (대체공휴일 · 선거일 포함). 매년 말 다음 해 날짜를 추가한다.
+// 관공서의 공휴일 (대체공휴일 · 선거일 포함).
+// 공휴일 API(lib/holiday-api)를 쓸 수 없을 때 대신 쓴다.
 const HOLIDAYS = new Set([
   // 2026
   '2026-01-01',
@@ -45,6 +46,6 @@ const HOLIDAYS = new Set([
 ])
 
 // date: 'YYYY-MM-DD'
-export function isHoliday(date: string) {
+export function isStaticHoliday(date: string) {
   return HOLIDAYS.has(date)
 }
