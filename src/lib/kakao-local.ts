@@ -48,11 +48,10 @@ export async function geocode(address: string): Promise<Coordinates | null> {
   }
 
   if (!response.ok) {
-    console.error('[Kakao Local Response Error]', {
-      status: response.status,
-      response: await response.text(),
+    await response.body?.cancel()
+    throw new AppError('SERVICE_UNAVAILABLE', undefined, {
+      cause: new Error(`카카오 로컬 API 응답 오류 (${response.status})`),
     })
-    throw new AppError('SERVICE_UNAVAILABLE')
   }
 
   const { documents } = (await response.json()) as AddressSearchResponse
@@ -62,8 +61,9 @@ export async function geocode(address: string): Promise<Coordinates | null> {
   const lat = toCoordinate(first.y, 90)
   const lng = toCoordinate(first.x, 180)
   if (lat === null || lng === null) {
-    console.error('[Kakao Local Invalid Coordinates]', first)
-    throw new AppError('SERVICE_UNAVAILABLE')
+    throw new AppError('SERVICE_UNAVAILABLE', undefined, {
+      cause: new Error('카카오 로컬 API 좌표 오류'),
+    })
   }
 
   return { lat, lng }

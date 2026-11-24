@@ -31,6 +31,44 @@ enum ServiceType {
   @@map("service_type")
 }
 
+enum ServiceLevel {
+  BASIC
+  HALF_PACKING
+  FULL_PACKING
+
+  @@map("service_level")
+}
+
+enum BuildingType {
+  APARTMENT
+  VILLA
+  OFFICETEL
+  HOUSE
+  COMMERCIAL
+
+  @@map("building_type")
+}
+
+enum AreaRange {
+  UNDER_10
+  TENS
+  TWENTIES
+  THIRTIES
+  OVER_40
+
+  @@map("area_range")
+}
+
+enum BoxRange {
+  UP_TO_10
+  UP_TO_20
+  UP_TO_30
+  UP_TO_50
+  OVER_50
+
+  @@map("box_range")
+}
+
 enum MoveRequestStatus {
   PENDING
   CONFIRMED
@@ -160,6 +198,19 @@ model MoveRequest {
   toAddress          String              @map("to_address")
   toZonecode         String?             @map("to_zonecode")
   toRegion           String              @map("to_region")
+  serviceLevel       ServiceLevel?       @map("service_level")
+  fromBuildingType   BuildingType?       @map("from_building_type")
+  fromFloor          Int?                @map("from_floor")
+  fromHasElevator    Boolean?            @map("from_has_elevator")
+  fromCanPark        Boolean?            @map("from_can_park")
+  toBuildingType     BuildingType?       @map("to_building_type")
+  toFloor            Int?                @map("to_floor")
+  toHasElevator      Boolean?            @map("to_has_elevator")
+  toCanPark          Boolean?            @map("to_can_park")
+  areaRange          AreaRange?          @map("area_range")
+  residentCount      Int?                @map("resident_count")
+  boxRange           BoxRange?           @map("box_range")
+  memo               String?             @db.Text
   status             MoveRequestStatus   @default(PENDING)
   confirmedAt        DateTime?           @map("confirmed_at") @db.Timestamptz
   createdAt          DateTime            @default(now()) @map("created_at") @db.Timestamptz
@@ -169,10 +220,21 @@ model MoveRequest {
   quotes             Quote[]
   requestRejections  RequestRejection[]
   notifications      Notification[]
+  items              MoveRequestItem[]
 
   // Partial unique index on active requests is defined in the migration SQL.
   @@index([customerId])
   @@map("move_requests")
+}
+
+model MoveRequestItem {
+  moveRequestId String      @map("move_request_id") @db.Uuid
+  item          String
+  quantity      Int
+  moveRequest   MoveRequest @relation(fields: [moveRequestId], references: [id], onDelete: Cascade)
+
+  @@id([moveRequestId, item])
+  @@map("move_request_items")
 }
 
 model DesignatedRequest {
@@ -200,6 +262,7 @@ model Quote {
   moveRequest   MoveRequest    @relation(fields: [moveRequestId], references: [id], onDelete: Cascade)
   mover         MoverProfile   @relation(fields: [moverId], references: [userId], onDelete: Cascade)
   reviews       Review[]
+  proofPhotos   ProofPhoto[]
   notifications Notification[]
   chatRoom      ChatRoom?
 
@@ -230,6 +293,21 @@ model Review {
   keywordMentions ReviewKeywordMention[]
 
   @@map("reviews")
+}
+
+model ProofPhoto {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  quoteId      String    @map("quote_id") @db.Uuid
+  uploadId     String    @map("upload_id") @db.Uuid
+  imageKey     String    @map("image_key")
+  thumbnailKey String    @map("thumbnail_key")
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  deletedAt    DateTime? @map("deleted_at") @db.Timestamptz
+  quote        Quote     @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+
+  @@unique([quoteId, uploadId])
+  @@index([quoteId, createdAt, id])
+  @@map("proof_photos")
 }
 
 model Favorite {

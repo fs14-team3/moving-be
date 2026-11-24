@@ -95,7 +95,6 @@ describe('POST /api/uploads/images', () => {
     async (name) => {
       const original = env[name]
       env[name] = undefined
-      vi.spyOn(console, 'error').mockImplementation(() => {})
 
       try {
         const response = await attach(

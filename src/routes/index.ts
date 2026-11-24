@@ -15,6 +15,7 @@ import { receivedQuoteRouter } from './received-quote.routes'
 import { userRouter } from './user.routes'
 import { reviewRouter } from './review.routes'
 import { uploadRouter } from './upload.routes'
+import { proofPhotoRouter } from './proof-photo.routes'
 import { chatMessageRouter } from './chat-message.routes'
 import { chatRouter } from './chat.routes'
 import { estimateRouter } from './estimate.routes'
@@ -57,6 +58,7 @@ apiRouter.use('/notifications', notificationRouter)
 apiRouter.use('/move-requests', moveRequestRouter)
 apiRouter.use('/quotes', confirmQuoteRouter)
 apiRouter.use('/quotes', receivedQuoteRouter)
+apiRouter.use('/quotes', proofPhotoRouter)
 apiRouter.use('/users', userRouter)
 apiRouter.use('/reviews', reviewRouter)
 apiRouter.use('/uploads', uploadRouter)

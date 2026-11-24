@@ -1,5 +1,9 @@
 import { AppError } from '../errors/app-error'
 import { prisma } from '../lib/prisma'
+import {
+  moveRequestDetailsSelect,
+  toRequestForMover,
+} from './move-request.service'
 
 function assertMover(viewer: Express.User | undefined): string {
   if (!viewer) {
@@ -55,6 +59,7 @@ export async function rejectMoveRequest(
 
     const moveRequest = await tx.moveRequest.findUniqueOrThrow({
       where: { id: requestId },
+      include: { items: moveRequestDetailsSelect.items },
     })
 
     // 기존에 받은 요청 목록에 나타날 수 있는 요청만 반려
@@ -107,25 +112,11 @@ export async function rejectMoveRequest(
     })
 
     return {
-      moveRequest: {
-        id: moveRequest.id,
-        customerName: customer?.name ?? null,
-        moveType: moveRequest.moveType,
-        moveDate: moveRequest.moveDate.toISOString().slice(0, 10),
-        from: {
-          address: moveRequest.fromAddress,
-          zonecode: moveRequest.fromZonecode,
-          region: moveRequest.fromRegion,
-        },
-        to: {
-          address: moveRequest.toAddress,
-          zonecode: moveRequest.toZonecode,
-          region: moveRequest.toRegion,
-        },
-        status: moveRequest.status,
-        isDesignated: designation !== null,
-        createdAt: moveRequest.createdAt,
-      },
+      moveRequest: toRequestForMover(
+        moveRequest,
+        customer?.name ?? null,
+        designation !== null,
+      ),
       rejectedAt: rejection.createdAt,
       reason: rejection.reason,
     }

@@ -93,8 +93,7 @@ describe('getMoveDistanceKm', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
-  it('카카오 API가 오류를 응답하면 503으로 실패한다', async () => {
-    vi.spyOn(console, 'error').mockImplementation(() => {})
+  it('카카오 API가 오류를 응답하면 상태 코드만 원인에 남기고 503으로 실패한다', async () => {
     // 응답 본문은 한 번만 읽을 수 있어서 호출마다 새로 만든다.
     fetchMock.mockImplementation(async () =>
       jsonResponse(
@@ -105,7 +104,11 @@ describe('getMoveDistanceKm', () => {
 
     await expect(
       getMoveDistanceKm(SEOUL_CITY_HALL, BUSAN_CITY_HALL),
-    ).rejects.toMatchObject({ code: 'SERVICE_UNAVAILABLE', status: 503 })
+    ).rejects.toMatchObject({
+      code: 'SERVICE_UNAVAILABLE',
+      status: 503,
+      cause: { message: '카카오 로컬 API 응답 오류 (403)' },
+    })
   })
 
   it.each([
@@ -116,7 +119,6 @@ describe('getMoveDistanceKm', () => {
   ])(
     '카카오 API 좌표가 올바르지 않으면 503으로 실패한다 (%s)',
     async (_, document) => {
-      vi.spyOn(console, 'error').mockImplementation(() => {})
       fetchMock.mockImplementation(async () =>
         jsonResponse({ documents: [document] }),
       )

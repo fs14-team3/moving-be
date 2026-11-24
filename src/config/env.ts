@@ -10,6 +10,7 @@ if (!sessionSecret || sessionSecret.length < 32) {
 
 export const env = {
   NODE_ENV: process.env.NODE_ENV ?? 'development',
+  LOG_LEVEL: process.env.LOG_LEVEL ?? 'info',
   PORT: Number(process.env.PORT ?? 4000),
   HOST: process.env.HOST,
   TRUST_PROXY: Number(process.env.TRUST_PROXY ?? 0),
@@ -24,6 +25,8 @@ export const env = {
   AWS_REGION: process.env.AWS_REGION,
   S3_BUCKET: process.env.S3_BUCKET,
   IMAGE_BASE_URL: process.env.IMAGE_BASE_URL,
+  CLOUDFRONT_KEY_PAIR_ID: process.env.CLOUDFRONT_KEY_PAIR_ID,
+  CLOUDFRONT_PRIVATE_KEY: process.env.CLOUDFRONT_PRIVATE_KEY,
 
   SESSION_SECRET: sessionSecret,
 

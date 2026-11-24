@@ -1,8 +1,13 @@
 import { AppError } from '../errors/app-error'
-import type { MoveRequest, Quote } from '../generated/prisma/client'
+import type { Quote } from '../generated/prisma/client'
 import { prisma } from '../lib/prisma'
 import { encodeCursor } from '../utils/cursor'
 import type { SentQuoteQuery } from '../validators/sent-quote.validator'
+import {
+  moveRequestDetailsSelect,
+  toRequestForMover,
+  type RequestForMoverRow,
+} from './move-request.service'
 
 function assertMover(viewer: Express.User | undefined): string {
   if (!viewer) {
@@ -17,11 +22,9 @@ function assertMover(viewer: Express.User | undefined): string {
 }
 
 export function toSentQuote(
-  quote: Quote & { moveRequest: MoveRequest },
+  quote: Quote & { moveRequest: RequestForMoverRow },
   customerName: string | null,
 ) {
-  const request = quote.moveRequest
-
   return {
     id: quote.id,
     price: quote.price,
@@ -29,25 +32,11 @@ export function toSentQuote(
     status: quote.status,
     isDesignated: quote.isDesignated,
     createdAt: quote.createdAt,
-    moveRequest: {
-      id: request.id,
+    moveRequest: toRequestForMover(
+      quote.moveRequest,
       customerName,
-      moveType: request.moveType,
-      moveDate: request.moveDate.toISOString().slice(0, 10),
-      from: {
-        address: request.fromAddress,
-        zonecode: request.fromZonecode,
-        region: request.fromRegion,
-      },
-      to: {
-        address: request.toAddress,
-        zonecode: request.toZonecode,
-        region: request.toRegion,
-      },
-      status: request.status,
-      isDesignated: quote.isDesignated,
-      createdAt: request.createdAt,
-    },
+      quote.isDesignated,
+    ),
   }
 }
 
@@ -74,7 +63,7 @@ export async function listMySentQuotes(
         : {}),
     },
     include: {
-      moveRequest: true,
+      moveRequest: { include: { items: moveRequestDetailsSelect.items } },
     },
     orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     take: limit + 1,
@@ -135,6 +124,7 @@ export async function getMySentQuote(
       moveRequest: {
         include: {
           customer: { select: { user: { select: { name: true } } } },
+          items: moveRequestDetailsSelect.items,
         },
       },
     },

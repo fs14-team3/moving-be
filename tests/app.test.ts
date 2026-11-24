@@ -30,7 +30,6 @@ describe('상태 확인', () => {
   })
 
   it('GET /api/ready는 DB 오류 시 내부 정보 없이 503을 반환한다', async () => {
-    vi.spyOn(console, 'error').mockImplementation(() => {})
     vi.spyOn(prisma, '$queryRaw').mockRejectedValue(
       new Error('connect ECONNREFUSED 10.0.0.5:5432'),
     )
@@ -80,12 +79,10 @@ describe('공통 오류 응답', () => {
     })
   })
 
-  it('예상하지 못한 오류는 내부 정보 없이 500을 반환하고 서버 로그에 남긴다', async () => {
-    const log = vi.spyOn(console, 'error').mockImplementation(() => {})
-    const failure = new Error('password=hunter2')
+  it('예상하지 못한 오류는 내부 정보 없이 500을 반환한다', async () => {
     const app = express()
     app.get('/boom', () => {
-      throw failure
+      throw new Error('password=hunter2')
     })
     app.use(errorHandler)
 
@@ -95,7 +92,6 @@ describe('공통 오류 응답', () => {
     expect(res.body).toEqual({
       error: { code: 'INTERNAL_ERROR', message: '서버 오류가 발생했습니다' },
     })
-    expect(log).toHaveBeenCalledWith(failure)
   })
 })
 
