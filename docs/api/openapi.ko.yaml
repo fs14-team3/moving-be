@@ -887,6 +887,42 @@ paths:
           content:
             application/json:
               schema: { '$ref': '#/components/schemas/ErrorResponse' }
+  '/move-requests/{requestId}/quotes/compare':
+    post:
+      tags: [MoveRequests]
+      summary: 견적 비교 (대기 중인 견적)
+      description: |-
+        요청자 본인만 받은 견적을 비교할 수 있습니다. 비로그인은 401, 기사님은 403을 반환합니다. 
+        대기 중인 견적 2~3개와 비교 키워드 1~3개를 선택해 요청합니다.
+        견적은 선택한 순서대로 반환하며, 금액·코멘트와 기사님의 경력·평점·리뷰 수·리뷰 요약·후기 항목을 제공합니다.
+        리뷰 요약과 후기 항목은 리뷰가 10건 미만이면 null입니다. 후기 항목에는 가격(PRICE)을 제외합니다.
+        본인 요청이 아니거나 선택한 견적이 해당 요청의 대기 중 견적이 아니면 404를 반환합니다.
+        결과는 요청 시점에 계산하며 저장하지 않습니다.
+      operationId: compareQuotes
+      security:
+        - sessionCookie: []
+      x-roles: [CUSTOMER]
+      parameters:
+        - { '$ref': '#/components/parameters/RequestIdPath' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { '$ref': '#/components/schemas/QuoteComparisonRequest' }
+      responses:
+        '200':
+          description: 견적 비교 결과
+          content:
+            application/json:
+              schema: { '$ref': '#/components/schemas/QuoteComparison' }
+        '400': { '$ref': '#/components/responses/ValidationError' }
+        '401': { '$ref': '#/components/responses/Unauthorized' }
+        '403': { '$ref': '#/components/responses/Forbidden' }
+        '404':
+          description: '`NOT_FOUND`. 본인의 이사 요청이 아니거나, 선택한 견적이 해당 요청의 대기 중인 견적이 아닌 경우'
+          content:
+            application/json:
+              schema: { '$ref': '#/components/schemas/ErrorResponse' }
   '/move-requests/{requestId}/rejections':
     post:
       tags: [MoverInbox]
@@ -2475,6 +2511,72 @@ components:
         isDesignated: { type: boolean, description: 지정 견적 라벨 표시용 }
         createdAt: { type: string, format: date-time }
         mover: { '$ref': '#/components/schemas/MoverSummary' }
+    QuoteComparisonRequest:
+      type: object
+      required: [quoteIds, keywords]
+      properties:
+        quoteIds:
+          type: array
+          description: 비교할 대기 중인 견적 id. 응답은 이 순서대로 반환합니다.
+          minItems: 2
+          maxItems: 3
+          uniqueItems: true
+          items: { type: string, format: uuid }
+        keywords:
+          type: array
+          description: 비교 기준 키워드
+          minItems: 1
+          maxItems: 3
+          uniqueItems: true
+          items:
+            type: string
+            enum: [PRICE, CAREER, PUNCTUALITY, HANDLING, SPEED, COMMUNICATION]
+    QuoteComparisonMover:
+      type: object
+      required:
+        [
+          nickname,
+          careerYears,
+          averageRating,
+          reviewCount,
+          reviewSummary,
+          aspects,
+        ]
+      properties:
+        nickname: { type: string, nullable: true }
+        careerYears: { type: integer, nullable: true }
+        averageRating: { type: number, format: float, example: 4.8 }
+        reviewCount: { type: integer }
+        reviewSummary:
+          type: string
+          nullable: true
+          description: AI 리뷰 요약. 리뷰가 10건 미만이면 null.
+        aspects:
+          type: array
+          nullable: true
+          description: 후기 항목별 언급 수. 가격(PRICE)은 제외합니다. 리뷰가 10건 미만이면 null.
+          items: { '$ref': '#/components/schemas/ReviewSummaryAspect' }
+    QuoteComparisonQuote:
+      type: object
+      required: [id, price, comment, mover]
+      properties:
+        id: { type: string, format: uuid }
+        price: { type: integer, description: 원(KRW), example: 350000 }
+        comment:
+          type: string
+          nullable: true
+          description: 기사님이 견적 제출 시 입력한 코멘트. 미입력 시 null.
+        mover: { '$ref': '#/components/schemas/QuoteComparisonMover' }
+    QuoteComparison:
+      type: object
+      required: [quotes]
+      properties:
+        quotes:
+          type: array
+          description: 요청한 `quoteIds` 순서대로 반환합니다.
+          minItems: 2
+          maxItems: 3
+          items: { '$ref': '#/components/schemas/QuoteComparisonQuote' }
     QuoteDetail:
       allOf:
         - { '$ref': '#/components/schemas/CustomerQuote' }
