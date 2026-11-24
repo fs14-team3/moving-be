@@ -30,3 +30,9 @@ export async function createDamageReport(req: Request, res: Response) {
     .status(201)
     .json(await damageReportService.createDamageReport(req.user, quoteId, body))
 }
+
+export async function listDamageReports(req: Request, res: Response) {
+  const { quoteId } = validate(damageReportParamsSchema, req.params)
+
+  res.json(await damageReportService.listDamageReports(req.user, quoteId))
+}

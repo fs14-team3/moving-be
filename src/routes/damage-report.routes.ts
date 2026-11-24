@@ -18,3 +18,9 @@ damageReportRouter.post(
   requireRole('CUSTOMER'),
   damageReportController.createDamageReport,
 )
+
+damageReportRouter.get(
+  '/:quoteId/damage-reports',
+  requireAuth,
+  damageReportController.listDamageReports,
+)

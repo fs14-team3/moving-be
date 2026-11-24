@@ -213,3 +213,31 @@ export async function createDamageReport(
     }
   }
 }
+
+export async function listDamageReports(
+  viewer: Express.User | undefined,
+  quoteId: string,
+) {
+  if (!viewer) throw new AppError('UNAUTHORIZED')
+
+  const quote = await prisma.quote.findFirst({
+    where: {
+      id: quoteId,
+      OR: [{ moverId: viewer.id }, { moveRequest: { customerId: viewer.id } }],
+    },
+    select: {
+      ...reportableQuoteSelect,
+      damageReports: {
+        select: damageReportSelect,
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      },
+    },
+  })
+  if (!quote) throw new AppError('NOT_FOUND')
+  const query = quote.damageReports.length > 0 ? signedPhotoQuery(quoteId) : ''
+
+  return {
+    items: quote.damageReports.map((report) => toDamageReport(report, query)),
+    canReport: quote.moverId !== viewer.id && isReportable(quote),
+  }
+}

@@ -1389,6 +1389,38 @@ paths:
             application/json:
               schema: { '$ref': '#/components/schemas/ErrorResponse' }
   '/quotes/{quoteId}/damage-reports':
+    get:
+      tags: [Quotes]
+      summary: 파손 접수 목록
+      description: >-
+        견적을 보낸 기사님과 해당 견적 요청의 일반 유저만 조회할 수 있습니다. 최근에 접수한 순서로 반환합니다.
+        `canReport`가 `true`일 때만 파손 접수하기 버튼을 보여 줍니다.
+
+
+        사진 주소는 작업 사진과 같은 CloudFront 서명 URL이므로, 화면을 1시간 넘게 열어 둘 때는 목록을 다시 조회해 주소를 갱신합니다.
+      operationId: listDamageReports
+      security:
+        - sessionCookie: []
+      parameters:
+        - { '$ref': '#/components/parameters/QuoteIdPath' }
+      responses:
+        '200':
+          description: 파손 접수 목록
+          content:
+            application/json:
+              schema: { '$ref': '#/components/schemas/DamageReportList' }
+        '400': { '$ref': '#/components/responses/ValidationError' }
+        '401': { '$ref': '#/components/responses/Unauthorized' }
+        '404':
+          description: '`NOT_FOUND`. 견적을 보낸 기사님이나 견적을 요청한 일반 유저가 아님'
+          content:
+            application/json:
+              schema: { '$ref': '#/components/schemas/ErrorResponse' }
+        '503':
+          description: '`UPLOAD_NOT_CONFIGURED`. 접수가 있는데 서버에 `IMAGE_BASE_URL`·`CLOUDFRONT_KEY_PAIR_ID`·`CLOUDFRONT_PRIVATE_KEY` 중 하나라도 없는 경우 (로컬 개발 환경 등)'
+          content:
+            application/json:
+              schema: { '$ref': '#/components/schemas/ErrorResponse' }
     post:
       tags: [Quotes]
       summary: 파손 접수
@@ -2287,6 +2319,17 @@ components:
           type: array
           description: 접수할 때 보낸 `uploadIds` 순서입니다.
           items: { '$ref': '#/components/schemas/DamagePhoto' }
+    DamageReportList:
+      type: object
+      required: [items, canReport]
+      properties:
+        items:
+          type: array
+          items: { '$ref': '#/components/schemas/DamageReport' }
+        canReport:
+          type: boolean
+          description: 호출자가 지금 파손을 접수할 수 있으면 `true` (견적을 요청한 일반 유저, 확정된 견적의 이사일 다음 날부터 30일 동안)
+          example: true
     DamagePhoto:
       type: object
       required: [url, thumbnailUrl]

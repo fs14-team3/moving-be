@@ -28,6 +28,7 @@ import {
 } from './helpers'
 
 const mover: Express.User = { id: randomUUID(), role: 'MOVER' }
+const otherMover: Express.User = { id: randomUUID(), role: 'MOVER' }
 const customer: Express.User = { id: randomUUID(), role: 'CUSTOMER' }
 const otherCustomer: Express.User = { id: randomUUID(), role: 'CUSTOMER' }
 
@@ -52,7 +53,7 @@ async function createQuote(
   moveDate = daysAfterMove(1),
   customerId = customer.id,
 ) {
-  const request = await createMoveRequest(customerId, 'CONFIRMED', moveDate)
+  const request = await createMoveRequest(customerId, 'COMPLETED', moveDate)
   const quote = await prisma.quote.create({
     data: {
       moveRequestId: request.id,
@@ -85,6 +86,10 @@ function report(
     .send({ ...REPORT, uploadIds: [randomUUID()], ...body })
 }
 
+function list(quoteId: string, viewer?: Express.User) {
+  return api(viewer).get(`/api/quotes/${quoteId}/damage-reports`)
+}
+
 function signedFor(quoteId: string) {
   return {
     keyPairId: 'K2TESTKEYPAIR',
@@ -110,6 +115,7 @@ function notifications() {
 beforeEach(async () => {
   await resetDatabase()
   await createMover(mover.id, {})
+  await createMover(otherMover.id, {})
   await createCustomer(customer.id, '김고객')
   await createCustomer(otherCustomer.id)
   send = vi.spyOn(s3, 'send').mockResolvedValue(undefined as never)
@@ -608,6 +614,108 @@ describe('POST /api/quotes/:quoteId/damage-reports', () => {
 
   it('견적 ID 형식이 잘못되면 400을 반환한다', async () => {
     const response = await report('not-a-uuid', customer)
+
+    expect(response.status).toBe(400)
+    expect(response.body.error.code).toBe('VALIDATION_ERROR')
+  })
+})
+
+describe('GET /api/quotes/:quoteId/damage-reports', () => {
+  it.each([
+    { name: '견적을 요청한 일반 유저', viewer: customer, canReport: true },
+    { name: '견적을 보낸 기사님', viewer: mover, canReport: false },
+  ])(
+    '$name 조회 시 최근 접수 순으로 반환한다',
+    async ({ viewer, canReport }) => {
+      const quoteId = await createQuote()
+      const first = await report(quoteId, customer)
+      const second = await report(quoteId, customer, {
+        itemName: '냉장고',
+        uploadIds: [randomUUID(), randomUUID()],
+      })
+
+      const response = await list(quoteId.toUpperCase(), viewer)
+
+      expect(response.status).toBe(200)
+      expect(response.body).toEqual({
+        items: [second.body, first.body],
+        canReport,
+      })
+    },
+  )
+
+  it.each([
+    { name: '이사 당일이면', status: 'CONFIRMED', days: 0 },
+    { name: '이사일 31일 뒤면', status: 'CONFIRMED', days: 31 },
+    { name: '확정되지 않은 견적이면', status: 'SUBMITTED', days: 1 },
+  ] as const)(
+    '$name 일반 유저도 canReport가 false다',
+    async ({ status, days }) => {
+      const quoteId = await createQuote(status, daysAfterMove(days))
+
+      const response = await list(quoteId, customer)
+
+      expect(response.status).toBe(200)
+      expect(response.body).toEqual({ items: [], canReport: false })
+    },
+  )
+
+  it('접수 기간이 끝나도 접수한 내용은 계속 반환한다', async () => {
+    const quoteId = await createQuote('CONFIRMED', daysAfterMove(30))
+    const { body: saved } = await report(quoteId, customer)
+    vi.setSystemTime(NOW.getTime() + DAY_MS)
+
+    const response = await list(quoteId, customer)
+
+    expect(response.body.canReport).toBe(false)
+    expect(response.body.items).toEqual([
+      expect.objectContaining({ id: saved.id, itemName: REPORT.itemName }),
+    ])
+  })
+
+  it.each(['IMAGE_BASE_URL', 'CLOUDFRONT_KEY_PAIR_ID'] as const)(
+    '%s 설정이 없으면 접수가 있을 때만 503을 반환한다',
+    async (key) => {
+      const empty = await createQuote()
+      const reported = await createQuote()
+      await report(reported, customer)
+      const original = env[key]
+      env[key] = undefined
+
+      try {
+        const emptyResponse = await list(empty, mover)
+        const reportedResponse = await list(reported, mover)
+
+        expect(emptyResponse.status).toBe(200)
+        expect(emptyResponse.body.items).toEqual([])
+        expect(reportedResponse.status).toBe(503)
+        expect(reportedResponse.body.error.code).toBe('UPLOAD_NOT_CONFIGURED')
+      } finally {
+        env[key] = original
+      }
+    },
+  )
+
+  it('로그인하지 않으면 401을 반환한다', async () => {
+    const response = await list(await createQuote())
+
+    expect(response.status).toBe(401)
+  })
+
+  it.each([
+    { name: '다른 기사님', viewer: otherMover },
+    { name: '다른 일반 유저', viewer: otherCustomer },
+  ])('$name 조회 시 404를 반환한다', async ({ viewer }) => {
+    const quoteId = await createQuote()
+    await report(quoteId, customer)
+
+    const response = await list(quoteId, viewer)
+
+    expect(response.status).toBe(404)
+  })
+
+  it('견적 ID 형식이 잘못되면 400을 반환한다', async () => {
+    const response = await list('not-a-uuid', customer)
 
     expect(response.status).toBe(400)
     expect(response.body.error.code).toBe('VALIDATION_ERROR')
