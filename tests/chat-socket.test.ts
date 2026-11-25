@@ -151,6 +151,12 @@ function joinChatRoom(socket: TestSocket, chatRoomId: string) {
   })
 }
 
+function waitForDisconnect(socket: TestSocket) {
+  return new Promise<string>((resolve) => {
+    socket.once('disconnect', resolve)
+  })
+}
+
 describe('Socket.IO 채팅 연결 및 채팅방 입장', () => {
   beforeAll(async () => {
     const sessionMiddleware = createSessionMiddleware()
@@ -440,5 +446,72 @@ describe('Socket.IO 채팅 연결 및 채팅방 입장', () => {
 
     expect(customerRead.lastReadAt).toBe(moverRead.lastReadAt)
     expect(Number.isNaN(Date.parse(customerRead.lastReadAt))).toBe(false)
+  })
+  it('로그아웃하면 해당 세션의 소켓만 종료한다', async () => {
+    const fixture = await createChatFixture()
+
+    // 동일 사용자의 서로 다른 브라우저 세션 생성
+    const cookie1 = await loginAndGetCookie({
+      id: fixture.customerId,
+      role: 'CUSTOMER',
+    })
+    const cookie2 = await loginAndGetCookie({
+      id: fixture.customerId,
+      role: 'CUSTOMER',
+    })
+
+    const socket1 = connectSocket(cookie1)
+    const socket2 = connectSocket(cookie2)
+
+    await Promise.all([waitForConnection(socket1), waitForConnection(socket2)])
+
+    const disconnectPromise = waitForDisconnect(socket1)
+
+    await request(httpServer)
+      .post('/api/auth/logout')
+      .set('Cookie', cookie1)
+      .expect(200)
+
+    await expect(disconnectPromise).resolves.toBe('io server disconnect')
+
+    // 다른 브라우저 세션은 유지되어야 한다
+    expect(socket2.connected).toBe(true)
+  })
+  it('비밀번호 변경 시 동일 사용자의 모든 소켓 연결을 종료한다', async () => {
+    const fixture = await createChatFixture()
+
+    // 동일 사용자의 서로 다른 브라우저 세션 생성
+    const cookie1 = await loginAndGetCookie({
+      id: fixture.moverId,
+      role: 'MOVER',
+    })
+    const cookie2 = await loginAndGetCookie({
+      id: fixture.moverId,
+      role: 'MOVER',
+    })
+
+    const socket1 = connectSocket(cookie1)
+    const socket2 = connectSocket(cookie2)
+
+    await Promise.all([waitForConnection(socket1), waitForConnection(socket2)])
+
+    const disconnectPromises = [
+      waitForDisconnect(socket1),
+      waitForDisconnect(socket2),
+    ]
+
+    await request(httpServer)
+      .patch('/api/users/me/password')
+      .set('Cookie', cookie1)
+      .send({
+        currentPassword: PASSWORD,
+        newPassword: 'Newpass123!',
+        confirmPassword: 'Newpass123!',
+      })
+      .expect(200)
+
+    const reasons = await Promise.all(disconnectPromises)
+
+    expect(reasons).toEqual(['io server disconnect', 'io server disconnect'])
   })
 })

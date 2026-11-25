@@ -6,6 +6,7 @@ import { Server as SocketIOServer } from 'socket.io'
 
 type SocketRequest = IncomingMessage & {
   session?: Session & SessionData
+  sessionID?: string
 }
 
 type ChatJoinResponse = { ok: true } | { ok: false; message: string }
@@ -43,6 +44,7 @@ export interface SocketData {
     userId: string
     role: UserRole
   }
+  sessionId: string
 }
 
 export type ChatSocketServer = SocketIOServer<
@@ -60,8 +62,9 @@ export function registerChatSocketHandlers(io: ChatSocketServer) {
   io.use((socket, next) => {
     const request = socket.request as SocketRequest
     const sessionUser = request.session?.user
+    const sessionId = request.sessionID
 
-    if (!sessionUser) {
+    if (!sessionUser || !sessionId) {
       return next(new Error('UNAUTHORIZED'))
     }
 
@@ -69,11 +72,16 @@ export function registerChatSocketHandlers(io: ChatSocketServer) {
       userId: sessionUser.userId,
       role: sessionUser.role,
     }
+    socket.data.sessionId = sessionId
 
     return next()
   })
 
   io.on('connection', (socket) => {
+    // 세션 및 사용자 단위 소켓 관리
+    void socket.join(`session:${socket.data.sessionId}`)
+    void socket.join(`user:${socket.data.user.userId}`)
+
     // 채팅방 입장 요청
     socket.on('chat:join', async ({ chatRoomId }, acknowledge) => {
       if (!UUID_REGEX.test(chatRoomId)) {

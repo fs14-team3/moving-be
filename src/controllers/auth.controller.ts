@@ -8,6 +8,7 @@ import {
   socialLoginQuery,
   socialCallbackQuery,
 } from '../validators/auth.validator'
+import type { ChatSocketServer } from '../socket/chat.socket'
 
 const STATE_COOKIE_MAX_AGE = 10 * 60 * 1000
 
@@ -96,6 +97,9 @@ export async function login(req: Request, res: Response) {
 
 // 로그아웃
 export async function logout(req: Request, res: Response) {
+  // 세션 삭제 전에 ID를 확보
+  const sessionId = req.sessionID
+
   await new Promise<void>((resolve, reject) => {
     req.session.destroy((error) => {
       if (error) {
@@ -106,6 +110,13 @@ export async function logout(req: Request, res: Response) {
       resolve()
     })
   })
+
+  // 현재 세션에 연결된 Socket.IO 연결 종료
+  const io = req.app.get('io') as ChatSocketServer | undefined
+
+  if (sessionId) {
+    io?.in(`session:${sessionId}`).disconnectSockets(true)
+  }
 
   res.clearCookie('moving.sid', {
     httpOnly: true,
