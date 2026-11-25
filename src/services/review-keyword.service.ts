@@ -39,7 +39,7 @@ function getGemini() {
  * 리뷰 한 건을 Gemini로 분석하고 DB에 저장합니다.
  */
 export async function analyzeAndSaveReviewKeywords(reviewId: string) {
-  // 1. 리뷰 조회
+  // 리뷰 조회
   const review = await prisma.review.findUnique({
     where: { id: reviewId },
     select: {
@@ -54,7 +54,7 @@ export async function analyzeAndSaveReviewKeywords(reviewId: string) {
     throw new Error('리뷰를 찾을 수 없습니다.')
   }
 
-  // 2. 기존 추가 키워드 조회
+  // 기존 추가 키워드 조회
   const existingKeywords = await prisma.reviewKeyword.findMany({
     where: {
       baseKey: null,
@@ -66,7 +66,7 @@ export async function analyzeAndSaveReviewKeywords(reviewId: string) {
     },
   })
 
-  // 3. Gemini 프롬프트 생성
+  // Gemini 프롬프트 생성
   const prompt = buildReviewKeywordPrompt(
     {
       content: review.content,
@@ -75,7 +75,7 @@ export async function analyzeAndSaveReviewKeywords(reviewId: string) {
     existingKeywords,
   )
 
-  // 4. Gemini 분석
+  // Gemini 분석
   const gemini = getGemini()
 
   const response = await gemini.models.generateContent({
@@ -90,10 +90,10 @@ export async function analyzeAndSaveReviewKeywords(reviewId: string) {
     throw new Error('Gemini 분석 응답이 비어 있습니다.')
   }
 
-  // 5. JSON 파싱 및 Zod 검증
+  // JSON 파싱 및 Zod 검증
   const analysis = reviewKeywordSchema.parse(JSON.parse(response.text))
 
-  // 6. evidence 위치 검증
+  // evidence 위치 검증
   // DB 트랜잭션 전에 검증하여 잘못된 근거가
   // 기존 분석 결과를 삭제하지 않도록 합니다.
   const baseResults = analysis.baseLabels.map((item) => {
@@ -134,7 +134,7 @@ export async function analyzeAndSaveReviewKeywords(reviewId: string) {
     }
   }
 
-  // 7. 키워드 및 분석 결과를 트랜잭션으로 저장
+  // 키워드 및 분석 결과를 트랜잭션으로 저장
   return prisma.$transaction(async (tx) => {
     // Gemini 호출 도중 리뷰가 수정되었다면 저장하지 않음
     const currentReview = await tx.review.findUnique({
@@ -158,7 +158,7 @@ export async function analyzeAndSaveReviewKeywords(reviewId: string) {
     const mentions: Prisma.ReviewKeywordMentionCreateManyInput[] = []
     const usedKeywordIds = new Set<string>()
 
-    // 8. 기본 라벨 저장
+    // 기본 라벨 저장
     for (const item of baseResults) {
       const keyword = await tx.reviewKeyword.upsert({
         where: {
@@ -187,7 +187,7 @@ export async function analyzeAndSaveReviewKeywords(reviewId: string) {
       })
     }
 
-    // 9. 추가 키워드 저장
+    // 추가 키워드 저장
     for (const item of additionalResults) {
       let keyword
 
@@ -241,19 +241,40 @@ export async function analyzeAndSaveReviewKeywords(reviewId: string) {
       })
     }
 
-    // 10. 해당 리뷰의 기존 분석 결과 삭제
+    // 해당 리뷰의 기존 분석 결과 삭제
     await tx.reviewKeywordMention.deleteMany({
       where: {
         reviewId,
       },
     })
 
-    // 11. 새로운 분석 결과 저장
+    // 새로운 분석 결과 저장
     if (mentions.length > 0) {
       await tx.reviewKeywordMention.createMany({
         data: mentions,
       })
     }
+
+    // AI 분석 완료 기록 저장
+    // 키워드가 0개인 리뷰도 분석 완료로 기록합니다.
+    await tx.reviewKeywordAnalysis.upsert({
+      where: {
+        reviewId,
+      },
+      create: {
+        reviewId,
+        reviewUpdatedAt: review.updatedAt,
+      },
+      update: {
+        reviewUpdatedAt: review.updatedAt,
+        analyzedAt: new Date(),
+      },
+    })
+
+    // 분석 완료 시 이전 복구 시도 기록 초기화.
+    await tx.reviewKeywordRecovery.deleteMany({
+      where: { reviewId },
+    })
 
     return {
       reviewId,
