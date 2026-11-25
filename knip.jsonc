@@ -1,5 +1,9 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema-jsonc.json",
-  "entry": ["tests/review-keyword.seed.ts"],
+  "entry": [
+    "tests/review-keyword.seed.ts",
+    "tests/review-keyword-e2e.manual.ts",
+    "tests/review-keyword-retry.manual.ts",
+  ],
   "ignoreDependencies": ["@prisma/client"],
 }

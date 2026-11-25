@@ -262,4 +262,44 @@ describe('리뷰 키워드 DB 저장', () => {
       }),
     ).toBe(0)
   })
+
+  it('키워드가 0개여도 분석 완료 기록을 저장한다', async () => {
+    mockAnalysis([], [])
+
+    const result = await analyzeAndSaveReviewKeywords(reviewId)
+
+    expect(result.keywordCount).toBe(0)
+
+    const mentions = await prisma.reviewKeywordMention.findMany({
+      where: { reviewId },
+    })
+
+    expect(mentions).toHaveLength(0)
+
+    const review = await prisma.review.findUniqueOrThrow({
+      where: { id: reviewId },
+    })
+
+    const analysis = await prisma.reviewKeywordAnalysis.findUnique({
+      where: { reviewId },
+    })
+
+    expect(analysis).not.toBeNull()
+    expect(analysis?.reviewUpdatedAt).toEqual(review.updatedAt)
+    expect(analysis?.analyzedAt).toBeInstanceOf(Date)
+  })
+
+  it('Gemini 분석에 실패하면 완료 기록을 생성하지 않는다', async () => {
+    generateContent.mockRejectedValue(new Error('Gemini 분석 실패'))
+
+    await expect(analyzeAndSaveReviewKeywords(reviewId)).rejects.toThrow(
+      'Gemini 분석 실패',
+    )
+
+    const analysis = await prisma.reviewKeywordAnalysis.findUnique({
+      where: { reviewId },
+    })
+
+    expect(analysis).toBeNull()
+  })
 })
