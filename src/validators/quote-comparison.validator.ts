@@ -1,7 +1,7 @@
 import { z } from 'zod'
 
 // 대기 중인 견적 비교 키워드
-export const COMPARISON_KEYWORDS = [
+const COMPARISON_KEYWORDS = [
   'PRICE',
   'CAREER',
   'PUNCTUALITY',
