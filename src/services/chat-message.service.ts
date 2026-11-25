@@ -18,7 +18,10 @@ type MessageRow = {
 }
 
 // 채팅방 참여 여부 확인
-async function assertChatParticipant(chatRoomId: string, userId: string) {
+export async function assertChatParticipant(
+  chatRoomId: string,
+  userId: string,
+) {
   const participants = await prisma.$queryRaw<Array<{ id: string }>>`
     SELECT cr.id
     FROM chat_rooms cr
