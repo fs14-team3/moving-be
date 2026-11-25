@@ -1,3 +1,4 @@
+import compression from 'compression'
 import cors from 'cors'
 import express from 'express'
 import helmet from 'helmet'
@@ -17,6 +18,7 @@ export function createApp(sessionMiddleware = createSessionMiddleware()) {
   app.set('trust proxy', env.TRUST_PROXY)
   app.use(httpLogger)
   app.use(helmet())
+  app.use(compression())
   app.use(
     cors({
       origin: env.CLIENT_ORIGIN,

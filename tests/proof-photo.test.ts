@@ -300,6 +300,16 @@ describe('POST /api/quotes/:quoteId/proof-photos/uploads', () => {
     })
   })
 
+  it('클라이언트가 압축을 허용하면 응답을 압축해 보낸다', async () => {
+    const response = await presign(await createQuote(), mover, {
+      count: 10,
+    }).set('Accept-Encoding', 'gzip')
+
+    expect(response.status).toBe(201)
+    expect(response.headers['content-encoding']).toBe('gzip')
+    expect(response.body.items).toHaveLength(10)
+  })
+
   it('로그인하지 않으면 401을 반환한다', async () => {
     const response = await presign(await createQuote())
 
