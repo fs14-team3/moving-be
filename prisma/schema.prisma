@@ -338,6 +338,7 @@ model Notification {
   quote         Quote?           @relation(fields: [quoteId], references: [id], onDelete: Cascade)
 
   @@index([userId, readAt, createdAt, id])
+  @@index([userId, createdAt, id])
   @@map("notifications")
 }
 

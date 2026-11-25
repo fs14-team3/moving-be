@@ -2,11 +2,12 @@ import { prisma } from '../lib/prisma'
 import { encodeCursor } from '../utils/cursor'
 import type { ListNotificationsQuery } from '../validators/notification.validator'
 
+const READ_RETENTION_MS = 30 * 24 * 60 * 60 * 1000
+
 type GetNotificationsInput = ListNotificationsQuery & {
   userId: string
 }
 
-// 현재 사용자의 미읽음 알림을 최신순으로 조회
 export async function getNotifications({
   userId,
   cursor,
@@ -15,22 +16,27 @@ export async function getNotifications({
   const notifications = await prisma.notification.findMany({
     where: {
       userId,
-      readAt: null,
+      OR: [
+        { readAt: null },
+        { createdAt: { gte: new Date(Date.now() - READ_RETENTION_MS) } },
+      ],
 
       ...(cursor && {
-        OR: [
-          {
-            createdAt: {
-              lt: cursor.createdAt,
+        AND: {
+          OR: [
+            {
+              createdAt: {
+                lt: cursor.createdAt,
+              },
             },
-          },
-          {
-            createdAt: cursor.createdAt,
-            id: {
-              lt: cursor.id,
+            {
+              createdAt: cursor.createdAt,
+              id: {
+                lt: cursor.id,
+              },
             },
-          },
-        ],
+          ],
+        },
       }),
     },
 

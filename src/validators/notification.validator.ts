@@ -10,7 +10,7 @@ const notificationCursor = z.object({
 
 export const listNotificationsQuery = z.object({
   ...cursorPageQuery(cursorSchema(notificationCursor)),
-  limit: z.coerce.number().int().min(1).max(50).default(3),
+  limit: z.coerce.number().int().min(1).max(50).default(10),
 })
 
 export const notificationIdParamsSchema = z.object({
