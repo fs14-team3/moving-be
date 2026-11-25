@@ -10,6 +10,7 @@ import { createApp } from './app'
 import { env } from './config/env'
 import './instrument'
 import { boss } from './lib/boss'
+import { logger } from './lib/logger'
 import { prisma } from './lib/prisma'
 import { createSessionMiddleware } from './middlewares/session'
 import { generateAndSaveReviewSummary } from './services/review.service'
@@ -52,25 +53,33 @@ io.engine.use(
     sessionMiddleware(req as Request, res as Response, next)
   },
 )
+
+// Socket.IO 이벤트 핸들러 등록
 registerChatSocketHandlers(io)
 
+// HTTP 서버 시작 및 작업 큐 초기화
 httpServer.listen({ port: env.PORT, host: env.HOST }, async () => {
   await boss.start()
   await boss.createQueue('review-summary', { policy: 'exclusive' })
   await boss.work<{ moverId: string }>('review-summary', async (jobs) => {
     for (const job of jobs) {
-      await generateAndSaveReviewSummary(job.data.moverId)
+      try {
+        await generateAndSaveReviewSummary(job.data.moverId)
+      } catch (err) {
+        logger.error({ err, queue: job.name, jobId: job.id }, 'Job failed')
+        throw err
+      }
     }
   })
 
-  console.info(`API ready on port ${env.PORT}`)
+  logger.info({ port: env.PORT }, 'API ready')
 })
 
 function shutdown(signal: string) {
-  console.info(`Shutting down (${signal})`)
+  logger.info({ signal }, 'Shutting down')
 
   setTimeout(() => {
-    console.error('Shutdown timed out')
+    logger.error('Shutdown timed out')
     process.exit(1)
   }, 10_000).unref()
 

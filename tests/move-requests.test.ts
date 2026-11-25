@@ -38,6 +38,25 @@ const body = {
   to: { address: '경기 성남시 분당구 판교역로 166' },
 }
 
+const details = {
+  serviceLevel: 'HALF_PACKING',
+  from: { buildingType: 'VILLA', floor: 3, hasElevator: false, canPark: true },
+  to: {
+    buildingType: 'APARTMENT',
+    floor: 5,
+    hasElevator: true,
+    canPark: false,
+  },
+  areaRange: 'TWENTIES',
+  residentCount: 2,
+  items: [
+    { item: 'FRIDGE_SIDE_BY_SIDE', quantity: 1 },
+    { item: 'BED_QUEEN', quantity: 1 },
+  ],
+  boxRange: 'UP_TO_30',
+  memo: '  피아노는 조심히 옮겨 주세요  ',
+}
+
 function createRequest(user: Express.User, input: object = body) {
   return api(user).post('/api/move-requests').send(input)
 }
@@ -110,6 +129,7 @@ describe('POST /api/move-requests', () => {
         zonecode: null,
         region: '경기',
       },
+      details: null,
       status: 'PENDING',
       quoteCount: 0,
       designatedMoverIds: [],
@@ -148,6 +168,102 @@ describe('POST /api/move-requests', () => {
     expect(res.status).toBe(status)
     expect(res.body.error.code).toBe(code)
     expect(await prisma.moveRequest.count()).toBe(0)
+  })
+
+  it('상세 정보와 짐 목록을 함께 저장하고 진행 중인 요청에서도 반환한다', async () => {
+    const res = await createRequest(customer, { ...body, details })
+
+    expect(res.status).toBe(201)
+    expect(res.body.details).toEqual({
+      ...details,
+      items: [
+        { item: 'BED_QUEEN', quantity: 1 },
+        { item: 'FRIDGE_SIDE_BY_SIDE', quantity: 1 },
+      ],
+      memo: '피아노는 조심히 옮겨 주세요',
+    })
+    expect(
+      await prisma.moveRequestItem.count({
+        where: { moveRequestId: res.body.id },
+      }),
+    ).toBe(2)
+
+    const active = await api(customer).get('/api/move-requests/active')
+
+    expect(active.body.moveRequest.details).toEqual(res.body.details)
+  })
+
+  it('짐 목록과 요청사항 없이도 상세 정보를 저장한다', async () => {
+    const res = await createRequest(customer, {
+      ...body,
+      details: { ...details, items: [], memo: '   ' },
+    })
+
+    expect(res.status).toBe(201)
+    expect(res.body.details).toMatchObject({ items: [], memo: null })
+  })
+
+  it('사무실이사는 거주 인원 없이 상세 정보를 저장한다', async () => {
+    const { residentCount: _residentCount, ...officeDetails } = details
+
+    const res = await createRequest(customer, {
+      ...body,
+      moveType: 'OFFICE',
+      details: officeDetails,
+    })
+
+    expect(res.status).toBe(201)
+    expect(res.body.details.residentCount).toBeNull()
+  })
+
+  it.each([
+    [
+      '가정이사에 거주 인원이 없으면',
+      { ...details, residentCount: null },
+      'details.residentCount',
+    ],
+    [
+      '층수가 0층이면',
+      { ...details, from: { ...details.from, floor: 0 } },
+      'details.from.floor',
+    ],
+    [
+      '목록에 없는 짐이면',
+      { ...details, items: [{ item: 'SPACESHIP', quantity: 1 }] },
+      'details.items.0.item',
+    ],
+    [
+      '짐 수량이 0이면',
+      { ...details, items: [{ item: 'BED_QUEEN', quantity: 0 }] },
+      'details.items.0.quantity',
+    ],
+    [
+      '같은 짐을 두 번 보내면',
+      {
+        ...details,
+        items: [
+          { item: 'BED_QUEEN', quantity: 1 },
+          { item: 'BED_QUEEN', quantity: 2 },
+        ],
+      },
+      'details.items',
+    ],
+    [
+      '요청사항이 200자를 넘으면',
+      { ...details, memo: '가'.repeat(201) },
+      'details.memo',
+    ],
+  ])('%s 400을 반환한다', async (_case, invalidDetails, field) => {
+    const res = await createRequest(customer, {
+      ...body,
+      details: invalidDetails,
+    })
+
+    expect(res.status).toBe(400)
+    expect(res.body.error.details).toEqual([
+      { field, reason: expect.any(String) },
+    ])
+    expect(await requestCount(customer.id)).toBe(0)
   })
 
   it('필수 정보가 없으면 400과 누락된 필드를 반환한다', async () => {

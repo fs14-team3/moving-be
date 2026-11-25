@@ -308,15 +308,16 @@ async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
   const response = await fetch(url, options)
 
   if (!response.ok) {
-    const responseText = await response.text()
-
-    console.error('[OAuth Provider Response Error]', {
-      status: response.status,
-      statusText: response.statusText,
-      response: responseText,
-    })
-
-    throw new Error(`OAuth 제공자 요청 실패 (${response.status})`)
+    const body = (await response.json().catch(() => null)) as {
+      error?: unknown
+      error_code?: unknown
+    } | null
+    const codes = [body?.error, body?.error_code].filter(
+      (code) => typeof code === 'string' && /^\w+$/.test(code),
+    )
+    throw new Error(
+      `OAuth 제공자 요청 실패 (${[response.status, ...codes].join(' ')})`,
+    )
   }
 
   return response.json() as Promise<T>

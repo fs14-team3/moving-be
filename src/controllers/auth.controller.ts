@@ -188,11 +188,7 @@ export async function socialCallback(req: Request, res: Response) {
       status: 'success',
     })
   } catch (error) {
-    console.error('[Social Login Callback Error]', {
-      provider,
-      message: error instanceof Error ? error.message : '알 수 없는 오류',
-      stack: error instanceof Error ? error.stack : undefined,
-    })
+    req.log.error({ err: error, provider }, 'Social login callback failed')
 
     return redirectToLanding(res, {
       provider,

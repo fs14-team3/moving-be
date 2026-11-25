@@ -4,6 +4,7 @@ import helmet from 'helmet'
 import { env } from './config/env'
 import { createSessionMiddleware } from './middlewares/session'
 import { errorHandler, notFoundHandler } from './middlewares/error-handler'
+import { httpLogger } from './middlewares/http-logger'
 import { apiRouter } from './routes'
 
 export function createApp(sessionMiddleware = createSessionMiddleware()) {
@@ -14,6 +15,7 @@ export function createApp(sessionMiddleware = createSessionMiddleware()) {
   }
 
   app.set('trust proxy', env.TRUST_PROXY)
+  app.use(httpLogger)
   app.use(helmet())
   app.use(
     cors({
