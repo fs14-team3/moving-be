@@ -4,6 +4,7 @@ import { requireAuth } from '../middlewares/require-auth'
 import * as customerController from '../controllers/customer.controller'
 import { listFavoritesQuery } from '../validators/favorite.validator'
 import { validate } from '../validators/validate'
+import * as customerReviewController from '../controllers/customer-review.controller'
 
 export const customerRouter = Router()
 
@@ -38,4 +39,16 @@ customerRouter.delete(
   '/me/favorites',
   requireAuth,
   favoriteController.removeMyFavorites,
+)
+
+customerRouter.get(
+  '/me/reviews/writable',
+  requireAuth,
+  customerReviewController.listWritableReviews,
+)
+
+customerRouter.get(
+  '/me/reviews',
+  requireAuth,
+  customerReviewController.listMyReviews,
 )

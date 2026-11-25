@@ -4,6 +4,8 @@ import { todayInSeoul } from '../utils/date'
 import type { CreateReviewInput } from '../validators/create-review.validator'
 import { assertCustomer, assertCustomerProfile } from './customer-access'
 import { moverSummarySelect, toMoverSummary } from './mover.service'
+import { enqueueReviewKeyword } from './review-keyword-processing.service'
+import { logger } from '../lib/logger'
 
 export async function createReview(
   viewer: Express.User | undefined,
@@ -32,6 +34,12 @@ export async function createReview(
           select: {
             moveType: true,
             moveDate: true,
+            fromAddress: true,
+            fromZonecode: true,
+            fromRegion: true,
+            toAddress: true,
+            toZonecode: true,
+            toRegion: true,
           },
         },
       },
@@ -100,6 +108,16 @@ export async function createReview(
 
   const { quote, review } = result
 
+  // 리뷰 저장이 완료된 후 키워드 분석 작업 등록
+  try {
+    await enqueueReviewKeyword(review.id)
+  } catch (error) {
+    logger.error(
+      { err: error, reviewId: review.id },
+      '[review-keyword] 신규 리뷰 분석 등록 실패',
+    )
+  }
+
   const [mover, favorite] = await Promise.all([
     prisma.moverProfile.findUniqueOrThrow({
       where: { userId: quote.moverId },
@@ -123,6 +141,16 @@ export async function createReview(
     isDesignated: quote.isDesignated,
     moveType: quote.moveRequest.moveType,
     moveDate: quote.moveRequest.moveDate.toISOString().slice(0, 10),
+    from: {
+      address: quote.moveRequest.fromAddress,
+      zonecode: quote.moveRequest.fromZonecode,
+      region: quote.moveRequest.fromRegion,
+    },
+    to: {
+      address: quote.moveRequest.toAddress,
+      zonecode: quote.moveRequest.toZonecode,
+      region: quote.moveRequest.toRegion,
+    },
     mover: toMoverSummary(mover, favorite !== null),
     rating: review.rating,
     content: review.content,
