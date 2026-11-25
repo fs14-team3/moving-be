@@ -19,5 +19,11 @@ export default defineConfig([
       ],
     },
   },
+  {
+    files: ['src/**/*.ts'],
+    rules: {
+      'no-console': 'error',
+    },
+  },
   eslintConfigPrettier,
 ])

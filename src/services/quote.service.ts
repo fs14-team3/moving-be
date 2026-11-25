@@ -1,5 +1,6 @@
 import { AppError } from '../errors/app-error'
 import { prisma } from '../lib/prisma'
+import { moveRequestDetailsSelect } from './move-request.service'
 import { createNotification } from './notification-creation.service'
 import { toSentQuote } from './sent-quote.service'
 import type { SendQuoteBody } from '../validators/quote.validator'
@@ -33,7 +34,7 @@ function assertMover(viewer: Express.User | undefined): string {
 
 export async function sendQuote(
   viewer: Express.User | undefined,
-  { requestId, price }: SendQuoteInput,
+  { requestId, price, comment }: SendQuoteInput,
 ) {
   const moverId = assertMover(viewer)
 
@@ -71,6 +72,7 @@ export async function sendQuote(
             },
           },
         },
+        items: moveRequestDetailsSelect.items,
       },
     })
     if (request.status !== 'PENDING' || request.moveDate < getToday()) {
@@ -144,8 +146,32 @@ export async function sendQuote(
         moveRequestId: requestId,
         moverId,
         price,
+        comment,
         isDesignated,
         status: 'SUBMITTED',
+      },
+    })
+
+    // 견적별 채팅방 및 참여자 생성
+    await tx.chatRoom.create({
+      data: {
+        quote: {
+          connect: { id: quote.id },
+        },
+        participants: {
+          create: [
+            {
+              user: {
+                connect: { id: request.customerId },
+              },
+            },
+            {
+              user: {
+                connect: { id: moverId },
+              },
+            },
+          ],
+        },
       },
     })
 

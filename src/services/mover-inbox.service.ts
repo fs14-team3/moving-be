@@ -1,6 +1,10 @@
 import type { Prisma } from '../generated/prisma/client'
 import { AppError } from '../errors/app-error'
 import { prisma } from '../lib/prisma'
+import {
+  moveRequestDetailsSelect,
+  toRequestForMover,
+} from './move-request.service'
 import type { ReceivedRequestsQuery } from '../validators/mover-inbox.validator'
 
 type ReceivedRequestSort = 'MOVE_DATE_ASC' | 'CREATED_DESC'
@@ -176,6 +180,7 @@ export async function listReceivedRequests({
         where: { moverId },
         select: { moverId: true },
       },
+      items: moveRequestDetailsSelect.items,
     },
 
     orderBy:
@@ -199,25 +204,13 @@ export async function listReceivedRequests({
   const page = requests.slice(0, pageSize)
   const last = page.at(-1)
 
-  const items = page.map((request) => ({
-    id: request.id,
-    customerName: request.customer.user.name ?? null,
-    moveType: request.moveType,
-    moveDate: request.moveDate.toISOString().slice(0, 10),
-    from: {
-      address: request.fromAddress,
-      zonecode: request.fromZonecode,
-      region: request.fromRegion,
-    },
-    to: {
-      address: request.toAddress,
-      zonecode: request.toZonecode,
-      region: request.toRegion,
-    },
-    status: request.status,
-    isDesignated: request.designatedRequests.length > 0,
-    createdAt: request.createdAt.toISOString(),
-  }))
+  const items = page.map((request) =>
+    toRequestForMover(
+      request,
+      request.customer.user.name ?? null,
+      request.designatedRequests.length > 0,
+    ),
+  )
 
   const nextCursor =
     hasNext && last

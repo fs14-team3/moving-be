@@ -72,6 +72,7 @@ export async function listMoveRequestHistory(
       id: true,
       moveRequestId: true,
       price: true,
+      comment: true,
       status: true,
       isDesignated: true,
       createdAt: true,
@@ -102,6 +103,7 @@ export async function listMoveRequestHistory(
     Array<{
       id: string
       price: number
+      comment: string | null
       status: (typeof quotes)[number]['status']
       isDesignated: boolean
       createdAt: Date
@@ -113,6 +115,7 @@ export async function listMoveRequestHistory(
     const item = {
       id: quote.id,
       price: quote.price,
+      comment: quote.comment,
       status: quote.status,
       isDesignated: quote.isDesignated,
       createdAt: quote.createdAt,

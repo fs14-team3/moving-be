@@ -9,6 +9,7 @@ describe('estimateMoveCost', () => {
         moveType: 'HOME',
         moveDate: '2026-11-18',
         distanceKm: 10,
+        isHoliday: false,
       }),
     ).toEqual({ minPrice: 710_000, maxPrice: 950_000, surcharges: [] })
   })
@@ -20,17 +21,20 @@ describe('estimateMoveCost', () => {
         moveType: 'SMALL',
         moveDate: '2026-11-21',
         distanceKm: 20,
+        isHoliday: false,
       }),
     ).toEqual({ minPrice: 310_000, maxPrice: 420_000, surcharges: ['WEEKEND'] })
   })
 
-  it.each([
-    ['평일 공휴일', '2026-12-25'],
-    ['대체공휴일', '2026-10-05'],
-  ])('%s에는 공휴일 할증을 적용한다', (_, moveDate) => {
-    // 1,500,000 × 1.2 = 1,800,000
+  it('평일 공휴일에는 공휴일 할증을 적용한다', () => {
+    // 금요일 성탄절, 1,500,000 × 1.2 = 1,800,000
     expect(
-      estimateMoveCost({ moveType: 'OFFICE', moveDate, distanceKm: 0 }),
+      estimateMoveCost({
+        moveType: 'OFFICE',
+        moveDate: '2026-12-25',
+        distanceKm: 0,
+        isHoliday: true,
+      }),
     ).toEqual({
       minPrice: 1_530_000,
       maxPrice: 2_070_000,
@@ -45,6 +49,7 @@ describe('estimateMoveCost', () => {
         moveType: 'HOME',
         moveDate: '2026-10-03',
         distanceKm: 0,
+        isHoliday: true,
       }),
     ).toEqual({
       minPrice: 820_000,
