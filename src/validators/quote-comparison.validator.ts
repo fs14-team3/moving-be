@@ -10,6 +10,8 @@ const COMPARISON_KEYWORDS = [
   'COMMUNICATION',
 ] as const
 
+export type ComparisonKeyword = (typeof COMPARISON_KEYWORDS)[number]
+
 const hasNoDuplicates = (values: string[]) =>
   new Set(values).size === values.length
 

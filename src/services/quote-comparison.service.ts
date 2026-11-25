@@ -1,6 +1,8 @@
 import { AppError } from '../errors/app-error'
 import { Prisma } from '../generated/prisma/client'
 import { prisma } from '../lib/prisma'
+import { recommendQuote } from '../utils/quote-recommendation'
+import type { ComparisonKeyword } from '../validators/quote-comparison.validator'
 import { assertCustomer, assertCustomerProfile } from './customer-access'
 
 const COMPARISON_ASPECT_KEYS = [
@@ -59,7 +61,7 @@ export async function compareQuotes(
   viewer: Express.User | undefined,
   requestId: string,
   quoteIds: string[],
-  keywords: string[],
+  keywords: ComparisonKeyword[],
 ) {
   // 사용자 검증
   const customerId = assertCustomer(viewer)
@@ -91,9 +93,11 @@ export async function compareQuotes(
   // quotes 응답 가공
   const formattedQuotes = sortedQuotes.map(formatQuote)
 
-  // TODO: 키워드 기반 추천 로직 추가
-  // TODO: 추천을 포함한 응답 데이터 가공
+  // 키워드 기반 추천
+  const recommendation = recommendQuote(formattedQuotes, keywords)
+
   return {
     quotes: formattedQuotes,
+    recommendation,
   }
 }
