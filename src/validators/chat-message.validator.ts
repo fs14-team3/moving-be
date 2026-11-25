@@ -38,6 +38,4 @@ export const sendChatMessageBody = z
     }
   })
 
-export type SendChatMessageBody = z.infer<typeof sendChatMessageBody>
-
 export type ListChatMessagesQuery = z.infer<typeof listChatMessagesQuery>
