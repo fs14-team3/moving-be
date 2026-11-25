@@ -18,3 +18,4 @@ CREATE UNIQUE INDEX "proof_photos_quote_id_upload_id_key" ON "proof_photos"("quo
 
 -- AddForeignKey
 ALTER TABLE "proof_photos" ADD CONSTRAINT "proof_photos_quote_id_fkey" FOREIGN KEY ("quote_id") REFERENCES "quotes"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
