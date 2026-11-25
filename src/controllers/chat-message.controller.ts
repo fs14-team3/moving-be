@@ -45,12 +45,13 @@ export async function listChatMessages(req: Request, res: Response) {
 export async function sendChatMessage(req: Request, res: Response) {
   const userId = getCurrentUserId(req)
   const { chatRoomId } = validate(chatRoomIdParamsSchema, req.params)
-  const { content } = validate(sendChatMessageBody, req.body)
+  const { content, imageUploadIds } = validate(sendChatMessageBody, req.body)
 
   const result = await chatMessageService.sendChatMessage({
     userId,
     chatRoomId,
     content,
+    imageUploadIds,
   })
 
   // DB 저장 성공 후 채팅방 참여자에게 새 메시지 전달

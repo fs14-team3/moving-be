@@ -142,6 +142,7 @@ model User {
   notifications      Notification[]
   chatParticipations ChatParticipant[]
   sentMessages       Message[]
+  chatImages         ChatImage[]
 
   @@unique([email, role], name: "email_role")
   @@map("users")
@@ -405,11 +406,28 @@ model Message {
   content    String   @db.Text
   createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
 
-  chatRoom ChatRoom @relation(fields: [chatRoomId], references: [id], onDelete: Cascade)
-  sender   User     @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  chatRoom ChatRoom    @relation(fields: [chatRoomId], references: [id], onDelete: Cascade)
+  sender   User        @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  images   ChatImage[]
 
   @@index([chatRoomId, createdAt, id])
   @@map("messages")
+}
+
+model ChatImage {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  messageId   String   @map("message_id") @db.Uuid
+  uploaderId  String   @map("uploader_id") @db.Uuid
+  uploadId    String   @unique @map("upload_id") @db.Uuid
+  imageKey    String   @unique @map("image_key")
+  contentType String   @map("content_type")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  message  Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  uploader User    @relation(fields: [uploaderId], references: [id], onDelete: Cascade)
+
+  @@index([messageId, createdAt, id])
+  @@map("chat_images")
 }
 
 model ReviewSummary {
