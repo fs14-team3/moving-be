@@ -42,6 +42,31 @@ export async function resetDatabase() {
   await prisma.$executeRaw`TRUNCATE TABLE users, session CASCADE`
 }
 
+async function untilWaitingForLock() {
+  for (;;) {
+    const [{ waiting }] = await prisma.$queryRaw<{ waiting: number }[]>`
+      SELECT count(*)::int AS waiting
+      FROM pg_stat_activity
+      WHERE datname = current_database() AND wait_event_type = 'Lock'
+    `
+    if (waiting > 0) return
+    await new Promise((resolve) => setTimeout(resolve, 10))
+  }
+}
+
+export async function whileWriting<T>(
+  write: (tx: Prisma.TransactionClient) => Promise<unknown>,
+  request: () => PromiseLike<T>,
+) {
+  let response!: Promise<T>
+  await prisma.$transaction(async (tx) => {
+    await write(tx)
+    response = Promise.resolve(request())
+    await untilWaitingForLock()
+  })
+  return response
+}
+
 export async function createMover(
   id: string,
   profile?: Prisma.MoverProfileCreateWithoutUserInput,
