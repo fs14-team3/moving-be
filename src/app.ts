@@ -1,3 +1,4 @@
+import compression from 'compression'
 import connectPgSimple from 'connect-pg-simple'
 import cors from 'cors'
 import express from 'express'
@@ -17,6 +18,7 @@ export function createApp() {
   app.set('trust proxy', env.TRUST_PROXY)
   app.use(httpLogger)
   app.use(helmet())
+  app.use(compression())
   app.use(
     cors({
       origin: env.CLIENT_ORIGIN,
