@@ -86,6 +86,16 @@ enum QuoteStatus {
   @@map("quote_status")
 }
 
+enum MoveProgressStep {
+  DEPARTED
+  LOADING
+  IN_TRANSIT
+  UNLOADING
+  COMPLETED
+
+  @@map("move_progress_step")
+}
+
 enum NotificationType {
   NEW_REQUEST
   NEW_DESIGNATED_REQUEST
@@ -263,6 +273,7 @@ model Quote {
   mover         MoverProfile   @relation(fields: [moverId], references: [userId], onDelete: Cascade)
   reviews       Review[]
   proofPhotos   ProofPhoto[]
+  progress      MoveProgress[]
   notifications Notification[]
   chatRoom      ChatRoom?
 
@@ -312,6 +323,16 @@ model ProofPhoto {
   @@map("proof_photos")
 }
 
+model MoveProgress {
+  quoteId    String           @map("quote_id") @db.Uuid
+  step       MoveProgressStep
+  recordedAt DateTime         @default(now()) @map("recorded_at") @db.Timestamptz
+  quote      Quote            @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+
+  @@id([quoteId, step])
+  @@map("move_progress")
+}
+
 model Favorite {
   customerId String          @map("customer_id") @db.Uuid
   moverId    String          @map("mover_id") @db.Uuid
@@ -338,6 +359,7 @@ model Notification {
   quote         Quote?           @relation(fields: [quoteId], references: [id], onDelete: Cascade)
 
   @@index([userId, readAt, createdAt, id])
+  @@index([userId, createdAt, id])
   @@map("notifications")
 }
 
