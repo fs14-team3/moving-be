@@ -121,6 +121,43 @@ describe('recommendQuote', () => {
     })
   })
 
+  it('긍정과 부정 차이가 같으면 언급 수가 적은 기사님의 후기 점수가 더 높다', () => {
+    const quotes = [
+      createQuote('a', {
+        mover: {
+          aspects: [
+            {
+              key: 'PUNCTUALITY',
+              mentionCount: 10,
+              positiveCount: 6,
+              negativeCount: 2,
+            },
+          ],
+        },
+      }),
+      createQuote('b', {
+        mover: {
+          aspects: [
+            {
+              key: 'PUNCTUALITY',
+              mentionCount: 5,
+              positiveCount: 4,
+              negativeCount: 0,
+            },
+          ],
+        },
+      }),
+      createQuote('c'),
+    ]
+
+    const result = recommendQuote(quotes, ['PUNCTUALITY'])
+
+    expect(result).toEqual({
+      quoteIds: ['b'],
+      reason: '시간 약속에 대한 후기가 가장 좋아요.',
+    })
+  })
+
   it('비교 대상이 1명이어도 1등으로 인정한다', () => {
     const quotes = [
       createQuote('a', { mover: { careerYears: null } }),
