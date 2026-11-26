@@ -103,6 +103,18 @@ describe('POST /api/reviews', () => {
   it('본인의 완료된 이사에 대한 확정 견적에 리뷰를 작성한다', async () => {
     const quote = await createTestQuote()
 
+    await prisma.moveRequest.update({
+      where: { id: quote.moveRequestId },
+      data: {
+        fromAddress: '서울특별시 강남구 테헤란로',
+        fromZonecode: '06236',
+        fromRegion: '서울',
+        toAddress: '경기도 성남시 분당구',
+        toZonecode: '13529',
+        toRegion: '경기',
+      },
+    })
+
     const res = await postReview(reviewBody(quote.id), customer)
 
     expect(res.status).toBe(201)
@@ -112,6 +124,16 @@ describe('POST /api/reviews', () => {
       price: 350000,
       moveType: 'SMALL',
       moveDate: pastDate,
+      from: {
+        address: '서울특별시 강남구 테헤란로',
+        zonecode: '06236',
+        region: '서울',
+      },
+      to: {
+        address: '경기도 성남시 분당구',
+        zonecode: '13529',
+        region: '경기',
+      },
       rating: 5,
       content: '친절하고 안전하게 이사해 주셨습니다.',
       createdAt: expect.any(String),

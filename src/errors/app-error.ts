@@ -83,6 +83,15 @@ const ERROR_CATALOG = {
     status: 409,
     message: '리뷰가 작성된 견적의 작업 사진은 올리거나 삭제할 수 없습니다',
   },
+  MOVE_PROGRESS_NOT_ALLOWED: {
+    status: 409,
+    message:
+      '견적과 이사 요청이 모두 확정된 경우에만 이사 당일 진행 단계를 기록할 수 있습니다',
+  },
+  MOVE_PROGRESS_OUT_OF_ORDER: {
+    status: 409,
+    message: '다음 진행 단계만 기록할 수 있습니다',
+  },
   ADDRESS_NOT_FOUND: {
     status: 422,
     message: '주소를 찾을 수 없습니다',

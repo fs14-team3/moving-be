@@ -1,7 +1,8 @@
 import { Router } from 'express'
-import * as moveRequestController from '../controllers/move-request.controller'
-import * as receivedQuoteController from '../controllers/received-quote.controller'
 import * as moveRequestHistoryController from '../controllers/move-request-history.controller'
+import * as moveRequestController from '../controllers/move-request.controller'
+import { compareQuotes } from '../controllers/quote-comparison.controller'
+import * as receivedQuoteController from '../controllers/received-quote.controller'
 import { requireAuth } from '../middlewares/require-auth'
 import { requireRole } from '../middlewares/require-role'
 
@@ -46,4 +47,11 @@ moveRequestRouter.get(
   requireAuth,
   requireRole('CUSTOMER'),
   receivedQuoteController.listReceivedQuotes,
+)
+
+moveRequestRouter.post(
+  '/:requestId/quotes/compare',
+  requireAuth,
+  requireRole('CUSTOMER'),
+  compareQuotes,
 )

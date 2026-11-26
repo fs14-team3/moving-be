@@ -23,7 +23,9 @@ describe('알림 관리 API', () => {
     return api(user)
   }
 
-  const createdAtBase = Date.parse('2026-10-20T09:00:00.000Z')
+  const DAY_MS = 24 * 60 * 60 * 1000
+  const createdAtBase = Date.now() - DAY_MS
+  const daysAgo = (days: number) => new Date(Date.now() - days * DAY_MS)
 
   // 알림 API 테스트에 사용할 고객 및 기사님 계정 생성
   beforeAll(async () => {
@@ -84,10 +86,12 @@ describe('알림 관리 API', () => {
   async function createNotification({
     userId = customerId,
     seconds = 0,
+    createdAt = new Date(createdAtBase + seconds * 1000),
     readAt = null,
   }: {
     userId?: string
     seconds?: number
+    createdAt?: Date
     readAt?: Date | null
   } = {}) {
     return prisma.notification.create({
@@ -98,27 +102,77 @@ describe('알림 관리 API', () => {
           customerName: '테스트 고객',
           moveType: 'HOME',
         },
-        createdAt: new Date(createdAtBase + seconds * 1000),
+        createdAt,
         readAt,
       },
     })
   }
 
   describe('GET /api/notifications', () => {
-    it('현재 사용자의 읽지 않은 알림만 조회한다', async () => {
-      const unread = await createNotification()
+    it('현재 사용자의 미읽음 알림과 생성 후 30일 이내의 읽은 알림을 함께 조회한다', async () => {
+      const unread = await createNotification({ seconds: 1 })
+      const read = await createNotification({ seconds: 2, readAt: new Date() })
 
-      await createNotification({ readAt: new Date() })
       await createNotification({ userId: otherUserId })
 
       const res = await notificationApi().get('/api/notifications')
 
       expect(res.status).toBe(200)
-      expect(res.body.items).toHaveLength(1)
-      expect(res.body.items[0].id).toBe(unread.id)
-      expect(res.body.items[0].readAt).toBeNull()
+      expect(res.body.items.map((item: { id: string }) => item.id)).toEqual([
+        read.id,
+        unread.id,
+      ])
+      expect(res.body.items[0].readAt).toEqual(expect.any(String))
+      expect(res.body.items[1].readAt).toBeNull()
       expect(res.body.hasNext).toBe(false)
       expect(res.body.nextCursor).toBeNull()
+    })
+
+    it('생성 후 30일이 지난 알림은 미읽음일 때만 조회한다', async () => {
+      const oldUnread = await createNotification({ createdAt: daysAgo(31) })
+      const recentRead = await createNotification({
+        createdAt: daysAgo(29),
+        readAt: new Date(),
+      })
+
+      await createNotification({ createdAt: daysAgo(31), readAt: new Date() })
+
+      const res = await notificationApi().get('/api/notifications')
+
+      expect(res.status).toBe(200)
+      expect(res.body.items.map((item: { id: string }) => item.id)).toEqual([
+        recentRead.id,
+        oldUnread.id,
+      ])
+    })
+
+    it('목록을 넘기는 중 읽음 처리해도 같은 페이지를 다시 조회하고 다음 페이지를 누락 없이 조회한다', async () => {
+      for (let index = 0; index < 12; index++) {
+        await createNotification({ seconds: index })
+      }
+
+      const first = await notificationApi().get('/api/notifications')
+      const firstIds = first.body.items.map((item: { id: string }) => item.id)
+
+      for (const id of firstIds) {
+        await notificationApi().patch(`/api/notifications/${id}/read`)
+      }
+
+      const refetched = await notificationApi().get('/api/notifications')
+      const second = await notificationApi()
+        .get('/api/notifications')
+        .query({ cursor: first.body.nextCursor })
+
+      expect(
+        refetched.body.items.map((item: { id: string }) => item.id),
+      ).toEqual(firstIds)
+      expect(second.body.items).toHaveLength(2)
+      expect(
+        new Set([
+          ...firstIds,
+          ...second.body.items.map((item: { id: string }) => item.id),
+        ]).size,
+      ).toBe(12)
     })
 
     it('최신 알림부터 정렬한다', async () => {
@@ -136,28 +190,28 @@ describe('알림 관리 API', () => {
       ])
     })
 
-    it('첫 페이지에서 최대 3개를 반환한다', async () => {
-      for (let index = 0; index < 5; index++) {
+    it('첫 페이지에서 최대 10개를 반환한다', async () => {
+      for (let index = 0; index < 12; index++) {
         await createNotification({ seconds: index })
       }
 
       const res = await notificationApi().get('/api/notifications')
 
       expect(res.status).toBe(200)
-      expect(res.body.items).toHaveLength(3)
+      expect(res.body.items).toHaveLength(10)
       expect(res.body.hasNext).toBe(true)
       expect(res.body.nextCursor).toEqual(expect.any(String))
     })
 
     it('커서로 다음 페이지를 중복 없이 조회한다', async () => {
-      for (let index = 0; index < 5; index++) {
+      for (let index = 0; index < 12; index++) {
         await createNotification({ seconds: index })
       }
 
       const first = await notificationApi().get('/api/notifications')
 
       expect(first.status).toBe(200)
-      expect(first.body.items).toHaveLength(3)
+      expect(first.body.items).toHaveLength(10)
 
       const second = await notificationApi()
         .get('/api/notifications')
@@ -172,11 +226,11 @@ describe('알림 관리 API', () => {
         (item: { id: string }) => item.id,
       )
 
-      expect(new Set(ids).size).toBe(5)
+      expect(new Set(ids).size).toBe(12)
     })
 
     it('생성 시각이 같아도 알림을 중복이나 누락 없이 조회한다', async () => {
-      for (let index = 0; index < 5; index++) {
+      for (let index = 0; index < 12; index++) {
         await createNotification({ seconds: 1 })
       }
 
@@ -193,8 +247,8 @@ describe('알림 관리 API', () => {
         (item: { id: string }) => item.id,
       )
 
-      expect(ids).toHaveLength(5)
-      expect(new Set(ids).size).toBe(5)
+      expect(ids).toHaveLength(12)
+      expect(new Set(ids).size).toBe(12)
     })
 
     it('알림이 없으면 빈 목록을 반환한다', async () => {
