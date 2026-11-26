@@ -324,4 +324,28 @@ describe('POST /api/move-requests/:requestId/quotes/compare', () => {
     expect(res.body.quotes[0].mover.reviewSummary).toBeNull()
     expect(res.body.quotes[0].mover.aspects).toBeNull()
   })
+
+  it('선택한 키워드로 추천 견적과 이유를 함께 반환한다', async () => {
+    const request = await createMoveRequest()
+    const quote1 = await createQuote(request.id, moverId, {
+      price: 300000,
+    })
+    const quote2 = await createQuote(request.id, secondMoverId, {
+      price: 200000,
+    })
+    const quote3 = await createQuote(request.id, thirdMoverId, {
+      price: 400000,
+    })
+
+    const res = await compareQuotes(request.id, customer).send({
+      quoteIds: [quote1.id, quote2.id, quote3.id],
+      keywords: ['PRICE'],
+    })
+
+    expect(res.status).toBe(200)
+    expect(res.body.recommendation).toEqual({
+      quoteIds: [quote2.id],
+      reason: '가격이 가장 낮아요.',
+    })
+  })
 })

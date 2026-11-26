@@ -892,11 +892,13 @@ paths:
       tags: [MoveRequests]
       summary: 견적 비교 (대기 중인 견적)
       description: |-
-        요청자 본인만 받은 견적을 비교할 수 있습니다. 비로그인은 401, 기사님은 403을 반환합니다. 
+        요청자 본인만 받은 견적을 비교할 수 있습니다. 비로그인은 401, 기사님은 403을 반환합니다.
         대기 중인 견적 2~3개와 비교 키워드 1~3개를 선택해 요청합니다.
         견적은 선택한 순서대로 반환하며, 금액·코멘트와 기사님의 경력·평점·리뷰 수·리뷰 요약·후기 항목을 제공합니다.
         리뷰 요약과 후기 항목은 리뷰가 10건 미만이면 null입니다. 후기 항목에는 가격(PRICE)을 제외합니다.
         본인 요청이 아니거나 선택한 견적이 해당 요청의 대기 중 견적이 아니면 404를 반환합니다.
+        선택한 키워드에서 가장 많이 앞선 견적을 추천 이유와 함께 반환합니다.
+        순위가 같으면 함께 추천하고, 차이가 없으면 추천 견적은 빈 배열입니다.
         결과는 요청 시점에 계산하며 저장하지 않습니다.
       operationId: compareQuotes
       security:
@@ -2674,9 +2676,30 @@ components:
           nullable: true
           description: 기사님이 견적 제출 시 입력한 코멘트. 미입력 시 null.
         mover: { '$ref': '#/components/schemas/QuoteComparisonMover' }
+    QuoteRecommendation:
+      description: |-
+        선택한 키워드별로 가장 좋은 견적을 정하고, 가장 많은 키워드에서 앞선 견적을 추천합니다.
+        가격은 낮을수록, 경력은 길수록, 후기 항목은 (긍정 수 - 부정 수) / 언급 수가 높을수록 앞섭니다.
+        경력이 없거나 0년, 후기가 없거나 점수가 0 이하인 기사님은 해당 키워드 비교에서 제외합니다.
+        모든 견적이 같은 값인 키워드는 반영하지 않습니다.
+        앞선 키워드 수가 같으면 평점이 높은 순, 가격이 낮은 순으로 정하고, 순위가 같은 견적은 함께 추천합니다.
+      type: object
+      required: [quoteIds, reason]
+      properties:
+        quoteIds:
+          type: array
+          description: 공동 추천이면 여러 개, 모든 기준에서 차이가 없으면 빈 배열
+          minItems: 0
+          maxItems: 3
+          uniqueItems: true
+          items: { type: string, format: uuid }
+        reason:
+          type: string
+          description: 추천 이유 문장
+          example: 가격이 가장 낮고, 경력이 가장 길어요.
     QuoteComparison:
       type: object
-      required: [quotes]
+      required: [quotes, recommendation]
       properties:
         quotes:
           type: array
@@ -2684,6 +2707,7 @@ components:
           minItems: 2
           maxItems: 3
           items: { '$ref': '#/components/schemas/QuoteComparisonQuote' }
+        recommendation: { '$ref': '#/components/schemas/QuoteRecommendation' }
     QuoteDetail:
       allOf:
         - { '$ref': '#/components/schemas/CustomerQuote' }
