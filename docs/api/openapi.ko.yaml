@@ -2677,6 +2677,12 @@ components:
           description: 기사님이 견적 제출 시 입력한 코멘트. 미입력 시 null.
         mover: { '$ref': '#/components/schemas/QuoteComparisonMover' }
     QuoteRecommendation:
+      description: |-
+        선택한 키워드별로 가장 좋은 견적을 정하고, 가장 많은 키워드에서 앞선 견적을 추천합니다.
+        가격은 낮을수록, 경력은 길수록, 후기 항목은 (긍정 수 - 부정 수) / 언급 수가 높을수록 앞섭니다.
+        경력이 없거나 0년, 후기가 없거나 점수가 0 이하인 기사님은 해당 키워드 비교에서 제외합니다.
+        모든 견적이 같은 값인 키워드는 반영하지 않습니다.
+        앞선 키워드 수가 같으면 평점이 높은 순, 가격이 낮은 순으로 정하고, 순위가 같은 견적은 함께 추천합니다.
       type: object
       required: [quoteIds, reason]
       properties:
