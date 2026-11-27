@@ -168,6 +168,7 @@ describe('GET /api/movers/:moverId/reviews', () => {
           content: '친절했어요',
           customerName: '홍**',
           createdAt: writtenAt(1).toISOString(),
+          keywordMentions: [],
         },
         {
           id: reviewId('2'),
@@ -175,6 +176,7 @@ describe('GET /api/movers/:moverId/reviews', () => {
           content: '빨랐어요',
           customerName: '김*',
           createdAt: writtenAt(2).toISOString(),
+          keywordMentions: [],
         },
         {
           id: reviewId('3'),
@@ -182,6 +184,7 @@ describe('GET /api/movers/:moverId/reviews', () => {
           content: 'Good',
           customerName: 'J*******',
           createdAt: writtenAt(3).toISOString(),
+          keywordMentions: [],
         },
         {
           id: reviewId('4'),
@@ -189,6 +192,7 @@ describe('GET /api/movers/:moverId/reviews', () => {
           content: '늦었어요',
           customerName: null,
           createdAt: writtenAt(3).toISOString(),
+          keywordMentions: [],
         },
       ],
       page: 1,
