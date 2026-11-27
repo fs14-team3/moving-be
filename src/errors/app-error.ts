@@ -75,6 +75,14 @@ const ERROR_CATALOG = {
     status: 409,
     message: '업로드된 작업 사진을 찾을 수 없습니다',
   },
+  CHAT_IMAGE_NOT_UPLOADED: {
+    status: 409,
+    message: '업로드된 채팅 이미지를 찾을 수 없습니다',
+  },
+  CHAT_IMAGE_INVALID: {
+    status: 400,
+    message: '유효하지 않은 채팅 이미지입니다',
+  },
   PROOF_PHOTO_DELETED: {
     status: 409,
     message: '삭제된 작업 사진은 다시 올릴 수 없습니다',

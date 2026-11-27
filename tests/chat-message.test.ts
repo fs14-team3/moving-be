@@ -150,6 +150,7 @@ describe('채팅 메시지 API', () => {
 
       expect(response.body.items).toHaveLength(1)
       expect(response.body.items[0].content).toBe('첫 번째 메시지')
+      expect(response.body.items[0].images).toEqual([])
       expect(response.body.hasNext).toBe(false)
       expect(response.body.items[0].senderId).toBe(fixture.customerId)
       expect(response.body.items[0].senderName).toBe('채팅 고객')
@@ -273,6 +274,7 @@ describe('채팅 메시지 API', () => {
       expect(response.body.content).toBe('안녕하세요')
       expect(response.body.senderId).toBe(fixture.customerId)
       expect(response.body.chatRoomId).toBe(fixture.chatRoomId)
+      expect(response.body.images).toEqual([])
 
       const savedMessages = await prisma.$queryRaw<Array<{ content: string }>>`
         SELECT content

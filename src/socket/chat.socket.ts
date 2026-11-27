@@ -27,6 +27,12 @@ export interface ServerToClientEvents {
     content: string
     createdAt: Date
     senderName: string | null
+    images: Array<{
+      id: string
+      url: string
+      contentType: string
+      createdAt: Date
+    }>
   }) => void
 
   // 채팅방 읽음 상태 변경

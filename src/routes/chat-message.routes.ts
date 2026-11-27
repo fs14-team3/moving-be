@@ -2,6 +2,7 @@ import { Router } from 'express'
 
 import * as chatMessageController from '../controllers/chat-message.controller'
 import { requireAuth } from '../middlewares/require-auth'
+import * as chatImageController from '../controllers/chat-image.controller'
 
 export const chatMessageRouter = Router()
 
@@ -23,4 +24,10 @@ chatMessageRouter.post(
 chatMessageRouter.patch(
   '/:chatRoomId/read',
   chatMessageController.markChatRoomAsRead,
+)
+
+// 채팅 이미지 업로드 URL 발급
+chatMessageRouter.post(
+  '/:chatRoomId/images/uploads',
+  chatImageController.createChatImageUploads,
 )
