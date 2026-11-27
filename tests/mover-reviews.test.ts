@@ -132,6 +132,14 @@ async function prepareKeywordReviews() {
         start: 0,
         end: 4,
       },
+      {
+        reviewId: reviewId('6'),
+        keywordId: punctuality.id,
+        sentiment: 'UNCLEAR',
+        evidence: '추가 리뷰',
+        start: 0,
+        end: 5,
+      },
     ],
   })
 
@@ -336,17 +344,25 @@ describe('GET /api/movers/:moverId/review-keywords', () => {
     expect(res.body.items).toEqual([
       expect.objectContaining({
         id: punctuality.id,
-        mentionCount: 3,
+        mentionCount: 4,
         positiveCount: 2,
         negativeCount: 1,
+        unclearCount: 1,
       }),
       expect.objectContaining({
         id: handling.id,
         mentionCount: 1,
         positiveCount: 0,
         negativeCount: 1,
+        unclearCount: 0,
       }),
     ])
+
+    for (const keyword of res.body.items) {
+      expect(keyword.mentionCount).toBe(
+        keyword.positiveCount + keyword.negativeCount + keyword.unclearCount,
+      )
+    }
   })
 
   it('리뷰 10개 미만이면 키워드를 공개하지 않는다', async () => {
@@ -387,9 +403,13 @@ describe('GET /api/movers/:moverId/reviews 키워드 필터', () => {
       keywordId: punctuality.id,
     })
 
-    expect(ids(page)).toEqual([reviewId('1'), reviewId('2'), reviewId('5')])
-
-    expect(page.totalCount).toBe(3)
+    expect(ids(page)).toEqual([
+      reviewId('1'),
+      reviewId('2'),
+      reviewId('5'),
+      reviewId('6'),
+    ])
+    expect(page.totalCount).toBe(4)
   })
 
   it('키워드 필터 적용 후에도 페이지네이션을 유지한다', async () => {
@@ -409,15 +429,15 @@ describe('GET /api/movers/:moverId/reviews 키워드 필터', () => {
 
     expect(ids(first)).toEqual([reviewId('1'), reviewId('2')])
 
-    expect(ids(second)).toEqual([reviewId('5')])
+    expect(ids(second)).toEqual([reviewId('5'), reviewId('6')])
 
     expect(first).toMatchObject({
-      totalCount: 3,
+      totalCount: 4,
       totalPages: 2,
     })
 
     expect(second).toMatchObject({
-      totalCount: 3,
+      totalCount: 4,
       totalPages: 2,
     })
   })
