@@ -39,6 +39,13 @@ const notificationPayloadSchemas = {
       toAddress: requiredString,
     })
     .passthrough(),
+
+  DAMAGE_REPORTED: z
+    .object({
+      customerName: requiredString,
+      itemName: requiredString,
+    })
+    .passthrough(),
 } satisfies Record<NotificationType, z.ZodType>
 
 type BaseNotificationInput = {
@@ -53,7 +60,7 @@ type RequestNotificationInput = BaseNotificationInput & {
 }
 
 type QuoteNotificationInput = BaseNotificationInput & {
-  type: 'NEW_QUOTE' | 'QUOTE_CONFIRMED'
+  type: 'NEW_QUOTE' | 'QUOTE_CONFIRMED' | 'DAMAGE_REPORTED'
   quoteId: string
   moveRequestId?: string | null
 }
@@ -104,7 +111,9 @@ export async function createNotification(
 
   // 3. 생성한 알림 또는 기존 알림 반환
   const where =
-    input.type === 'NEW_QUOTE' || input.type === 'QUOTE_CONFIRMED'
+    input.type === 'NEW_QUOTE' ||
+    input.type === 'QUOTE_CONFIRMED' ||
+    input.type === 'DAMAGE_REPORTED'
       ? {
           userId: input.userId,
           type: input.type,

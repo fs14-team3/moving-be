@@ -1,27 +1,24 @@
 import { randomUUID } from 'node:crypto'
-import {
-  CopyObjectCommand,
-  DeleteObjectCommand,
-  NoSuchKey,
-} from '@aws-sdk/client-s3'
-import { getSignedUrl } from '@aws-sdk/cloudfront-signer'
-import { createPresignedPost } from '@aws-sdk/s3-presigned-post'
 import * as Sentry from '@sentry/node'
-import { env } from '../config/env'
 import { AppError, type ErrorCode } from '../errors/app-error'
 import type { Prisma } from '../generated/prisma/client'
 import { prisma } from '../lib/prisma'
-import { s3 } from '../lib/s3'
 import { todayInSeoul } from '../utils/date'
 import type { CreateProofPhotoUploadsBody } from '../validators/proof-photo.validator'
-import { IMAGE_CACHE_CONTROL, imageUrl, uploadBucket } from './upload.service'
+import {
+  copyPhotosFromPending,
+  createPhotoUploads,
+  deletePhotoObjects,
+  pendingKey,
+  photoKeys,
+  quotePhotoFolder,
+  signedPhotoQuery,
+  toPhotoUrls,
+  type PhotoKeys,
+} from './photo-storage'
+import { uploadBucket } from './upload.service'
 
 const MAX_PROOF_PHOTOS = 100
-const MAX_IMAGE_BYTES = 5 * 1024 * 1024
-const MAX_THUMBNAIL_BYTES = 512 * 1024
-const UPLOAD_EXPIRES_SECONDS = 600
-const SIGNED_URL_WINDOW_MS = 60 * 60 * 1000
-const PENDING_PREFIX = 'pending/'
 
 const proofPhotoSelect = {
   id: true,
@@ -35,47 +32,15 @@ type ProofPhotoRow = Prisma.ProofPhotoGetPayload<{
   select: typeof proofPhotoSelect
 }>
 
-function signedQuery(quoteId: string) {
-  const keyPairId = env.CLOUDFRONT_KEY_PAIR_ID
-  const privateKey = env.CLOUDFRONT_PRIVATE_KEY
-  if (!keyPairId || !privateKey) throw new AppError('UPLOAD_NOT_CONFIGURED')
-
-  const windowStart =
-    Math.floor(Date.now() / SIGNED_URL_WINDOW_MS) * SIGNED_URL_WINDOW_MS
-  const resource = imageUrl(`proof-photos/${quoteId}/*`)
-  const policy = JSON.stringify({
-    Statement: [
-      {
-        Resource: resource,
-        Condition: {
-          DateLessThan: {
-            'AWS:EpochTime': (windowStart + 2 * SIGNED_URL_WINDOW_MS) / 1000,
-          },
-        },
-      },
-    ],
-  })
-  return new URL(getSignedUrl({ url: resource, keyPairId, privateKey, policy }))
-    .search
-}
-
 function toProofPhoto(
   { id, imageKey, thumbnailKey, createdAt }: ProofPhotoRow,
   query: string,
 ) {
-  return {
-    id,
-    url: `${imageUrl(imageKey)}${query}`,
-    thumbnailUrl: `${imageUrl(thumbnailKey)}${query}`,
-    createdAt,
-  }
+  return { id, ...toPhotoUrls({ imageKey, thumbnailKey }, query), createdAt }
 }
 
-type ProofPhotoKeys = Pick<ProofPhotoRow, 'imageKey' | 'thumbnailKey'>
-
-function proofPhotoKeys(quoteId: string, id: string): ProofPhotoKeys {
-  const imageKey = `proof-photos/${quoteId}/${id}`
-  return { imageKey, thumbnailKey: `${imageKey}-thumbnail` }
+function proofPhotoKeys(quoteId: string, id: string) {
+  return photoKeys(quotePhotoFolder(quoteId), id)
 }
 
 function assertMover(viewer: Express.User | undefined) {
@@ -134,59 +99,6 @@ function assertEditable(quote: EditableQuote) {
   return quote._count.proofPhotos
 }
 
-function presignImage(
-  bucket: string,
-  key: string,
-  contentType: CreateProofPhotoUploadsBody['contentType'],
-  maxBytes: number,
-) {
-  return createPresignedPost(s3, {
-    Bucket: bucket,
-    Key: `${PENDING_PREFIX}${key}`,
-    Expires: UPLOAD_EXPIRES_SECONDS,
-    Conditions: [['content-length-range', 1, maxBytes]],
-    Fields: {
-      'Content-Type': contentType,
-      'Cache-Control': IMAGE_CACHE_CONTROL,
-    },
-  })
-}
-
-async function copyPhotoFromPending(
-  bucket: string,
-  uploaded: ProofPhotoKeys,
-  photo: ProofPhotoKeys,
-) {
-  const copies = await Promise.allSettled(
-    (['imageKey', 'thumbnailKey'] as const).map((key) =>
-      s3.send(
-        new CopyObjectCommand({
-          Bucket: bucket,
-          Key: photo[key],
-          CopySource: `${bucket}/${PENDING_PREFIX}${uploaded[key]}`,
-        }),
-      ),
-    ),
-  )
-  const failed = copies.find(
-    (copy): copy is PromiseRejectedResult => copy.status === 'rejected',
-  )
-  if (failed?.reason instanceof NoSuchKey) {
-    throw new AppError('PROOF_PHOTO_NOT_UPLOADED', undefined, {
-      cause: failed.reason,
-    })
-  }
-  if (failed) throw failed.reason
-}
-
-function deleteObjects(bucket: string, keys: string[]) {
-  return Promise.all(
-    keys.map((key) =>
-      s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: key })),
-    ),
-  )
-}
-
 async function lockUnreviewedQuote(
   tx: Prisma.TransactionClient,
   quoteId: string,
@@ -218,11 +130,7 @@ async function findProofPhoto(
   return photo
 }
 
-function saveProofPhoto(
-  quoteId: string,
-  uploadId: string,
-  keys: ProofPhotoKeys,
-) {
+function saveProofPhoto(quoteId: string, uploadId: string, keys: PhotoKeys) {
   return prisma.$transaction(async (tx) => {
     await lockUnreviewedQuote(tx, quoteId)
 
@@ -252,18 +160,11 @@ export async function createProofPhotoUploads(
   if (photoCount + count > MAX_PROOF_PHOTOS) {
     throw new AppError('PROOF_PHOTO_LIMIT_REACHED')
   }
-  const bucket = uploadBucket()
-
-  const items = await Promise.all(
-    Array.from({ length: count }, async () => {
-      const uploadId = randomUUID()
-      const { imageKey, thumbnailKey } = proofPhotoKeys(quoteId, uploadId)
-      const [image, thumbnail] = await Promise.all([
-        presignImage(bucket, imageKey, contentType, MAX_IMAGE_BYTES),
-        presignImage(bucket, thumbnailKey, contentType, MAX_THUMBNAIL_BYTES),
-      ])
-      return { uploadId, image, thumbnail }
-    }),
+  const items = await createPhotoUploads(
+    uploadBucket(),
+    quotePhotoFolder(quoteId),
+    count,
+    contentType,
   )
 
   return { items }
@@ -275,7 +176,7 @@ export async function confirmProofPhoto(
   uploadId: string,
 ) {
   const quote = await findMoverQuote(viewer, quoteId)
-  const query = signedQuery(quoteId)
+  const query = signedPhotoQuery(quoteId)
 
   const saved = await findProofPhoto(prisma, quoteId, uploadId)
   if (saved) return toProofPhoto(saved, query)
@@ -288,7 +189,11 @@ export async function confirmProofPhoto(
   const keys = proofPhotoKeys(quoteId, randomUUID())
   let photo: ProofPhotoRow | undefined
   try {
-    await copyPhotoFromPending(bucket, proofPhotoKeys(quoteId, uploadId), keys)
+    await copyPhotosFromPending(
+      bucket,
+      [{ uploaded: proofPhotoKeys(quoteId, uploadId), saved: keys }],
+      'PROOF_PHOTO_NOT_UPLOADED',
+    )
     photo = await saveProofPhoto(quoteId, uploadId, keys)
     return toProofPhoto(photo, query)
   } catch (error) {
@@ -304,9 +209,10 @@ export async function confirmProofPhoto(
     throw error
   } finally {
     if (photo?.imageKey !== keys.imageKey) {
-      await deleteObjects(bucket, [keys.imageKey, keys.thumbnailKey]).catch(
-        (error) => Sentry.captureException(error),
-      )
+      await deletePhotoObjects(bucket, [
+        keys.imageKey,
+        keys.thumbnailKey,
+      ]).catch((error) => Sentry.captureException(error))
     }
   }
 }
@@ -332,7 +238,7 @@ export async function listProofPhotos(
     },
   })
   if (!quote) throw new AppError('NOT_FOUND')
-  const query = quote.proofPhotos.length > 0 ? signedQuery(quoteId) : ''
+  const query = quote.proofPhotos.length > 0 ? signedPhotoQuery(quoteId) : ''
 
   return {
     items: quote.proofPhotos.map((photo) => toProofPhoto(photo, query)),
@@ -372,10 +278,10 @@ export async function deleteProofPhoto(
   })
 
   const uploaded = proofPhotoKeys(quoteId, photo.uploadId)
-  await deleteObjects(bucket, [
+  await deletePhotoObjects(bucket, [
     photo.imageKey,
     photo.thumbnailKey,
-    `${PENDING_PREFIX}${uploaded.imageKey}`,
-    `${PENDING_PREFIX}${uploaded.thumbnailKey}`,
+    pendingKey(uploaded.imageKey),
+    pendingKey(uploaded.thumbnailKey),
   ])
 }

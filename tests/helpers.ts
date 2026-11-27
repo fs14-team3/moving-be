@@ -1,10 +1,17 @@
 import { crc32, deflateSync } from 'node:zlib'
+import {
+  CopyObjectCommand,
+  DeleteObjectCommand,
+  NoSuchKey,
+} from '@aws-sdk/client-s3'
 import bcrypt from 'bcrypt'
 import express from 'express'
 import request from 'supertest'
+import { expect, vi } from 'vitest'
 import { createApp } from '../src/app'
 import type { MoveRequestStatus, Prisma } from '../src/generated/prisma/client'
 import { prisma } from '../src/lib/prisma'
+import { s3 } from '../src/lib/s3'
 
 export const userId = (suffix: string) =>
   `00000000-0000-4000-8000-00000000000${suffix}`
@@ -131,6 +138,66 @@ export async function createReview(
       },
     },
   })
+}
+
+export function policyConditions(fields: Record<string, string>) {
+  return JSON.parse(Buffer.from(fields.Policy, 'base64').toString('utf8'))
+    .conditions
+}
+
+export function signedUrl(url: string) {
+  const { origin, pathname, searchParams } = new URL(url)
+  const policy = (searchParams.get('Policy') ?? '')
+    .replace(/-/g, '+')
+    .replace(/_/g, '=')
+    .replace(/~/g, '/')
+  const [statement] = JSON.parse(
+    Buffer.from(policy, 'base64').toString('utf8'),
+  ).Statement
+  return {
+    url: `${origin}${pathname}`,
+    keyPairId: searchParams.get('Key-Pair-Id'),
+    resource: statement.Resource,
+    expiresAt: statement.Condition.DateLessThan['AWS:EpochTime'] * 1000,
+    signed: Boolean(searchParams.get('Signature')),
+  }
+}
+
+function sentCommands(): unknown[] {
+  return vi.mocked(s3.send).mock.calls.map(([command]) => command)
+}
+
+export function copies() {
+  return sentCommands()
+    .filter((command) => command instanceof CopyObjectCommand)
+    .map((command) => command.input)
+}
+
+export function deletedKeys() {
+  return sentCommands()
+    .filter((command) => command instanceof DeleteObjectCommand)
+    .map((command) => command.input.Key)
+}
+
+export function expectCopiesSavedOrDeleted(
+  saved: { imageKey: string; thumbnailKey: string }[],
+) {
+  const savedKeys = new Set<string | undefined>(
+    saved.flatMap(({ imageKey, thumbnailKey }) => [imageKey, thumbnailKey]),
+  )
+  const copied = copies().map((input) => input.Key)
+  expect(deletedKeys().sort()).toEqual(
+    copied.filter((key) => !savedKeys.has(key)).sort(),
+  )
+}
+
+export function noSuchKey() {
+  return Promise.reject(
+    new NoSuchKey({
+      message: 'The specified key does not exist.',
+      $metadata: { httpStatusCode: 404 },
+    }),
+  )
 }
 
 function pngChunk(type: string, data: Buffer) {
