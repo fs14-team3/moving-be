@@ -6,13 +6,6 @@ import { prisma } from '../lib/prisma'
 const requiredString = z.string().trim().min(1)
 
 const notificationPayloadSchemas = {
-  NEW_REQUEST: z
-    .object({
-      customerName: requiredString,
-      moveType: requiredString,
-    })
-    .passthrough(),
-
   NEW_DESIGNATED_REQUEST: z
     .object({
       customerName: requiredString,
@@ -46,6 +39,13 @@ const notificationPayloadSchemas = {
       toAddress: requiredString,
     })
     .passthrough(),
+
+  DAMAGE_REPORTED: z
+    .object({
+      customerName: requiredString,
+      itemName: requiredString,
+    })
+    .passthrough(),
 } satisfies Record<NotificationType, z.ZodType>
 
 type BaseNotificationInput = {
@@ -54,13 +54,13 @@ type BaseNotificationInput = {
 }
 
 type RequestNotificationInput = BaseNotificationInput & {
-  type: 'NEW_REQUEST' | 'NEW_DESIGNATED_REQUEST' | 'MOVE_DAY'
+  type: 'NEW_DESIGNATED_REQUEST' | 'MOVE_DAY'
   moveRequestId: string
   quoteId?: string | null
 }
 
 type QuoteNotificationInput = BaseNotificationInput & {
-  type: 'NEW_QUOTE' | 'QUOTE_CONFIRMED'
+  type: 'NEW_QUOTE' | 'QUOTE_CONFIRMED' | 'DAMAGE_REPORTED'
   quoteId: string
   moveRequestId?: string | null
 }
@@ -111,7 +111,9 @@ export async function createNotification(
 
   // 3. 생성한 알림 또는 기존 알림 반환
   const where =
-    input.type === 'NEW_QUOTE' || input.type === 'QUOTE_CONFIRMED'
+    input.type === 'NEW_QUOTE' ||
+    input.type === 'QUOTE_CONFIRMED' ||
+    input.type === 'DAMAGE_REPORTED'
       ? {
           userId: input.userId,
           type: input.type,
@@ -125,32 +127,5 @@ export async function createNotification(
 
   return db.notification.findFirstOrThrow({
     where,
-  })
-}
-
-type NewRequestNotificationsInput = {
-  moveRequestId: string
-  regions: string[]
-  payload: { customerName: string; moveType: string }
-}
-
-export async function createNewRequestNotifications(
-  input: NewRequestNotificationsInput,
-  tx: Prisma.TransactionClient,
-) {
-  notificationPayloadSchemas.NEW_REQUEST.parse(input.payload)
-
-  const movers = await tx.moverProfile.findMany({
-    where: { regions: { hasSome: input.regions } },
-    select: { userId: true },
-  })
-  await tx.notification.createMany({
-    data: movers.map(({ userId }) => ({
-      userId,
-      type: 'NEW_REQUEST',
-      payload: input.payload,
-      moveRequestId: input.moveRequestId,
-    })),
-    skipDuplicates: true,
   })
 }

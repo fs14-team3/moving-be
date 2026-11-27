@@ -1,8 +1,6 @@
 import type { Request, Response, NextFunction } from 'express'
-import { env } from '../config/env'
+import { SESSION_COOKIE, sessionCookieOptions } from './session'
 import { AppError } from '../errors/app-error'
-
-const SESSION_COOKIE = 'moving.sid'
 
 // 로그인 여부와 관계없이 접근 허용
 export function optionalAuth(req: Request, res: Response, next: NextFunction) {
@@ -14,12 +12,7 @@ export function optionalAuth(req: Request, res: Response, next: NextFunction) {
       role: sessionUser.role,
     }
   } else if (hasSessionCookie(req)) {
-    res.clearCookie(SESSION_COOKIE, {
-      httpOnly: true,
-      secure: env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      path: '/',
-    })
+    res.clearCookie(SESSION_COOKIE, sessionCookieOptions)
     throw new AppError('UNAUTHORIZED')
   }
 

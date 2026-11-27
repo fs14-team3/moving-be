@@ -1,6 +1,6 @@
-import { env } from '../config/env'
 import type { Request, Response } from 'express'
 import * as userService from '../services/user.service'
+import { SESSION_COOKIE, sessionCookieOptions } from '../middlewares/session'
 import {
   updateUserInput,
   changePasswordInput,
@@ -46,13 +46,7 @@ export async function changePassword(req: Request, res: Response) {
     })
   })
 
-  // 세션 쿠키 만료
-  res.clearCookie('moving.sid', {
-    httpOnly: true,
-    secure: env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    path: '/',
-  })
+  res.clearCookie(SESSION_COOKIE, sessionCookieOptions)
 
   res.json(result)
 }

@@ -71,6 +71,25 @@ function getToday(): Date {
   return new Date(`${today}T00:00:00.000Z`)
 }
 
+export function receivedRequestWhere(
+  moverId: string,
+): Prisma.MoveRequestWhereInput {
+  return {
+    status: 'PENDING',
+    moveDate: { gte: getToday() },
+
+    // 본인이 이미 견적을 보낸 요청 제외
+    quotes: {
+      none: { moverId },
+    },
+
+    // 본인이 이미 반려한 요청 제외
+    requestRejections: {
+      none: { moverId },
+    },
+  }
+}
+
 function getFilterSignature({
   moveTypes,
   region,
@@ -123,8 +142,7 @@ export async function listReceivedRequests({
 
   // 공통 조회 조건
   const where: Prisma.MoveRequestWhereInput = {
-    status: 'PENDING',
-    moveDate: { gte: getToday() },
+    ...receivedRequestWhere(moverId),
 
     ...(moveTypes?.length ? { moveType: { in: moveTypes } } : {}),
 
@@ -137,16 +155,6 @@ export async function listReceivedRequests({
           },
         }
       : {}),
-
-    // 본인이 이미 견적을 보낸 요청 제외
-    quotes: {
-      none: { moverId },
-    },
-
-    // 본인이 이미 반려한 요청 제외
-    requestRejections: {
-      none: { moverId },
-    },
   }
 
   // 커서가 현재 조회 조건에 포함되는 요청인지 확인

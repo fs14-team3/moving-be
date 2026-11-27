@@ -161,6 +161,9 @@ export async function listMoverReviewKeywords(moverId: string) {
       negativeCount: counts
         .filter((group) => group.sentiment === 'NEGATIVE')
         .reduce((sum, group) => sum + group._count._all, 0),
+      unclearCount: counts
+        .filter((group) => group.sentiment === 'UNCLEAR')
+        .reduce((sum, group) => sum + group._count._all, 0),
     }
   })
 

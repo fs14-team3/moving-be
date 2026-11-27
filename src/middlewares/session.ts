@@ -1,6 +1,16 @@
 import connectPgSimple from 'connect-pg-simple'
 import session from 'express-session'
 import { env } from '../config/env'
+import { logger } from '../lib/logger'
+
+export const SESSION_COOKIE = 'moving.sid'
+
+export const sessionCookieOptions = {
+  httpOnly: true,
+  secure: env.NODE_ENV === 'production',
+  sameSite: 'lax',
+  path: '/',
+} as const
 
 const PgStore = connectPgSimple(session)
 
@@ -10,17 +20,16 @@ export function createSessionMiddleware() {
     store: new PgStore({
       conString: env.DATABASE_URL,
       createTableIfMissing: false,
+      errorLog: (message: string, err: unknown) =>
+        logger.error({ err }, message),
     }),
-    name: 'moving.sid',
+    name: SESSION_COOKIE,
     secret: env.SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
     cookie: {
-      httpOnly: true,
-      secure: env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      ...sessionCookieOptions,
       maxAge: 1000 * 60 * 60 * 24,
-      path: '/',
     },
   })
 }

@@ -1,9 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import {
-  CopyObjectCommand,
-  DeleteObjectCommand,
-  NoSuchKey,
-} from '@aws-sdk/client-s3'
+import { CopyObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3'
 import {
   afterAll,
   afterEach,
@@ -20,10 +16,16 @@ import { prisma } from '../src/lib/prisma'
 import { s3 } from '../src/lib/s3'
 import {
   api,
+  copies,
   createCustomer,
   createMoveRequest,
   createMover,
+  deletedKeys,
+  expectCopiesSavedOrDeleted,
+  noSuchKey,
+  policyConditions,
   resetDatabase,
+  signedUrl,
   whileWriting,
 } from './helpers'
 
@@ -118,29 +120,6 @@ function fillPhotos(quoteId: string, count: number) {
   })
 }
 
-function policyConditions(fields: Record<string, string>) {
-  return JSON.parse(Buffer.from(fields.Policy, 'base64').toString('utf8'))
-    .conditions
-}
-
-function signedUrl(url: string) {
-  const { origin, pathname, searchParams } = new URL(url)
-  const policy = (searchParams.get('Policy') ?? '')
-    .replace(/-/g, '+')
-    .replace(/_/g, '=')
-    .replace(/~/g, '/')
-  const [statement] = JSON.parse(
-    Buffer.from(policy, 'base64').toString('utf8'),
-  ).Statement
-  return {
-    url: `${origin}${pathname}`,
-    keyPairId: searchParams.get('Key-Pair-Id'),
-    resource: statement.Resource,
-    expiresAt: statement.Condition.DateLessThan['AWS:EpochTime'] * 1000,
-    signed: Boolean(searchParams.get('Signature')),
-  }
-}
-
 function signedFor(quoteId: string, expiresAt = hourStart + 2 * HOUR_MS) {
   return {
     keyPairId: 'K2TESTKEYPAIR',
@@ -148,31 +127,6 @@ function signedFor(quoteId: string, expiresAt = hourStart + 2 * HOUR_MS) {
     expiresAt,
     signed: true,
   }
-}
-
-function sentCommands(): unknown[] {
-  return send.mock.calls.map(([command]: [unknown]) => command)
-}
-
-function copies() {
-  return sentCommands()
-    .filter((command) => command instanceof CopyObjectCommand)
-    .map((command) => command.input)
-}
-
-function deletedKeys() {
-  return sentCommands()
-    .filter((command) => command instanceof DeleteObjectCommand)
-    .map((command) => command.input.Key)
-}
-
-function noSuchKey() {
-  return Promise.reject(
-    new NoSuchKey({
-      message: 'The specified key does not exist.',
-      $metadata: { httpStatusCode: 404 },
-    }),
-  )
 }
 
 function missingThumbnail(command: unknown) {
@@ -185,17 +139,10 @@ function missingThumbnail(command: unknown) {
   return Promise.resolve()
 }
 
-async function expectCopiesSavedOrDeleted() {
-  const rows = await prisma.proofPhoto.findMany({
+function savedPhotos() {
+  return prisma.proofPhoto.findMany({
     select: { imageKey: true, thumbnailKey: true },
   })
-  const saved = new Set<string | undefined>(
-    rows.flatMap((row) => [row.imageKey, row.thumbnailKey]),
-  )
-  const copied = copies().map((input) => input.Key)
-  expect(deletedKeys().sort()).toEqual(
-    copied.filter((key) => !saved.has(key)).sort(),
-  )
 }
 
 beforeEach(async () => {
@@ -495,7 +442,7 @@ describe('POST /api/quotes/:quoteId/proof-photos', () => {
     expect(second.status).toBe(201)
     expect(second.body).toEqual(first.body)
     expect(await prisma.proofPhoto.count({ where: { quoteId } })).toBe(1)
-    await expectCopiesSavedOrDeleted()
+    expectCopiesSavedOrDeleted(await savedPhotos())
   })
 
   it('썸네일이 S3에 없으면 저장하지 않고 복사한 파일을 지운 뒤 409를 반환한다', async () => {
@@ -507,7 +454,7 @@ describe('POST /api/quotes/:quoteId/proof-photos', () => {
     expect(response.body.error.code).toBe('PROOF_PHOTO_NOT_UPLOADED')
     expect(await prisma.proofPhoto.count()).toBe(0)
     expect(deletedKeys()).toHaveLength(2)
-    await expectCopiesSavedOrDeleted()
+    expectCopiesSavedOrDeleted(await savedPhotos())
   })
 
   it('복사한 파일을 지우지 못해도 원래 오류를 반환한다', async () => {
@@ -598,7 +545,7 @@ describe('POST /api/quotes/:quoteId/proof-photos', () => {
     expect(response.status).toBe(409)
     expect(response.body.error.code).toBe('PROOF_PHOTO_REVIEWED')
     expect(await prisma.proofPhoto.count()).toBe(0)
-    await expectCopiesSavedOrDeleted()
+    expectCopiesSavedOrDeleted(await savedPhotos())
   })
 
   it('업로드 정보를 받은 뒤 리뷰가 작성되면 저장하지 않고 409를 반환한다', async () => {
@@ -625,7 +572,7 @@ describe('POST /api/quotes/:quoteId/proof-photos', () => {
     const statuses = responses.map((response) => response.status).sort()
     expect(statuses).toEqual([201, 201, 409, 409, 409])
     expect(await prisma.proofPhoto.count({ where: { quoteId } })).toBe(100)
-    await expectCopiesSavedOrDeleted()
+    expectCopiesSavedOrDeleted(await savedPhotos())
   })
 
   it('복사하는 사이 100장이 차면 저장하지 않고 복사한 파일을 지운 뒤 409를 반환한다', async () => {
@@ -646,7 +593,7 @@ describe('POST /api/quotes/:quoteId/proof-photos', () => {
     expect(response.body.error.code).toBe('PROOF_PHOTO_LIMIT_REACHED')
     expect(await prisma.proofPhoto.count({ where: { quoteId } })).toBe(100)
     expect(deletedKeys()).toHaveLength(2)
-    await expectCopiesSavedOrDeleted()
+    expectCopiesSavedOrDeleted(await savedPhotos())
   })
 })
 
