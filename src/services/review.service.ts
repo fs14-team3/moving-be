@@ -73,6 +73,17 @@ export async function listMoverReviews(
         rating: true,
         content: true,
         createdAt: true,
+        keywordMentions: {
+          where: query.keywordId
+            ? { keywordId: query.keywordId }
+            : { keywordId: { in: [] } },
+          select: {
+            keywordId: true,
+            evidence: true,
+            start: true,
+            end: true,
+          },
+        },
         quote: {
           select: {
             moveRequest: {

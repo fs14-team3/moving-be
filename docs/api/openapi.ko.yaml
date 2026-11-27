@@ -3119,7 +3119,7 @@ components:
     Review:
       description: 기사님 페이지에 표시되는 리뷰
       type: object
-      required: [id, rating, content, customerName, createdAt]
+      required: [id, rating, content, customerName, createdAt, keywordMentions]
       properties:
         id: { type: string, format: uuid }
         rating: { type: integer, description: 평점 (1~5점) }
@@ -3131,6 +3131,29 @@ components:
             nullable: true,
           }
         createdAt: { type: string, format: date-time }
+        keywordMentions:
+          type: array
+          description: 선택한 키워드의 리뷰 원문 근거 목록
+          items:
+            type: object
+            required:
+              - keywordId
+              - evidence
+              - start
+              - end
+            properties:
+              keywordId:
+                type: string
+                format: uuid
+              evidence:
+                type: string
+                description: Gemini가 분석 근거로 사용한 원문 구절
+              start:
+                type: integer
+                description: 원문에서 근거 구절이 시작하는 위치
+              end:
+                type: integer
+                description: 원문에서 근거 구절이 끝나는 위치(미포함)
     MoverReviewListResponse:
       allOf:
         - { '$ref': '#/components/schemas/OffsetMeta' }
