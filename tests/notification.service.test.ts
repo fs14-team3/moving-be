@@ -117,7 +117,7 @@ describe('createNotification', () => {
   it('새 알림은 읽지 않은 상태로 생성된다', async () => {
     const notification = await createNotification({
       userId: moverId,
-      type: 'NEW_REQUEST',
+      type: 'NEW_DESIGNATED_REQUEST',
       moveRequestId,
       payload: {
         customerName: '알림 테스트 고객',
@@ -169,7 +169,7 @@ describe('createNotification', () => {
     await expect(
       createNotification({
         userId: invalidUserId,
-        type: 'NEW_REQUEST',
+        type: 'NEW_DESIGNATED_REQUEST',
         moveRequestId,
         payload: {
           customerName: '알림 테스트 고객',
@@ -383,7 +383,7 @@ describe('createNotification', () => {
       [customerId, moverId].sort(),
     )
   })
-  it('같은 일반 이사 요청을 여러 기사님에게 각각 알릴 수 있다', async () => {
+  it('같은 이사 요청의 지정 알림을 여러 기사님에게 각각 보낼 수 있다', async () => {
     const secondMoverId = randomUUID()
 
     try {
@@ -402,14 +402,14 @@ describe('createNotification', () => {
 
       const firstNotification = await createNotification({
         userId: moverId,
-        type: 'NEW_REQUEST',
+        type: 'NEW_DESIGNATED_REQUEST',
         moveRequestId,
         payload,
       })
 
       const secondNotification = await createNotification({
         userId: secondMoverId,
-        type: 'NEW_REQUEST',
+        type: 'NEW_DESIGNATED_REQUEST',
         moveRequestId,
         payload,
       })
@@ -420,7 +420,7 @@ describe('createNotification', () => {
 
       const count = await prisma.notification.count({
         where: {
-          type: 'NEW_REQUEST',
+          type: 'NEW_DESIGNATED_REQUEST',
           moveRequestId,
           userId: {
             in: [moverId, secondMoverId],
@@ -478,41 +478,43 @@ describe('createNotification', () => {
     )
   })
 
-  it('같은 이사 요청이라도 일반 요청과 지정 요청 알림을 구분한다', async () => {
-    const payload = {
-      customerName: '알림 테스트 고객',
-      moveType: 'HOME',
-    }
-
-    const generalNotification = await createNotification({
-      userId: moverId,
-      type: 'NEW_REQUEST',
-      moveRequestId,
-      payload,
-    })
-
+  it('같은 이사 요청이라도 지정 요청 알림과 이사 당일 알림을 구분한다', async () => {
     const designatedNotification = await createNotification({
       userId: moverId,
       type: 'NEW_DESIGNATED_REQUEST',
       moveRequestId,
-      payload,
+      payload: {
+        customerName: '알림 테스트 고객',
+        moveType: 'HOME',
+      },
     })
 
-    expect(generalNotification.id).not.toBe(designatedNotification.id)
+    const moveDayNotification = await createNotification({
+      userId: moverId,
+      type: 'MOVE_DAY',
+      moveRequestId,
+      payload: {
+        moveType: 'HOME',
+        fromAddress: '서울특별시 강남구',
+        toAddress: '서울특별시 송파구',
+      },
+    })
+
+    expect(designatedNotification.id).not.toBe(moveDayNotification.id)
 
     const notifications = await prisma.notification.findMany({
       where: {
         userId: moverId,
         moveRequestId,
         type: {
-          in: ['NEW_REQUEST', 'NEW_DESIGNATED_REQUEST'],
+          in: ['NEW_DESIGNATED_REQUEST', 'MOVE_DAY'],
         },
       },
     })
 
     expect(notifications).toHaveLength(2)
     expect(notifications.map((item) => item.type).sort()).toEqual(
-      ['NEW_REQUEST', 'NEW_DESIGNATED_REQUEST'].sort(),
+      ['NEW_DESIGNATED_REQUEST', 'MOVE_DAY'].sort(),
     )
   })
 
@@ -523,7 +525,7 @@ describe('createNotification', () => {
     await expect(
       createNotification({
         userId: moverId,
-        type: 'NEW_REQUEST',
+        type: 'NEW_DESIGNATED_REQUEST',
         moveRequestId: invalidMoveRequestId,
         payload: {
           customerName: '알림 테스트 고객',

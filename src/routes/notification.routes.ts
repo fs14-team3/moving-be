@@ -17,5 +17,15 @@ notificationRouter.patch(
   notificationController.readAllNotifications,
 )
 
+notificationRouter.get(
+  '/new-requests',
+  notificationController.getNewRequestSummary,
+)
+
+notificationRouter.patch(
+  '/new-requests/read',
+  notificationController.readNewRequests,
+)
+
 // 선택한 알람 읽음 처리
 notificationRouter.patch('/:id/read', notificationController.readNotification)

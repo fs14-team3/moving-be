@@ -6,13 +6,6 @@ import { prisma } from '../lib/prisma'
 const requiredString = z.string().trim().min(1)
 
 const notificationPayloadSchemas = {
-  NEW_REQUEST: z
-    .object({
-      customerName: requiredString,
-      moveType: requiredString,
-    })
-    .passthrough(),
-
   NEW_DESIGNATED_REQUEST: z
     .object({
       customerName: requiredString,
@@ -54,7 +47,7 @@ type BaseNotificationInput = {
 }
 
 type RequestNotificationInput = BaseNotificationInput & {
-  type: 'NEW_REQUEST' | 'NEW_DESIGNATED_REQUEST' | 'MOVE_DAY'
+  type: 'NEW_DESIGNATED_REQUEST' | 'MOVE_DAY'
   moveRequestId: string
   quoteId?: string | null
 }
@@ -125,32 +118,5 @@ export async function createNotification(
 
   return db.notification.findFirstOrThrow({
     where,
-  })
-}
-
-type NewRequestNotificationsInput = {
-  moveRequestId: string
-  regions: string[]
-  payload: { customerName: string; moveType: string }
-}
-
-export async function createNewRequestNotifications(
-  input: NewRequestNotificationsInput,
-  tx: Prisma.TransactionClient,
-) {
-  notificationPayloadSchemas.NEW_REQUEST.parse(input.payload)
-
-  const movers = await tx.moverProfile.findMany({
-    where: { regions: { hasSome: input.regions } },
-    select: { userId: true },
-  })
-  await tx.notification.createMany({
-    data: movers.map(({ userId }) => ({
-      userId,
-      type: 'NEW_REQUEST',
-      payload: input.payload,
-      moveRequestId: input.moveRequestId,
-    })),
-    skipDuplicates: true,
   })
 }
