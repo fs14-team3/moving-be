@@ -91,6 +91,23 @@ async function attachChatImages(
     orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
   })
 
+  return attachChatImagesFromRows(messages, images, chatRoomId)
+}
+
+// 조회된 이미지 레코드를 메시지에 연결
+function attachChatImagesFromRows(
+  messages: MessageRow[],
+  images: Array<{
+    id: string
+    messageId: string
+    imageKey: string
+    contentType: string
+    createdAt: Date
+  }>,
+  chatRoomId: string,
+): MessageWithImages[] {
+  if (messages.length === 0) return []
+
   const query = images.length > 0 ? signedChatImageQuery(chatRoomId) : ''
   const imagesByMessageId = new Map<string, MessageWithImages['images']>()
 
@@ -225,7 +242,7 @@ export async function sendChatMessage({
   const uploadedKeys: string[] = []
   const messageId = randomUUID()
 
-  let message!: MessageRow
+  let message!: MessageWithImages
 
   try {
     message = await prisma.$transaction(async (tx) => {
@@ -323,7 +340,31 @@ export async function sendChatMessage({
         WHERE id = ${chatRoomId}::uuid
       `
 
-      return message
+      const images = await tx.chatImage.findMany({
+        where: {
+          messageId: message.id,
+        },
+        select: {
+          id: true,
+          messageId: true,
+          imageKey: true,
+          contentType: true,
+          createdAt: true,
+        },
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      })
+
+      const [messageWithImages] = attachChatImagesFromRows(
+        [message],
+        images,
+        chatRoomId,
+      )
+
+      if (!messageWithImages) {
+        throw new Error('메시지 이미지 정보를 구성하지 못했습니다.')
+      }
+
+      return messageWithImages
     })
   } catch (error) {
     if (uploadedKeys.length > 0) {
@@ -348,14 +389,7 @@ export async function sendChatMessage({
       logger.error({ err: cleanupError }, '임시 채팅 이미지 정리 실패')
     }
   }
-
-  const [messageWithImages] = await attachChatImages([message], chatRoomId)
-
-  if (!messageWithImages) {
-    throw new Error('메시지 이미지 정보를 구성하지 못했습니다.')
-  }
-
-  return messageWithImages
+  return message
 }
 
 // 채팅방 읽음 처리

@@ -1608,6 +1608,50 @@ paths:
               schema:
                 '$ref': '#/components/schemas/ErrorResponse'
 
+  '/chats/{chatRoomId}/images/uploads':
+    post:
+      tags: [Chats]
+      summary: 채팅 이미지 업로드 URL 발급
+      description: |
+        채팅방 참여자에게 S3 Presigned POST 업로드 정보를 발급합니다.
+        이미지 업로드는 JPEG, PNG, WEBP 형식만 지원하며 최대 5MB까지 가능합니다.
+        한 번에 1~5개의 업로드 정보를 요청할 수 있습니다.
+        발급된 업로드 URL은 10분 동안 유효합니다.
+        견적이 NOT_SELECTED 상태인 채팅방에는 발급할 수 없습니다.
+      operationId: createChatImageUploads
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: chatRoomId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              '$ref': '#/components/schemas/CreateChatImageUploadsRequest'
+      responses:
+        '201':
+          description: 이미지 업로드 정보 발급 완료
+          content:
+            application/json:
+              schema:
+                '$ref': '#/components/schemas/ChatImageUploadsResponse'
+        '400':
+          '$ref': '#/components/responses/ValidationError'
+        '401':
+          '$ref': '#/components/responses/Unauthorized'
+        '403':
+          description: 채팅방 참여자가 아니거나 이미지 업로드가 제한된 경우
+          content:
+            application/json:
+              schema:
+                '$ref': '#/components/schemas/ErrorResponse'
+
   '/chats':
     get:
       tags: [Chats]
@@ -2808,7 +2852,8 @@ components:
               items: { '$ref': '#/components/schemas/Notification' }
     ChatMessage:
       type: object
-      required: [id, chatRoomId, senderId, content, createdAt, senderName]
+      required:
+        [id, chatRoomId, senderId, content, createdAt, senderName, images]
       properties:
         id: { type: string, format: uuid }
         chatRoomId: { type: string, format: uuid }
@@ -2819,6 +2864,24 @@ components:
           type: string
           nullable: true
           description: 메시지 작성자 이름
+        images:
+          type: array
+          description: 메시지에 첨부된 이미지 목록
+          items:
+            '$ref': '#/components/schemas/ChatMessageImage'
+    ChatMessageImage:
+      type: object
+      required: [id, url, contentType, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        url:
+          type: string
+          format: uri
+          description: CloudFront 서명 URL
+        contentType:
+          type: string
+          enum: [image/jpeg, image/png, image/webp]
+        createdAt: { type: string, format: date-time }
     ChatMessageListResponse:
       allOf:
         - { '$ref': '#/components/schemas/CursorMeta' }
@@ -2830,12 +2893,78 @@ components:
               items: { '$ref': '#/components/schemas/ChatMessage' }
     SendChatMessageRequest:
       type: object
-      required: [content]
+      description: |
+        텍스트 또는 이미지를 포함한 메시지를 전송합니다.
+        content와 imageUploadIds 중 하나 이상은 유효한 값을 포함해야 합니다.
+        이미지 업로드 URL 발급 후 S3 업로드를 완료한 uploadId를 전달해야 합니다.
+        공백만 포함된 content는 이미지가 없는 경우 허용되지 않습니다.
       properties:
         content:
           type: string
-          minLength: 1
-          description: 공백만 입력한 메시지는 허용하지 않습니다.
+          description: 메시지 내용. 생략할 수 있으며 이미지 전용 메시지는 빈 문자열을 허용합니다.
+        imageUploadIds:
+          type: array
+          maxItems: 5
+          uniqueItems: true
+          default: []
+          description: 발급받은 이미지 업로드 ID 목록
+          items:
+            type: string
+            format: uuid
+      anyOf:
+        - required: [content]
+          properties:
+            content:
+              type: string
+              minLength: 1
+        - required: [imageUploadIds]
+          properties:
+            imageUploadIds:
+              type: array
+              minItems: 1
+              maxItems: 5
+              uniqueItems: true
+              items:
+                type: string
+                format: uuid
+
+    CreateChatImageUploadsRequest:
+      type: object
+      required: [count, contentType]
+      properties:
+        count:
+          type: integer
+          minimum: 1
+          maximum: 5
+        contentType:
+          type: string
+          enum: [image/jpeg, image/png, image/webp]
+    ChatImageUploadsResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            required: [uploadId, url, fields, contentType, maxSize]
+            properties:
+              uploadId:
+                type: string
+                format: uuid
+              url:
+                type: string
+                format: uri
+              fields:
+                type: object
+                additionalProperties:
+                  type: string
+              contentType:
+                type: string
+                enum: [image/jpeg, image/png, image/webp]
+              maxSize:
+                type: integer
+                example: 5242880
     ChatReadResponse:
       type: object
       required: [updated, lastReadAt]
