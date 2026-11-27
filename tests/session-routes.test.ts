@@ -133,7 +133,7 @@ describe('마운트된 API의 세션 인증', () => {
       data: {
         id: notificationId,
         userId: customer.id,
-        type: 'NEW_REQUEST',
+        type: 'NEW_DESIGNATED_REQUEST',
         payload: { customerName: '세션 테스트 고객', moveType: 'SMALL' },
       },
     })

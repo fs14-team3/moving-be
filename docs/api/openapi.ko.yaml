@@ -6,7 +6,11 @@ info:
   description: |
     이사 소비자(CUSTOMER)와 이사 전문가(MOVER, 기사님) 매칭 서비스의 초기 API 초안.
 
-    모든 응답은 요청마다 새로 발급한 `Request-ID` 헤더를 포함합니다. 서버 로그의 `req.id`와 같은 값입니다.
+    모든 응답은 요청마다 새로 발급한 `Request-ID` 헤더를 포함합니다. 서버 로그의 `req.id`와 같은 값이며, 허용된 프론트 주소에서는 CORS로 노출되어 JS에서 읽을 수 있습니다.
+
+    모든 응답은 `Cache-Control: no-store`를 포함해 브라우저나 프록시에 캐시되지 않습니다.
+
+    `GET`·`HEAD`·`OPTIONS`가 아닌 요청에 `Origin` 헤더가 있으면 허용된 프론트 주소나 API 자신의 주소여야 하며, 아니면 `403 FORBIDDEN`을 반환합니다.
 
 servers:
   - { url: '/api' }
@@ -1518,6 +1522,7 @@ paths:
     get:
       tags: [Notifications]
       summary: 미읽음 알림 개수 조회
+      description: 기사님은 확인하지 않은 새 견적 요청이 있으면 1을 더한 값을 받습니다.
       operationId: getUnreadNotificationCount
       security:
         - sessionCookie: []
@@ -1540,6 +1545,7 @@ paths:
     patch:
       tags: [Notifications]
       summary: 전체 알림 읽음 처리
+      description: 기사님은 10초 전까지 들어온 새 견적 요청도 확인 처리합니다.
       operationId: readAllNotifications
       security:
         - sessionCookie: []
@@ -1557,6 +1563,58 @@ paths:
                     minimum: 0
         '401':
           '$ref': '#/components/responses/Unauthorized'
+
+  '/notifications/new-requests':
+    get:
+      tags: [Notifications]
+      summary: 새 견적 요청 요약 조회
+      description: 기사님이 마지막으로 확인한 뒤 서비스 지역(출발지 또는 도착지)에 들어온 견적 요청 수와 가장 최근 요청 시각을 조회합니다. 받은 요청 목록에 나오는 요청만 세고, 기사님을 지정한 요청과 만들어진 지 10초가 지나지 않은 요청은 제외합니다.
+      operationId: getNewRequestSummary
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: 새 견적 요청 요약
+          content:
+            application/json:
+              schema: { '$ref': '#/components/schemas/NewRequestSummary' }
+        '401':
+          '$ref': '#/components/responses/Unauthorized'
+        '403': { '$ref': '#/components/responses/Forbidden' }
+
+  '/notifications/new-requests/read':
+    patch:
+      tags: [Notifications]
+      summary: 새 견적 요청 확인 처리
+      description: 요약에서 받은 `latestAt`까지의 요청을 확인 처리합니다. 10초 전보다 늦은 시각은 10초 전으로 맞추고, 이미 확인한 시각보다 이른 시각은 무시합니다.
+      operationId: readNewRequests
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [latestAt]
+              properties:
+                latestAt: { type: string, format: date-time }
+      responses:
+        '200':
+          description: 확인 처리 결과
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [updated]
+                properties:
+                  updated:
+                    type: boolean
+        '400':
+          '$ref': '#/components/responses/ValidationError'
+        '401':
+          '$ref': '#/components/responses/Unauthorized'
+        '403': { '$ref': '#/components/responses/Forbidden' }
 
   '/notifications/{id}/read':
     patch:
@@ -1928,14 +1986,7 @@ components:
       enum: [SUBMITTED, CONFIRMED, NOT_SELECTED]
     NotificationType:
       type: string
-      enum:
-        [
-          NEW_REQUEST,
-          NEW_DESIGNATED_REQUEST,
-          NEW_QUOTE,
-          QUOTE_CONFIRMED,
-          MOVE_DAY,
-        ]
+      enum: [NEW_DESIGNATED_REQUEST, NEW_QUOTE, QUOTE_CONFIRMED, MOVE_DAY]
     MoverSort:
       type: string
       description:
@@ -2996,6 +3047,12 @@ components:
             items:
               type: array
               items: { '$ref': '#/components/schemas/Notification' }
+    NewRequestSummary:
+      type: object
+      required: [count, latestAt]
+      properties:
+        count: { type: integer, minimum: 0 }
+        latestAt: { type: string, format: date-time, nullable: true }
     ChatMessage:
       type: object
       required: [id, chatRoomId, senderId, content, createdAt, senderName]
