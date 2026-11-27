@@ -4,6 +4,7 @@ import { cursorPageQuery } from './pagination.validator'
 
 export const listMoversQuery = z.object({
   keyword: z.string().trim().optional(),
+  reviewKeywordId: z.uuid().optional(),
   region: z.string().trim().optional(),
   serviceType: z.enum(ServiceType).optional(),
   sort: z

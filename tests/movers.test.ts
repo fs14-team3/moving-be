@@ -5,9 +5,11 @@ import {
   api,
   createCustomer,
   createMover,
+  createReview,
   resetDatabase,
   userId,
 } from './helpers'
+import { randomUUID } from 'node:crypto'
 
 const movers: ({ id: string } & Prisma.MoverProfileCreateWithoutUserInput)[] = [
   {
@@ -108,6 +110,93 @@ async function nicknamePages(query: Query) {
     cursor = page.nextCursor
   } while (cursor)
   return pages
+}
+
+async function prepareMoverKeywordSearch() {
+  const customerId = userId('1')
+  await createCustomer(customerId)
+
+  const keyword = await prisma.reviewKeyword.create({
+    data: { name: `친절 ${randomUUID()}` },
+  })
+
+  const otherKeyword = await prisma.reviewKeyword.create({
+    data: { name: `시간 준수 ${randomUUID()}` },
+  })
+
+  const reviewIds = new Map<string, string[]>()
+
+  // A, B, C는 리뷰 10개, D는 리뷰 9개
+  for (const [id, count] of [
+    [userId('a'), 10],
+    [userId('b'), 10],
+    [userId('c'), 10],
+    [userId('d'), 9],
+  ] as const) {
+    const ids: string[] = []
+
+    for (let i = 0; i < count; i++) {
+      const reviewId = randomUUID()
+
+      await createReview(customerId, id, {
+        id: reviewId,
+        rating: 5,
+        content: '친절한 이사',
+      })
+
+      ids.push(reviewId)
+    }
+
+    reviewIds.set(id, ids)
+
+    await prisma.moverProfile.update({
+      where: { userId: id },
+      data: { reviewCount: count },
+    })
+  }
+
+  const mentions: {
+    reviewId: string
+    keywordId: string
+    sentiment: 'POSITIVE' | 'NEGATIVE'
+    evidence: string
+    start: number
+    end: number
+  }[] = []
+
+  function addMentions(
+    id: string,
+    keywordId: string,
+    count: number,
+    sentiment: 'POSITIVE' | 'NEGATIVE',
+    offset = 0,
+  ) {
+    const ids = reviewIds.get(id)!
+
+    for (const reviewId of ids.slice(offset, offset + count)) {
+      mentions.push({
+        reviewId,
+        keywordId,
+        sentiment,
+        evidence: '친절',
+        start: 0,
+        end: 2,
+      })
+    }
+  }
+
+  addMentions(userId('a'), keyword.id, 2, 'POSITIVE')
+  addMentions(userId('b'), keyword.id, 3, 'POSITIVE')
+  addMentions(userId('c'), keyword.id, 2, 'NEGATIVE')
+  addMentions(userId('d'), keyword.id, 4, 'POSITIVE')
+
+  addMentions(userId('a'), otherKeyword.id, 1, 'POSITIVE', 3)
+
+  await prisma.reviewKeywordMention.createMany({
+    data: mentions,
+  })
+
+  return { keyword, otherKeyword }
 }
 
 beforeEach(async () => {
@@ -248,5 +337,106 @@ describe('GET /api/movers', () => {
     expect(res.status).toBe(400)
     expect(res.body.error.code).toBe('VALIDATION_ERROR')
     expect(res.body.error.details[0].field).toBe(field)
+  })
+})
+
+describe('GET /api/movers 리뷰 키워드 필터', () => {
+  it('키워드를 선택하지 않으면 기존 기사님 목록을 조회한다', async () => {
+    await prepareMoverKeywordSearch()
+
+    const result = await nicknames()
+
+    expect(result).toEqual([
+      '든든이사',
+      '한결 이사',
+      'Happy Move',
+      '오피스무브',
+      '원룸친구',
+    ])
+  })
+
+  it('선택한 키워드에 긍정 언급이 있는 기사님만 조회한다', async () => {
+    const { keyword } = await prepareMoverKeywordSearch()
+
+    const result = await nicknames({
+      reviewKeywordId: keyword.id,
+    })
+
+    expect(result).toEqual(['한결 이사', '든든이사'])
+  })
+
+  it('키워드의 긍정 언급 횟수가 많은 순서로 정렬한다', async () => {
+    const { keyword } = await prepareMoverKeywordSearch()
+
+    const result = await listMovers({
+      reviewKeywordId: keyword.id,
+      sort: 'CAREER',
+    })
+
+    // 기존 경력순이 아니라 선택한 키워드의 긍정 언급 횟수순
+    expect(result.items.map((item) => item.id)).toEqual([
+      userId('b'),
+      userId('a'),
+    ])
+  })
+
+  it('리뷰가 10개 미만인 기사님은 검색 결과에서 제외한다', async () => {
+    const { keyword } = await prepareMoverKeywordSearch()
+
+    const result = await listMovers({
+      reviewKeywordId: keyword.id,
+    })
+
+    expect(result.items.map((item) => item.id)).not.toContain(userId('d'))
+  })
+
+  it('키워드와 기존 지역·서비스 유형 필터를 함께 적용한다', async () => {
+    const { keyword } = await prepareMoverKeywordSearch()
+
+    expect(
+      await nicknames({
+        reviewKeywordId: keyword.id,
+        region: '서울',
+        serviceType: 'SMALL',
+      }),
+    ).toEqual(['든든이사'])
+
+    expect(
+      await nicknames({
+        reviewKeywordId: keyword.id,
+        region: '인천',
+      }),
+    ).toEqual([])
+  })
+
+  it('키워드 필터에서도 커서 페이지네이션을 유지한다', async () => {
+    const { keyword } = await prepareMoverKeywordSearch()
+
+    const pages = await nicknamePages({
+      reviewKeywordId: keyword.id,
+      limit: 1,
+    })
+
+    expect(pages).toEqual([['한결 이사'], ['든든이사']])
+  })
+
+  it('다른 키워드를 선택하면 검색 결과도 달라진다', async () => {
+    const { otherKeyword } = await prepareMoverKeywordSearch()
+
+    expect(
+      await nicknames({
+        reviewKeywordId: otherKeyword.id,
+      }),
+    ).toEqual(['든든이사'])
+  })
+
+  it('잘못된 reviewKeywordId는 400을 반환한다', async () => {
+    const res = await api().get('/api/movers').query({
+      reviewKeywordId: 'invalid-keyword',
+    })
+
+    expect(res.status).toBe(400)
+    expect(res.body.error.code).toBe('VALIDATION_ERROR')
+    expect(res.body.error.details[0].field).toBe('reviewKeywordId')
   })
 })
