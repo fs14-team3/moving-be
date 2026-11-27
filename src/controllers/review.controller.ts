@@ -10,6 +10,12 @@ export async function listMoverReviews(req: Request, res: Response) {
   res.json(await reviewService.listMoverReviews(moverId, query))
 }
 
+export async function listMoverReviewKeywords(req: Request, res: Response) {
+  const { moverId } = validate(moverIdParams, req.params)
+
+  res.json(await reviewService.listMoverReviewKeywords(moverId))
+}
+
 export async function getMoverReviewSummary(req: Request, res: Response) {
   const { moverId } = validate(moverIdParams, req.params)
   res.json(await reviewService.getMoverReviewSummary(moverId))

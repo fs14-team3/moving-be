@@ -17,4 +17,8 @@ export const notificationIdParamsSchema = z.object({
   id: z.uuid(),
 })
 
+export const readNewRequestsBodySchema = z.object({
+  latestAt: z.iso.datetime().transform((value) => new Date(value)),
+})
+
 export type ListNotificationsQuery = z.infer<typeof listNotificationsQuery>

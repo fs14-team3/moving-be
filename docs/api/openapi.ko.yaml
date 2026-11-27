@@ -6,7 +6,11 @@ info:
   description: |
     이사 소비자(CUSTOMER)와 이사 전문가(MOVER, 기사님) 매칭 서비스의 초기 API 초안.
 
-    모든 응답은 요청마다 새로 발급한 `Request-ID` 헤더를 포함합니다. 서버 로그의 `req.id`와 같은 값입니다.
+    모든 응답은 요청마다 새로 발급한 `Request-ID` 헤더를 포함합니다. 서버 로그의 `req.id`와 같은 값이며, 허용된 프론트 주소에서는 CORS로 노출되어 JS에서 읽을 수 있습니다.
+
+    모든 응답은 `Cache-Control: no-store`를 포함해 브라우저나 프록시에 캐시되지 않습니다.
+
+    `GET`·`HEAD`·`OPTIONS`가 아닌 요청에 `Origin` 헤더가 있으면 허용된 프론트 주소나 API 자신의 주소여야 하며, 아니면 `403 FORBIDDEN`을 반환합니다.
 
 servers:
   - { url: '/api' }
@@ -476,18 +480,51 @@ paths:
       description: |
         공개 API. 기사님 본인 마이페이지에서도 사용합니다.
         최근에 작성된 리뷰부터 보여주며, 작성자 이름은 첫 글자만 남기고 `*`로 가립니다.
+        keywordId를 지정하면 해당 키워드가 포함된 리뷰만 조회합니다.
+        keywordId를 지정하지 않으면 전체 리뷰를 조회합니다.
+        리뷰가 10개 미만인 기사님은 키워드 필터 적용 시 빈 목록을 반환합니다.
       operationId: listMoverReviews
       security: []
       parameters:
         - { '$ref': '#/components/parameters/MoverIdPath' }
         - { '$ref': '#/components/parameters/Page' }
         - { '$ref': '#/components/parameters/PageSize' }
+        - name: keywordId
+          in: query
+          required: false
+          description: 리뷰 필터링에 사용할 키워드 UUID
+          schema: { type: string, format: uuid }
       responses:
         '200':
           description: 리뷰 목록 페이지. 리뷰가 없으면 `items`는 빈 배열, `totalCount`와 `totalPages`는 0입니다.
           content:
             application/json:
               schema: { '$ref': '#/components/schemas/MoverReviewListResponse' }
+        '400': { '$ref': '#/components/responses/ValidationError' }
+        '404': { '$ref': '#/components/responses/NotFound' }
+  '/movers/{moverId}/review-keywords':
+    get:
+      tags: [Movers, Reviews]
+      summary: 기사님 리뷰 키워드 목록 조회
+      description: |
+        공개 API. 기사님이 받은 리뷰에서 분석된 키워드 목록을 조회합니다.
+        리뷰가 10개 이상인 기사님의 키워드별 전체 언급 횟수,
+        긍정·부정·불명확 평가 횟수를 반환합니다.
+        키워드는 전체 언급 횟수 내림차순으로 정렬합니다.
+        리뷰가 10개 미만이면 키워드 정보를 공개하지 않고 빈 목록을 반환합니다.
+      operationId: listMoverReviewKeywords
+      security: []
+      parameters:
+        - { '$ref': '#/components/parameters/MoverIdPath' }
+      responses:
+        '200':
+          description: 키워드 목록 조회 성공. 리뷰가 10개 미만이면 `items`는 빈 배열입니다.
+          content:
+            application/json:
+              schema:
+                {
+                  '$ref': '#/components/schemas/MoverReviewKeywordListResponse',
+                }
         '400': { '$ref': '#/components/responses/ValidationError' }
         '404': { '$ref': '#/components/responses/NotFound' }
   '/movers/{moverId}/review-summary':
@@ -887,6 +924,44 @@ paths:
           content:
             application/json:
               schema: { '$ref': '#/components/schemas/ErrorResponse' }
+  '/move-requests/{requestId}/quotes/compare':
+    post:
+      tags: [MoveRequests]
+      summary: 견적 비교 (대기 중인 견적)
+      description: |-
+        요청자 본인만 받은 견적을 비교할 수 있습니다. 비로그인은 401, 기사님은 403을 반환합니다.
+        대기 중인 견적 2~3개와 비교 키워드 1~3개를 선택해 요청합니다.
+        견적은 선택한 순서대로 반환하며, 금액·코멘트와 기사님의 경력·평점·리뷰 수·리뷰 요약·후기 항목을 제공합니다.
+        리뷰 요약과 후기 항목은 리뷰가 10건 미만이면 null입니다. 후기 항목에는 가격(PRICE)을 제외합니다.
+        본인 요청이 아니거나 선택한 견적이 해당 요청의 대기 중 견적이 아니면 404를 반환합니다.
+        선택한 키워드에서 가장 많이 앞선 견적을 추천 이유와 함께 반환합니다.
+        순위가 같으면 함께 추천하고, 차이가 없으면 추천 견적은 빈 배열입니다.
+        결과는 요청 시점에 계산하며 저장하지 않습니다.
+      operationId: compareQuotes
+      security:
+        - sessionCookie: []
+      x-roles: [CUSTOMER]
+      parameters:
+        - { '$ref': '#/components/parameters/RequestIdPath' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { '$ref': '#/components/schemas/QuoteComparisonRequest' }
+      responses:
+        '200':
+          description: 견적 비교 결과
+          content:
+            application/json:
+              schema: { '$ref': '#/components/schemas/QuoteComparison' }
+        '400': { '$ref': '#/components/responses/ValidationError' }
+        '401': { '$ref': '#/components/responses/Unauthorized' }
+        '403': { '$ref': '#/components/responses/Forbidden' }
+        '404':
+          description: '`NOT_FOUND`. 본인의 이사 요청이 아니거나, 선택한 견적이 해당 요청의 대기 중인 견적이 아닌 경우'
+          content:
+            application/json:
+              schema: { '$ref': '#/components/schemas/ErrorResponse' }
   '/move-requests/{requestId}/rejections':
     post:
       tags: [MoverInbox]
@@ -1136,7 +1211,7 @@ paths:
         '401': { '$ref': '#/components/responses/Unauthorized' }
         '404': { '$ref': '#/components/responses/NotFound' }
         '503':
-          description: '`UPLOAD_NOT_CONFIGURED`. 사진이 있는데 서버에 `CLOUDFRONT_KEY_PAIR_ID`·`CLOUDFRONT_PRIVATE_KEY` 중 하나라도 없는 경우 (로컬 개발 환경 등)'
+          description: '`UPLOAD_NOT_CONFIGURED`. 사진이 있는데 서버에 `IMAGE_BASE_URL`·`CLOUDFRONT_KEY_PAIR_ID`·`CLOUDFRONT_PRIVATE_KEY` 중 하나라도 없는 경우 (로컬 개발 환경 등)'
           content:
             application/json:
               schema: { '$ref': '#/components/schemas/ErrorResponse' }
@@ -1346,6 +1421,139 @@ paths:
           content:
             application/json:
               schema: { '$ref': '#/components/schemas/ErrorResponse' }
+  '/quotes/{quoteId}/damage-reports':
+    get:
+      tags: [Quotes]
+      summary: 파손 접수 목록
+      description: >-
+        견적을 보낸 기사님과 해당 견적 요청의 일반 유저만 조회할 수 있습니다. 최근에 접수한 순서로 반환합니다.
+        `canReport`가 `true`일 때만 파손 접수하기 버튼을 보여 줍니다.
+
+
+        사진 주소는 작업 사진과 같은 CloudFront 서명 URL이므로, 화면을 1시간 넘게 열어 둘 때는 목록을 다시 조회해 주소를 갱신합니다.
+      operationId: listDamageReports
+      security:
+        - sessionCookie: []
+      parameters:
+        - { '$ref': '#/components/parameters/QuoteIdPath' }
+      responses:
+        '200':
+          description: 파손 접수 목록
+          content:
+            application/json:
+              schema: { '$ref': '#/components/schemas/DamageReportList' }
+        '400': { '$ref': '#/components/responses/ValidationError' }
+        '401': { '$ref': '#/components/responses/Unauthorized' }
+        '404':
+          description: '`NOT_FOUND`. 견적을 보낸 기사님이나 견적을 요청한 일반 유저가 아님'
+          content:
+            application/json:
+              schema: { '$ref': '#/components/schemas/ErrorResponse' }
+        '503':
+          description: '`UPLOAD_NOT_CONFIGURED`. 접수가 있는데 서버에 `IMAGE_BASE_URL`·`CLOUDFRONT_KEY_PAIR_ID`·`CLOUDFRONT_PRIVATE_KEY` 중 하나라도 없는 경우 (로컬 개발 환경 등)'
+          content:
+            application/json:
+              schema: { '$ref': '#/components/schemas/ErrorResponse' }
+    post:
+      tags: [Quotes]
+      summary: 파손 접수
+      description: >-
+        일반 유저가 본인의 확정된 견적에 파손된 품목을 접수합니다.
+        한국 시간(Asia/Seoul) 기준 이사일 다음 날부터 30일 동안 접수할 수 있습니다.
+
+
+        `POST /quotes/{quoteId}/damage-reports/uploads`로 받은 업로드 정보로 사진과 썸네일을 S3에 모두 올린 뒤,
+        올린 사진의 `uploadId`를 보여 줄 순서대로 `uploadIds`에 담아 보냅니다.
+        응답을 받지 못했을 때 같은 품목명, 상세 내용, 같은 순서의 `uploadIds`로 다시 보내면 접수 기간이 지났어도 기존 접수를 반환합니다.
+        이미 접수된 사진을 사용하면서 품목명, 상세 내용, 사진 구성이나 순서를 바꾸면 `409 DAMAGE_REPORT_CONFLICT`를 반환합니다.
+
+
+        접수하면 견적을 보낸 기사님에게 `DAMAGE_REPORTED` 알림이 생성됩니다.
+        알림의 `quoteId`는 이 견적이며 `payload`에 `customerName`과 `itemName`이 담깁니다.
+      operationId: createDamageReport
+      security:
+        - sessionCookie: []
+      x-roles: [CUSTOMER]
+      parameters:
+        - { '$ref': '#/components/parameters/QuoteIdPath' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { '$ref': '#/components/schemas/DamageReportCreate' }
+      responses:
+        '201':
+          description: 저장된 파손 접수
+          content:
+            application/json:
+              schema: { '$ref': '#/components/schemas/DamageReport' }
+        '400': { '$ref': '#/components/responses/ValidationError' }
+        '401': { '$ref': '#/components/responses/Unauthorized' }
+        '403': { '$ref': '#/components/responses/Forbidden' }
+        '404':
+          description: '`NOT_FOUND`. 본인이 요청한 견적이 아님'
+          content:
+            application/json:
+              schema: { '$ref': '#/components/schemas/ErrorResponse' }
+        '409':
+          description: >-
+            `DAMAGE_REPORT_NOT_ALLOWED` (확정되지 않은 견적이거나 접수 기간이 아님),
+            `DAMAGE_REPORT_CONFLICT` (이미 접수된 사진이 포함되어 있고 기존 접수 내용과 다름) 또는
+            `DAMAGE_PHOTO_NOT_UPLOADED` (사진이나 썸네일이 S3에 없음. 업로드 정보를 다시 받아 사진을 올린 뒤 접수)
+          content:
+            application/json:
+              schema: { '$ref': '#/components/schemas/ErrorResponse' }
+        '503':
+          description: '`UPLOAD_NOT_CONFIGURED`. 서버에 S3 설정이나 `CLOUDFRONT_KEY_PAIR_ID`·`CLOUDFRONT_PRIVATE_KEY`가 없는 경우 (로컬 개발 환경 등)'
+          content:
+            application/json:
+              schema: { '$ref': '#/components/schemas/ErrorResponse' }
+  '/quotes/{quoteId}/damage-reports/uploads':
+    post:
+      tags: [Quotes]
+      summary: 파손 사진 업로드 정보 발급
+      description: >-
+        일반 유저가 본인의 확정된 견적에 접수할 파손 사진 `count`장의 S3 업로드 정보를 받습니다.
+        한국 시간(Asia/Seoul) 기준 이사일 다음 날부터 30일 동안 받을 수 있으며, 한 번에 10장까지 요청할 수 있습니다.
+
+
+        사진을 만들어 올리는 방법(`image`·`thumbnail` 인코딩, `contentType`, `multipart/form-data` POST, 크기와 10분 제한)은
+        `POST /quotes/{quoteId}/proof-photos/uploads`와 같습니다.
+      operationId: createDamagePhotoUploads
+      security:
+        - sessionCookie: []
+      x-roles: [CUSTOMER]
+      parameters:
+        - { '$ref': '#/components/parameters/QuoteIdPath' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { '$ref': '#/components/schemas/DamagePhotoUploadCreate' }
+      responses:
+        '201':
+          description: 업로드 정보
+          content:
+            application/json:
+              schema: { '$ref': '#/components/schemas/ProofPhotoUploadList' }
+        '400': { '$ref': '#/components/responses/ValidationError' }
+        '401': { '$ref': '#/components/responses/Unauthorized' }
+        '403': { '$ref': '#/components/responses/Forbidden' }
+        '404':
+          description: '`NOT_FOUND`. 본인이 요청한 견적이 아님'
+          content:
+            application/json:
+              schema: { '$ref': '#/components/schemas/ErrorResponse' }
+        '409':
+          description: '`DAMAGE_REPORT_NOT_ALLOWED`. 확정되지 않은 견적이거나 접수 기간(이사일 다음 날부터 30일)이 아님'
+          content:
+            application/json:
+              schema: { '$ref': '#/components/schemas/ErrorResponse' }
+        '503':
+          description: '`UPLOAD_NOT_CONFIGURED`. 서버에 `AWS_REGION`·`S3_BUCKET`·`IMAGE_BASE_URL` 중 하나라도 없는 경우 (로컬 개발 환경 등)'
+          content:
+            application/json:
+              schema: { '$ref': '#/components/schemas/ErrorResponse' }
   '/reviews':
     post:
       tags: [Reviews]
@@ -1447,6 +1655,7 @@ paths:
     get:
       tags: [Notifications]
       summary: 미읽음 알림 개수 조회
+      description: 기사님은 확인하지 않은 새 견적 요청이 있으면 1을 더한 값을 받습니다.
       operationId: getUnreadNotificationCount
       security:
         - sessionCookie: []
@@ -1469,6 +1678,7 @@ paths:
     patch:
       tags: [Notifications]
       summary: 전체 알림 읽음 처리
+      description: 기사님은 10초 전까지 들어온 새 견적 요청도 확인 처리합니다.
       operationId: readAllNotifications
       security:
         - sessionCookie: []
@@ -1486,6 +1696,58 @@ paths:
                     minimum: 0
         '401':
           '$ref': '#/components/responses/Unauthorized'
+
+  '/notifications/new-requests':
+    get:
+      tags: [Notifications]
+      summary: 새 견적 요청 요약 조회
+      description: 기사님이 마지막으로 확인한 뒤 서비스 지역(출발지 또는 도착지)에 들어온 견적 요청 수와 가장 최근 요청 시각을 조회합니다. 받은 요청 목록에 나오는 요청만 세고, 기사님을 지정한 요청과 만들어진 지 10초가 지나지 않은 요청은 제외합니다.
+      operationId: getNewRequestSummary
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: 새 견적 요청 요약
+          content:
+            application/json:
+              schema: { '$ref': '#/components/schemas/NewRequestSummary' }
+        '401':
+          '$ref': '#/components/responses/Unauthorized'
+        '403': { '$ref': '#/components/responses/Forbidden' }
+
+  '/notifications/new-requests/read':
+    patch:
+      tags: [Notifications]
+      summary: 새 견적 요청 확인 처리
+      description: 요약에서 받은 `latestAt`까지의 요청을 확인 처리합니다. 10초 전보다 늦은 시각은 10초 전으로 맞추고, 이미 확인한 시각보다 이른 시각은 무시합니다.
+      operationId: readNewRequests
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [latestAt]
+              properties:
+                latestAt: { type: string, format: date-time }
+      responses:
+        '200':
+          description: 확인 처리 결과
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [updated]
+                properties:
+                  updated:
+                    type: boolean
+        '400':
+          '$ref': '#/components/responses/ValidationError'
+        '401':
+          '$ref': '#/components/responses/Unauthorized'
+        '403': { '$ref': '#/components/responses/Forbidden' }
 
   '/notifications/{id}/read':
     patch:
@@ -1903,11 +2165,11 @@ components:
       type: string
       enum:
         [
-          NEW_REQUEST,
           NEW_DESIGNATED_REQUEST,
           NEW_QUOTE,
           QUOTE_CONFIRMED,
           MOVE_DAY,
+          DAMAGE_REPORTED,
         ]
     MoverSort:
       type: string
@@ -1945,6 +2207,9 @@ components:
         - PROOF_PHOTO_NOT_UPLOADED
         - MOVE_PROGRESS_NOT_ALLOWED
         - MOVE_PROGRESS_OUT_OF_ORDER
+        - DAMAGE_REPORT_NOT_ALLOWED
+        - DAMAGE_REPORT_CONFLICT
+        - DAMAGE_PHOTO_NOT_UPLOADED
         - RATE_LIMITED
         - INTERNAL_ERROR
         - SERVICE_UNAVAILABLE
@@ -2087,6 +2352,73 @@ components:
           type: boolean
           description: 견적을 보낸 기사님이고, 견적과 이사 요청이 모두 확정 상태이며, 이사 당일에 기록할 단계가 남아 있으면 `true`
           example: true
+    DamagePhotoUploadCreate:
+      type: object
+      required: [count, contentType]
+      properties:
+        count: { type: integer, minimum: 1, maximum: 10, example: 3 }
+        contentType:
+          type: string
+          enum: [image/jpeg, image/webp]
+          example: image/webp
+    DamageReportCreate:
+      type: object
+      required: [itemName, description, uploadIds]
+      properties:
+        itemName:
+          type: string
+          minLength: 1
+          maxLength: 50
+          description: 파손된 품목명. 앞뒤 공백은 빼고 저장합니다.
+          example: 4인용 식탁
+        description:
+          type: string
+          minLength: 1
+          maxLength: 500
+          description: 파손 상세 내용. 앞뒤 공백은 빼고 저장합니다.
+          example: 상판 모서리가 깨졌어요.
+        uploadIds:
+          type: array
+          minItems: 1
+          maxItems: 10
+          uniqueItems: true
+          description: S3에 올린 사진의 `uploadId`. 이 순서대로 사진을 보여 줍니다.
+          items: { type: string, format: uuid }
+    DamageReport:
+      type: object
+      required: [id, itemName, description, createdAt, photos]
+      properties:
+        id: { type: string, format: uuid }
+        itemName: { type: string, example: 4인용 식탁 }
+        description: { type: string, example: 상판 모서리가 깨졌어요. }
+        createdAt: { type: string, format: date-time }
+        photos:
+          type: array
+          description: 접수할 때 보낸 `uploadIds` 순서입니다.
+          items: { '$ref': '#/components/schemas/DamagePhoto' }
+    DamageReportList:
+      type: object
+      required: [items, canReport]
+      properties:
+        items:
+          type: array
+          items: { '$ref': '#/components/schemas/DamageReport' }
+        canReport:
+          type: boolean
+          description: 호출자가 지금 파손을 접수할 수 있으면 `true` (견적을 요청한 일반 유저, 확정된 견적의 이사일 다음 날부터 30일 동안)
+          example: true
+    DamagePhoto:
+      type: object
+      required: [url, thumbnailUrl]
+      properties:
+        url:
+          type: string
+          format: uri
+          description: 사진 CloudFront 서명 URL. 작업 사진과 같은 방식으로 발급되어 최소 1시간, 최대 2시간 동안 유효합니다.
+        thumbnailUrl:
+          type: string
+          format: uri
+          description: 썸네일 CloudFront 서명 URL. `url`과 같은 시각에 만료됩니다.
     SignupRequest:
       type: object
       required: [role, name, email, phone, password]
@@ -2626,6 +2958,94 @@ components:
         isDesignated: { type: boolean, description: 지정 견적 라벨 표시용 }
         createdAt: { type: string, format: date-time }
         mover: { '$ref': '#/components/schemas/MoverSummary' }
+    QuoteComparisonRequest:
+      type: object
+      required: [quoteIds, keywords]
+      properties:
+        quoteIds:
+          type: array
+          description: 비교할 대기 중인 견적 id. 응답은 이 순서대로 반환합니다.
+          minItems: 2
+          maxItems: 3
+          uniqueItems: true
+          items: { type: string, format: uuid }
+        keywords:
+          type: array
+          description: 비교 기준 키워드
+          minItems: 1
+          maxItems: 3
+          uniqueItems: true
+          items:
+            type: string
+            enum: [PRICE, CAREER, PUNCTUALITY, HANDLING, SPEED, COMMUNICATION]
+    QuoteComparisonMover:
+      type: object
+      required:
+        [
+          nickname,
+          careerYears,
+          averageRating,
+          reviewCount,
+          reviewSummary,
+          aspects,
+        ]
+      properties:
+        nickname: { type: string, nullable: true }
+        careerYears: { type: integer, nullable: true }
+        averageRating: { type: number, format: float, example: 4.8 }
+        reviewCount: { type: integer }
+        reviewSummary:
+          type: string
+          nullable: true
+          description: AI 리뷰 요약. 리뷰가 10건 미만이면 null.
+        aspects:
+          type: array
+          nullable: true
+          description: 후기 항목별 언급 수. 가격(PRICE)은 제외합니다. 리뷰가 10건 미만이면 null.
+          items: { '$ref': '#/components/schemas/ReviewSummaryAspect' }
+    QuoteComparisonQuote:
+      type: object
+      required: [id, price, comment, mover]
+      properties:
+        id: { type: string, format: uuid }
+        price: { type: integer, description: 원(KRW), example: 350000 }
+        comment:
+          type: string
+          nullable: true
+          description: 기사님이 견적 제출 시 입력한 코멘트. 미입력 시 null.
+        mover: { '$ref': '#/components/schemas/QuoteComparisonMover' }
+    QuoteRecommendation:
+      description: |-
+        선택한 키워드별로 가장 좋은 견적을 정하고, 가장 많은 키워드에서 앞선 견적을 추천합니다.
+        가격은 낮을수록, 경력은 길수록, 후기 항목은 (긍정 수 - 부정 수) / 언급 수가 높을수록 앞섭니다.
+        경력이 없거나 0년, 후기가 없거나 점수가 0 이하인 기사님은 해당 키워드 비교에서 제외합니다.
+        모든 견적이 같은 값인 키워드는 반영하지 않습니다.
+        앞선 키워드 수가 같으면 평점이 높은 순, 가격이 낮은 순으로 정하고, 순위가 같은 견적은 함께 추천합니다.
+      type: object
+      required: [quoteIds, reason]
+      properties:
+        quoteIds:
+          type: array
+          description: 공동 추천이면 여러 개, 모든 기준에서 차이가 없으면 빈 배열
+          minItems: 0
+          maxItems: 3
+          uniqueItems: true
+          items: { type: string, format: uuid }
+        reason:
+          type: string
+          description: 추천 이유 문장
+          example: 가격이 가장 낮고, 경력이 가장 길어요.
+    QuoteComparison:
+      type: object
+      required: [quotes, recommendation]
+      properties:
+        quotes:
+          type: array
+          description: 요청한 `quoteIds` 순서대로 반환합니다.
+          minItems: 2
+          maxItems: 3
+          items: { '$ref': '#/components/schemas/QuoteComparisonQuote' }
+        recommendation: { '$ref': '#/components/schemas/QuoteRecommendation' }
     QuoteDetail:
       allOf:
         - { '$ref': '#/components/schemas/CustomerQuote' }
@@ -2764,6 +3184,37 @@ components:
             items:
               type: array
               items: { '$ref': '#/components/schemas/Review' }
+    MoverReviewKeyword:
+      type: object
+      description: 기사님 리뷰 키워드 및 평가별 언급 횟수
+      required:
+        - id
+        - name
+        - description
+        - baseKey
+        - parentBaseKey
+        - mentionCount
+        - positiveCount
+        - negativeCount
+        - unclearCount
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        description: { type: string, nullable: true }
+        baseKey: { type: string, nullable: true }
+        parentBaseKey: { type: string, nullable: true }
+        mentionCount: { type: integer, minimum: 0 }
+        positiveCount: { type: integer, minimum: 0 }
+        negativeCount: { type: integer, minimum: 0 }
+        unclearCount: { type: integer, minimum: 0 }
+    MoverReviewKeywordListResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          description: 리뷰 10개 미만이면 빈 배열을 반환합니다.
+          items: { '$ref': '#/components/schemas/MoverReviewKeyword' }
     MoverReviewSummary:
       type: object
       nullable: true
@@ -2850,6 +3301,12 @@ components:
             items:
               type: array
               items: { '$ref': '#/components/schemas/Notification' }
+    NewRequestSummary:
+      type: object
+      required: [count, latestAt]
+      properties:
+        count: { type: integer, minimum: 0 }
+        latestAt: { type: string, format: date-time, nullable: true }
     ChatMessage:
       type: object
       required:

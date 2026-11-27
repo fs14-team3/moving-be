@@ -97,7 +97,7 @@ describe('알림 관리 API', () => {
     return prisma.notification.create({
       data: {
         userId,
-        type: 'NEW_REQUEST',
+        type: 'NEW_DESIGNATED_REQUEST',
         payload: {
           customerName: '테스트 고객',
           moveType: 'HOME',

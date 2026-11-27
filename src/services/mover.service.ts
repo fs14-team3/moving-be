@@ -185,6 +185,9 @@ export async function listMovers(
   query: ListMoversQuery,
   viewer?: Express.User,
 ) {
+  if (query.reviewKeywordId) {
+    return listMoversByReviewKeyword(query, viewer)
+  }
   const rows = await prisma.moverProfile.findMany({
     where: {
       OR: query.keyword
@@ -216,6 +219,108 @@ export async function listMovers(
       toMoverSummary(row, favoriteIds?.has(row.userId) ?? null),
     ),
     nextCursor: hasNext ? page[page.length - 1].userId : null,
+    hasNext,
+  }
+}
+
+async function listMoversByReviewKeyword(
+  query: ListMoversQuery,
+  viewer?: Express.User,
+) {
+  const keywordId = query.reviewKeywordId!
+
+  // 선택한 키워드에 대한 긍정 언급 조회
+  const mentions = await prisma.reviewKeywordMention.findMany({
+    where: {
+      keywordId,
+      sentiment: 'POSITIVE',
+      review: {
+        quote: {
+          mover: {
+            reviewCount: { gte: 10 },
+            OR: query.keyword
+              ? [
+                  {
+                    nickname: {
+                      contains: query.keyword,
+                      mode: 'insensitive',
+                    },
+                  },
+                  {
+                    intro: {
+                      contains: query.keyword,
+                      mode: 'insensitive',
+                    },
+                  },
+                  {
+                    description: {
+                      contains: query.keyword,
+                      mode: 'insensitive',
+                    },
+                  },
+                ]
+              : undefined,
+            regions: query.region ? { has: query.region } : undefined,
+            serviceTypes: query.serviceType
+              ? { has: query.serviceType }
+              : undefined,
+          },
+        },
+      },
+    },
+    select: {
+      review: {
+        select: {
+          quote: {
+            select: { moverId: true },
+          },
+        },
+      },
+    },
+  })
+
+  // 기사님별 긍정 언급 횟수 집계
+  const counts = new Map<string, number>()
+
+  for (const mention of mentions) {
+    const id = mention.review.quote.moverId
+    counts.set(id, (counts.get(id) ?? 0) + 1)
+  }
+
+  // 긍정 언급 횟수 내림차순, 동점이면 ID 오름차순
+  const sortedIds = [...counts.keys()].sort(
+    (a, b) => counts.get(b)! - counts.get(a)! || a.localeCompare(b),
+  )
+
+  // 정렬된 결과에 커서 페이지네이션 적용
+  const cursorIndex = query.cursor ? sortedIds.indexOf(query.cursor) : -1
+
+  const start = query.cursor
+    ? cursorIndex === -1
+      ? sortedIds.length
+      : cursorIndex + 1
+    : 0
+
+  const pageIds = sortedIds.slice(start, start + query.limit)
+  const hasNext = start + query.limit < sortedIds.length
+
+  const rows = await prisma.moverProfile.findMany({
+    where: {
+      userId: { in: pageIds },
+    },
+    select: moverSummarySelect,
+  })
+
+  const rowMap = new Map(rows.map((row) => [row.userId, row]))
+
+  const favoriteIds = await findFavoriteMoverIds(viewer, pageIds)
+
+  return {
+    items: pageIds
+      .map((id) => rowMap.get(id))
+      .filter((row): row is NonNullable<typeof row> => !!row)
+      .map((row) => toMoverSummary(row, favoriteIds?.has(row.userId) ?? null)),
+    nextCursor: hasNext ? pageIds[pageIds.length - 1] : null,
     hasNext,
   }
 }

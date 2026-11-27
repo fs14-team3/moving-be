@@ -38,6 +38,12 @@ moverRouter.get(
 )
 moverRouter.get('/:moverId', optionalAuth, moverController.getMover)
 moverRouter.get('/:moverId/reviews', reviewController.listMoverReviews)
+
+moverRouter.get(
+  '/:moverId/review-keywords',
+  reviewController.listMoverReviewKeywords,
+)
+
 moverRouter.get(
   '/:moverId/review-summary',
   reviewController.getMoverReviewSummary,

@@ -7,8 +7,12 @@ import {
   it,
   vi,
 } from 'vitest'
+import type { PGStore } from 'connect-pg-simple'
+import express from 'express'
+import request from 'supertest'
 import { boss } from '../src/lib/boss'
 import { prisma } from '../src/lib/prisma'
+import { createSessionMiddleware } from '../src/middlewares/session'
 import { api, userId } from './helpers'
 
 const lines = vi.hoisted(() => [] as Record<string, unknown>[])
@@ -137,5 +141,32 @@ describe('큐 로그', () => {
         err: { message: 'Connection terminated' },
       },
     ])
+  })
+})
+
+describe('세션 저장소 로그', () => {
+  it('세션 저장소 오류는 로그로 남긴다', async () => {
+    const stores: PGStore[] = []
+    const app = express()
+      .use(createSessionMiddleware())
+      .get('/', (req, res) => {
+        stores.push(req.sessionStore as unknown as PGStore)
+        res.end()
+      })
+    await request(app).get('/')
+    const [store] = stores
+    await store.close()
+
+    store.pruneSessions()
+
+    await vi.waitFor(() =>
+      expect(lines).toMatchObject([
+        {
+          level: 50,
+          msg: 'Failed to prune sessions:',
+          err: { message: 'Cannot use a pool after calling end on the pool' },
+        },
+      ]),
+    )
   })
 })
