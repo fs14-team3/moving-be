@@ -35,7 +35,32 @@ export async function listMoverReviews(
   })
   if (!mover) throw new AppError('NOT_FOUND')
 
-  const where = reviewsOf(moverId)
+  const where: Prisma.ReviewWhereInput = {
+    quote: { moverId },
+    ...(query.keywordId
+      ? {
+          keywordMentions: {
+            some: { keywordId: query.keywordId },
+          },
+        }
+      : {}),
+  }
+
+  if (query.keywordId) {
+    const reviewCount = await prisma.review.count({
+      where: reviewsOf(moverId),
+    })
+
+    if (reviewCount < 10) {
+      return {
+        items: [],
+        page: query.page,
+        pageSize: query.pageSize,
+        totalCount: 0,
+        totalPages: 0,
+      }
+    }
+  }
   const [totalCount, rows] = await Promise.all([
     prisma.review.count({ where }),
     prisma.review.findMany({
@@ -71,6 +96,68 @@ export async function listMoverReviews(
     totalCount,
     totalPages: Math.ceil(totalCount / query.pageSize),
   }
+}
+
+export async function listMoverReviewKeywords(moverId: string) {
+  const mover = await prisma.moverProfile.findUnique({
+    where: { userId: moverId },
+    select: { userId: true },
+  })
+
+  if (!mover) throw new AppError('NOT_FOUND')
+
+  const reviewCount = await prisma.review.count({
+    where: reviewsOf(moverId),
+  })
+
+  // 리뷰가 10개 미만이면 키워드 정보를 공개하지 않음
+  if (reviewCount < 10) {
+    return { items: [] }
+  }
+
+  const groups = await prisma.reviewKeywordMention.groupBy({
+    by: ['keywordId', 'sentiment'],
+    where: {
+      review: {
+        quote: { moverId },
+      },
+    },
+    _count: { _all: true },
+  })
+
+  const keywordIds = [...new Set(groups.map((group) => group.keywordId))]
+
+  const keywords = await prisma.reviewKeyword.findMany({
+    where: { id: { in: keywordIds } },
+    select: {
+      id: true,
+      name: true,
+      description: true,
+      baseKey: true,
+      parentBaseKey: true,
+    },
+  })
+
+  const items = keywords.map((keyword) => {
+    const counts = groups.filter((group) => group.keywordId === keyword.id)
+
+    return {
+      ...keyword,
+      mentionCount: counts.reduce((sum, group) => sum + group._count._all, 0),
+      positiveCount: counts
+        .filter((group) => group.sentiment === 'POSITIVE')
+        .reduce((sum, group) => sum + group._count._all, 0),
+      negativeCount: counts
+        .filter((group) => group.sentiment === 'NEGATIVE')
+        .reduce((sum, group) => sum + group._count._all, 0),
+    }
+  })
+
+  items.sort(
+    (a, b) => b.mentionCount - a.mentionCount || a.name.localeCompare(b.name),
+  )
+
+  return { items }
 }
 
 function reviewsOf(moverId: string) {
@@ -199,6 +286,7 @@ export async function getMoverReviewSummary(moverId: string) {
   if (!mover) throw new AppError('NOT_FOUND')
 
   const where = reviewsOf(moverId)
+
   const reviewCount = await prisma.review.count({
     where,
   })
